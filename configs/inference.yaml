@@ -1,0 +1,27 @@
+dummy: null
+deepspeed:
+  ds_enable: True
+  deepspeed_config: configs/ds_config.json
+
+special:
+  debug: False
+
+data:
+  batch_size_per_rank: 1
+
+info:
+  task_type: Infer  # Test, Infer, ...
+  wandb_watch_model: False
+  wandb_watch_freq: 100
+  cli_log_freq: 1
+  # wandb_log_freq: 10  # NO NEED. only one epoch with few iters
+  # global_tqdm: True  # NO NEED. only one epoch
+  
+env:
+  device: cuda
+
+tester:
+  use_best: True
+  save_images: True
+  checkpoint_path: TBD
+  train_cfg_path: /ldap_shared/synology_shared/zjh/code/MyCode-base/Pytorch-template-public/outputs/2023-09-18-18-39-17_simple_simple_mse_64/cfg.yaml  # XXX: required

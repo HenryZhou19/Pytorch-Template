@@ -1,0 +1,63 @@
+dummy: null
+deepspeed:
+  ds_enable: True
+  deepspeed_config: configs/ds_config.json
+
+special:
+  debug: False
+
+model:
+  backbone: simple
+  loss: mse
+
+data:
+  dataset: simple
+  batch_size_per_rank: 2
+  batch_size_total: TBD
+  split_rate: 0.8
+  
+info: # info & wandb
+  start_time : TBD
+  output_dir: ./outputs/
+  work_dir: TBD
+  project_name: template
+  task_type: Train  # Pretrain, Train, Pretrain_Re, Train_Re, ...
+  name_tags: 
+  - model.backbone
+  - data.dataset
+  - model.loss
+  - data.batch_size_total
+  wandb_tags:
+  - info.start_time
+  wandb_watch_model: False  # do not use
+  wandb_watch_freq: 100
+  cli_log_freq: 1
+  wandb_log_freq: 10  # <= 0 means only log when an epoch ends
+  global_tqdm: True
+
+env:
+  device: cuda
+  gpu: TBD
+  distributed: TBD
+  dist_url: env://
+  dist_backend: TBD
+  world_size: TBD
+  rank: TBD
+  seed: 42
+  seed_with_rank: True
+  cuda_deterministic: False
+  sync_bn: True
+  find_unused_params: True
+  amp: True
+  num_workers: 4
+
+trainer:
+  resume: null
+  epochs: 100
+  lr: 4.0e-4
+  # lr_groups:
+  #   main: 4.0e-4
+  #   backbone: 4.0e-4
+  weight_decay: 4.0e-5
+  warmup: False
+  save_interval: 1

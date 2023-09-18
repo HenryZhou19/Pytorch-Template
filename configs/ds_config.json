@@ -1,0 +1,6 @@
+{
+    "gradient_accumulation_steps": 1,
+    "zero_optimization": {
+        "stage": 0
+    }
+}
