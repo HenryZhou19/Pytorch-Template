@@ -128,8 +128,6 @@ def test(cfg, tester_status):
     device: torch.device = tester_status['device']
     pbar: tqdm = tester_status['test_pbar']
     
-    save_path =  cfg.info.work_dir + '/vis'
-
     model.eval()
 
     logger = MetricLogger(

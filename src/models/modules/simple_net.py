@@ -4,12 +4,18 @@ from torch import nn
 class SimpleNet(nn.Module):
     def __init__(self):
         super(SimpleNet, self).__init__()
-        self.fc1 = nn.Linear(2, 5)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(5, 1)
+        self.net = nn.Sequential(
+            nn.Linear(2, 100),
+            nn.BatchNorm1d(100),
+            nn.ReLU(),
+            nn.Linear(100, 100),
+            nn.BatchNorm1d(100),
+            nn.ReLU(),
+            nn.Linear(100, 1),
+            nn.Sigmoid()
+        )
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
+        x = self.net(x)
+                
         return x

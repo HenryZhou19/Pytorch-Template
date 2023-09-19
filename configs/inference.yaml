@@ -19,9 +19,15 @@ info:
   
 env:
   device: cuda
+  gpu: TBD
+  distributed: TBD
+  dist_url: env://
+  dist_backend: TBD
+  world_size: TBD
+  rank: TBD
 
 tester:
   use_best: True
   save_images: True
   checkpoint_path: TBD
-  train_cfg_path: /ldap_shared/synology_shared/zjh/code/MyCode-base/Pytorch-template-public/outputs/2023-09-18-18-39-17_simple_simple_mse_64/cfg.yaml  # XXX: required
+  train_cfg_path: ./outputs/2023-09-19-12-28-54_simple_simple_mse_128/cfg.yaml  # XXX: required

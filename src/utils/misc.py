@@ -202,14 +202,11 @@ class PortalMisc:
             ConfigMisc.write(os.path.join(cfg.info.work_dir, cfg_file_name), cfg)
 
     @staticmethod
-    def force_print_config(cfg, force=False):
-        def str_block_wrapper(str, block_width=80):
-            return '\n' + '='*block_width + '\n' + str + '='*block_width + '\n'
-        
+    def force_print_config(cfg):  
         def write_msg_lines(msg_in, cfg_in, indent=1):
             for m in sorted(vars(cfg_in).keys()):
                 m_indent = ' ' * (4*(indent - 1)) + ' ├─ ' + m
-                v = cfg_in.__getattribute__(m)
+                v = getattr(cfg_in, m)
                 if isinstance(v, Namespace):
                     msg_in += write_msg_lines(f'{m_indent}\n', v, indent + 1)
                 else:
@@ -425,8 +422,22 @@ class DistMisc:
 
 class ModelMisc:
     @staticmethod
-    def print_trainable_params(model):
-        print(f"Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
+    def print_model_info(cfg, model, *args):
+        args = set(args)
+        if len(args) > 0:
+            print_str = ''
+            if 'model_structure' in args:
+                print_str += str(model) + '\n'
+            if 'trainable_params' in args:
+                print_str += f'Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}\n'
+            if 'total_params' in args:
+                print_str += f'Total parameters: {sum(p.numel() for p in model.parameters())}\n'
+            
+            print_str = StrMisc.block_wrapper(print_str, s='-', block_width=80)
+            print(print_str)
+            print(print_str, file=cfg.info.log_file)
+            cfg.info.log_file.flush()
+        
 
     @staticmethod
     def ddp_wrapper(cfg, model_without_ddp):
@@ -442,16 +453,23 @@ class ModelMisc:
     
     @staticmethod
     def deepspeed_ddp_wrapper(cfg, model_without_ddp):
+        assert cfg.env.distributed, 'DeepSpeed DDP wrapper only works in distributed mode.'
+        
         print(StrMisc.block_wrapper('Using DeepSpeed DDP wrapper...\n', s='#', block_width=80))
         DistMisc.avoid_print_mess()
+        
         import deepspeed
         deepspeed.logger.setLevel(logging.WARNING)
-        def ds_init_engine_wrapper() -> deepspeed.DeepSpeedEngine:
+        
+        def ds_init_engine_wrapper(model_without_ddp) -> deepspeed.DeepSpeedEngine:
+            if cfg.env.sync_bn:
+                model_without_ddp = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_without_ddp)
             return deepspeed.initialize(model=model_without_ddp, config=deepspeed_config)[0]
+        
         with open(cfg.deepspeed.deepspeed_config, 'r') as json_file:
             deepspeed_config = hjson.load(json_file)
         deepspeed_config.update({'train_batch_size': cfg.data.batch_size_total})
-        return ds_init_engine_wrapper()
+        return ds_init_engine_wrapper(model_without_ddp)
 
 
 class OptimizerMisc:
@@ -678,8 +696,12 @@ class TesterMisc:
 
 class StrMisc:
     @staticmethod
-    def block_wrapper(str, s='=', block_width=80):
-        return '\n' + s*block_width + '\n' + str + s*block_width + '\n'
+    def block_wrapper(input, s='=', block_width=80):
+        str_input = str(input)
+        if str_input[-1] != '\n':
+            str_input += '\n'
+        return '\n' + s*block_width + '\n' + str(input) + s*block_width + '\n'
+
 
 class TimeMisc:
     @staticmethod

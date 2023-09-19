@@ -13,7 +13,7 @@ def train_run(cfg):
     # prepare for model, criterion, postprocessor
     model_manager = ModelManager(cfg)
     model_without_ddp = model_manager.build_model()
-    ModelMisc.print_trainable_params(model_without_ddp)
+    ModelMisc.print_model_info(cfg, model_without_ddp, 'model_structure', 'trainable_params', 'total_params')
     
     loss_criterion, metric_criterion = model_manager.build_criterion()
     # postprocessor = model_manager.build_postprocessor()
