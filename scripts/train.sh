@@ -24,6 +24,7 @@ echo "nproc_per_node: $nproc_per_node"
 master_port=25900
 end_port=25920
 used_port=""
+keep_trying=false
 
 while [ -z "$used_port" ] && [ $master_port -le $end_port ]; do
     echo "Trying master_port $master_port..."
@@ -31,10 +32,17 @@ while [ -z "$used_port" ] && [ $master_port -le $end_port ]; do
     run_cmd
 
     if [ $? -eq 0 ]; then
-        echo "Successfully started DDP with master_port $master_port."
+        echo "DDP ran successfully with master_port $master_port."
         used_port=$master_port
     else
-        echo "Failed to start DDP with master_port $master_port."
-        master_port=$(master_port + 1)
+        echo "Failed to start DDP with master_port $master_port. (Maybe triggered by other ERRORs)"
+
+        if [ "$keep_trying" = false ]; then
+            read -p "Press Enter to continue searching for other master_port，or press 'Ctrl+C' to exit：" confirm
+            if [ -z "$confirm" ]; then
+                keep_trying=true
+            fi
+        fi
+        master_port=$((master_port + 1))
     fi
 done
