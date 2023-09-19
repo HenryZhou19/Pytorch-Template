@@ -5,7 +5,7 @@ params="$@"
 run_cmd() {
     CUDA_VISIBLE_DEVICES=$cuda_devices \
     OMP_NUM_THREADS=$omp_num_threads \
-    torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port inference.py with $params\
+    torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port inference.py --loglevel=ERROR with $params\
         dummy=null \
         # special.device='cpu' \
 }

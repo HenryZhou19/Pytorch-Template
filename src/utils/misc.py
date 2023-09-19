@@ -1,3 +1,4 @@
+import logging
 import os
 import pickle
 import random
@@ -22,7 +23,7 @@ from tqdm import tqdm
 class ConfigMisc:
     @staticmethod
     def get_configs_from_sacred(main_config):
-        ex = sacred.Experiment('Config Collector')
+        ex = sacred.Experiment('Config Collector', save_git_info=False)
         ex.add_config(main_config)
         
         def print_sacred_configs(_run):
@@ -37,8 +38,8 @@ class ConfigMisc:
             if "RANK" in os.environ:
                 rank = int(os.environ["RANK"])
                 if rank != 0:
-                    print(f"INFO - Config Collector of Rank: {rank} - Only Rank 0 prints initial configs.")
                     return
+            print(f"\nInitial configs read by sacred for ALL Ranks:")
             print_sacred_configs(_run)
 
         config = ex.run_commandline().config
@@ -49,7 +50,7 @@ class ConfigMisc:
         return cfg
 
     @staticmethod 
-    def nested_dict_to_nested_namespace(dictionary, to_string=False):
+    def nested_dict_to_nested_namespace(dictionary):
         namespace = dictionary
         if isinstance(dictionary, dict):
             namespace = Namespace(**dictionary)
@@ -202,6 +203,9 @@ class PortalMisc:
 
     @staticmethod
     def force_print_config(cfg, force=False):
+        def str_block_wrapper(str, block_width=80):
+            return '\n' + '='*block_width + '\n' + str + '='*block_width + '\n'
+        
         def write_msg_lines(msg_in, cfg_in, indent=1):
             for m in sorted(vars(cfg_in).keys()):
                 m_indent = ' ' * (4*(indent - 1)) + ' ├─ ' + m
@@ -217,12 +221,14 @@ class PortalMisc:
             return msg_in
 
         msg = f"Rank {DistMisc.get_rank()} --- Parameters:\n"
-        msg = write_msg_lines(msg, cfg)
+        msg = StrMisc.block_wrapper(write_msg_lines(msg, cfg), s='=', block_width=80)
 
+        DistMisc.avoid_print_mess()
         if cfg.env.distributed:
             print(msg, force=True)
         else:
             print(msg)
+        DistMisc.avoid_print_mess()
 
     @staticmethod 
     def init_loggers(cfg):
@@ -273,7 +279,13 @@ class PortalMisc:
 
 
 class DistMisc:
-    @ staticmethod
+    @staticmethod
+    def avoid_print_mess():
+        if DistMisc.is_dist_avail_and_initialized():  # 
+            dist.barrier()
+            time.sleep(DistMisc.get_rank() * 0.1)
+    
+    @staticmethod
     def all_gather(data):
 
         """
@@ -317,7 +329,7 @@ class DistMisc:
 
         return data_list
 
-    @ staticmethod
+    @staticmethod
     def reduce_dict(input_dict, average=True):
         world_size = DistMisc.get_world_size()
         if world_size < 2:
@@ -336,7 +348,7 @@ class DistMisc:
             reduced_dict = {k: v for k, v in zip(names, values)}
         return reduced_dict
 
-    @ staticmethod
+    @staticmethod
     def reduce_sum(tensor):
         world_size = DistMisc.get_world_size()
         if world_size < 2:
@@ -345,7 +357,7 @@ class DistMisc:
         dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
         return tensor
 
-    @ staticmethod
+    @staticmethod
     def reduce_mean(tensor):
         world_size = DistMisc.get_world_size()
         total = DistMisc.reduce_sum(tensor)
@@ -355,19 +367,19 @@ class DistMisc:
     def is_dist_avail_and_initialized():
         return dist.is_available() and dist.is_initialized()
 
-    @ staticmethod
+    @staticmethod
     def get_world_size():
         return dist.get_world_size() if DistMisc.is_dist_avail_and_initialized() else 1
 
-    @ staticmethod
+    @staticmethod
     def get_rank():
         return dist.get_rank() if DistMisc.is_dist_avail_and_initialized() else 0
 
-    @ staticmethod
+    @staticmethod
     def is_main_process():
         return DistMisc.get_rank() == 0
 
-    @ staticmethod
+    @staticmethod
     def setup_for_distributed(is_master):
         # This function disables printing when not in master process
         import builtins as __builtin__
@@ -380,7 +392,7 @@ class DistMisc:
 
         __builtin__.print = dist_print
 
-    @ staticmethod
+    @staticmethod
     def init_distributed_mode(cfg):
         if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
             cfg.env.rank = int(os.environ["RANK"])
@@ -396,14 +408,18 @@ class DistMisc:
             return
 
         cfg.env.distributed = True
-        cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size
-
-        torch.cuda.set_device(cfg.env.gpu)
         cfg.env.dist_backend = 'nccl'
-        print(f"| distributed init (rank {cfg.env.rank}): {cfg.env.dist_url}", flush=True)
+        cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size
+        torch.cuda.set_device(cfg.env.gpu)
+        
+        dist.distributed_c10d.logger.setLevel(logging.WARNING)
+        
         dist.init_process_group(
             backend=cfg.env.dist_backend, init_method=cfg.env.dist_url, world_size=cfg.env.world_size, rank=cfg.env.rank
-        )
+        )       
+        # DistMisc.avoid_print_mess()
+        # print(f"INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}")
+        # DistMisc.avoid_print_mess()
         DistMisc.setup_for_distributed(cfg.env.rank == 0)
 
 
@@ -426,10 +442,10 @@ class ModelMisc:
     
     @staticmethod
     def deepspeed_ddp_wrapper(cfg, model_without_ddp):
-        import logging
-
+        print(StrMisc.block_wrapper('Using DeepSpeed DDP wrapper...\n', s='#', block_width=80))
+        DistMisc.avoid_print_mess()
         import deepspeed
-        deepspeed.logger.setLevel(logging.WARNING) 
+        deepspeed.logger.setLevel(logging.WARNING)
         def ds_init_engine_wrapper() -> deepspeed.DeepSpeedEngine:
             return deepspeed.initialize(model=model_without_ddp, config=deepspeed_config)[0]
         with open(cfg.deepspeed.deepspeed_config, 'r') as json_file:
@@ -659,6 +675,11 @@ class TesterMisc:
             
             tester_status['test_pbar'].close()
 
+
+class StrMisc:
+    @staticmethod
+    def block_wrapper(str, s='=', block_width=80):
+        return '\n' + s*block_width + '\n' + str + s*block_width + '\n'
 
 class TimeMisc:
     @staticmethod

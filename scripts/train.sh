@@ -5,7 +5,7 @@ params="$@"
 run_cmd() {
     CUDA_VISIBLE_DEVICES=$cuda_devices \
     OMP_NUM_THREADS=$omp_num_threads \
-    torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port train.py with $params\
+    torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port train.py --loglevel=ERROR with $params\
         dummy=null \
         env.num_workers=4 \
         data.batch_size_per_rank=32 \

@@ -258,22 +258,13 @@ class MetricLogger(object):
         if print_time:
             total_time = self.timer.info['all']
             total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+            final_msg += f'\n\tElapsed time: {total_time_str} ({total_time / self.iter_len:.4f} sec / batch)\n'
+        print(
+            final_msg, '\n',
+            file=self.log_file
+        )
+        self.log_file.flush()
+        if self.pbar is not None:
             print(
-                final_msg, f'\n\tElapsed time: {total_time_str} ({total_time / self.iter_len:.4f} sec / batch)\n',
-                file=self.log_file
+                final_msg, '\n'
             )
-            self.log_file.flush()
-            if self.pbar is not None:
-                print(
-                    final_msg, f'\n\tElapsed time: {total_time_str} ({total_time / self.iter_len:.4f} sec / batch)\n',
-                )
-        else:
-            print(
-                final_msg, '\n',
-                file=self.log_file
-            )
-            self.log_file.flush()
-            if self.pbar is not None:
-                print(
-                    final_msg, '\n'
-                )
