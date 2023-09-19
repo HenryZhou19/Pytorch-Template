@@ -311,9 +311,10 @@ class DistMisc:
         # receiving Tensor from all ranks
         # we pad the tensor because torch all_gather does not support
         # gathering tensors of different shapes
-        tensor_list = []
-        for _ in size_list:
-            tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
+        tensor_list = [None]*world_size
+        # tensor_list = []
+        # for _ in size_list:
+        #     tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
         if local_size != max_size:
             padding = torch.empty(size=(max_size - local_size,), dtype=torch.uint8, device="cuda")
             tensor = torch.cat((tensor, padding), dim=0)
@@ -332,13 +333,9 @@ class DistMisc:
         if world_size < 2:
             return input_dict
         with torch.inference_mode():
-            names = []
-            values = []
             # sort the keys so that they are consistent across processes
-            for k in sorted(input_dict.keys()):
-                names.append(k)
-                values.append(input_dict[k])
-            values = torch.stack(values, dim=0)
+            names = sorted(input_dict.keys())
+            values = torch.stack(list(map(lambda k: input_dict[k]), names), dim=0)
             dist.all_reduce(values)
             if average:
                 values /= world_size
@@ -429,9 +426,9 @@ class ModelMisc:
             if 'model_structure' in args:
                 print_str += str(model) + '\n'
             if 'trainable_params' in args:
-                print_str += f'Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}\n'
+                print_str += f'Trainable parameters: {sum(map(lambda p: p.numel() if p.requires_grad else 0, model.parameters()))}\n'
             if 'total_params' in args:
-                print_str += f'Total parameters: {sum(p.numel() for p in model.parameters())}\n'
+                print_str += f'Total parameters: {sum(map(lambda p: p.numel(), model.parameters()))}\n'
             
             print_str = StrMisc.block_wrapper(print_str, s='-', block_width=80)
             print(print_str)

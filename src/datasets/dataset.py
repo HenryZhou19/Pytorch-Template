@@ -4,15 +4,9 @@ from torch.utils.data import Dataset
 
 
 def collate_fn(data):  # input: list, len() = batch_size
-    output = {k: list() for k in data[0].keys()}
-
-    for d in data:
-        for k, v in d.items():
-            assert isinstance(v, torch.Tensor)
-            output[k].append(v)
-
-    output['inputs'] = torch.stack(output['inputs'])
-    output['targets'] = torch.stack(output['targets'])
+    output = dict()
+    for k in data[0].keys():
+        output[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
     return output  # output: dataloader's output
 
 

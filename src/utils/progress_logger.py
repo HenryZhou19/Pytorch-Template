@@ -155,7 +155,7 @@ class MetricLogger(object):
         ts = torch.stack(t_list, dim=0)
         dist.barrier()
         dist.all_reduce(ts)
-        gathered_ds = [None for _ in range(DistMisc.get_world_size())]
+        gathered_ds = [None]*DistMisc.get_world_size()
         dist.all_gather_object(gathered_ds, ds)
         ds = torch.cat(gathered_ds, dim=1)
         line_idx = 0
