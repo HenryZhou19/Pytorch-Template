@@ -262,6 +262,7 @@ class MetricLogger(object):
                 final_msg, f'\n\tElapsed time: {total_time_str} ({total_time / self.iter_len:.4f} sec / batch)\n',
                 file=self.log_file
             )
+            self.log_file.flush()
             if self.pbar is not None:
                 print(
                     final_msg, f'\n\tElapsed time: {total_time_str} ({total_time / self.iter_len:.4f} sec / batch)\n',
@@ -271,6 +272,7 @@ class MetricLogger(object):
                 final_msg, '\n',
                 file=self.log_file
             )
+            self.log_file.flush()
             if self.pbar is not None:
                 print(
                     final_msg, '\n'
