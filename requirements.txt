@@ -1,8 +1,10 @@
-# conda create -n torch112 python=3.7
+# conda create -n pytorch-template python=3.7
 # torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 --extra-index-url https://download.pytorch.org/whl/cu113
 
+numpy
 wandb  # ==0.15.9
-scikit-learn  # ==1.0.2
-opencv-python  # ==4.8.0.76
 sacred  # ==0.8.2
 deepspeed
+hjson
+tqdm
+yaml

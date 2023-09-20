@@ -46,7 +46,6 @@ env:
   seed: 42
   seed_with_rank: True
   cuda_deterministic: False
-  sync_bn: True
   find_unused_params: True
   amp: True
   num_workers: 4

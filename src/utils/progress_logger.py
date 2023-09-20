@@ -1,8 +1,8 @@
 import datetime
-from math import nan
 import statistics
 import sys
 from collections import defaultdict, deque
+from math import nan
 
 import torch
 import torch.distributed as dist

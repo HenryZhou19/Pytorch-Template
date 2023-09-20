@@ -1,10 +1,3 @@
-import os
-from argparse import Namespace
-
-import cv2
-import numpy as np
-import torch
-
 from src.utils.misc import TesterMisc, TrainerMisc
 
 
