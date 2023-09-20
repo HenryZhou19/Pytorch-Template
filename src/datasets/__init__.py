@@ -53,10 +53,10 @@ class DataManager(object):
         
     def _get_sampler(self, dataset: Dataset, shuffle: bool) -> Sampler:
         if self.cfg.env.distributed:
-            sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=shuffle)        
+            sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=shuffle)
         else:
             if shuffle:
                 sampler = torch.utils.data.RandomSampler(dataset)
             else:
-                sampler = None
+                sampler = torch.utils.data.SequentialSampler(dataset)
         return sampler
