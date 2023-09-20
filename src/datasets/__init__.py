@@ -45,7 +45,7 @@ class DataManager(object):
             dataset,
             self.cfg.data.batch_size_per_rank,
             sampler=sampler,
-            # pin_memory=True,
+            pin_memory=self.cfg.env.pin_memory,
             collate_fn=collate_fn,
             num_workers=self.cfg.env.num_workers,
             persistent_workers=True if self.cfg.env.num_workers > 0 else False,

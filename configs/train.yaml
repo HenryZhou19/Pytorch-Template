@@ -49,6 +49,7 @@ env:
   find_unused_params: True
   amp: True
   num_workers: 4
+  pin_memory: False
 
 trainer:
   resume: null
