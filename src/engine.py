@@ -62,10 +62,15 @@ def train_one_epoch(cfg, trainer_status):
         optimizer.zero_grad()
         if scaler is not None:
             scaler.scale(loss).backward()
+            if cfg.trainer.max_grad_norm > 0:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(parameters=model.parameters(), max_norm=cfg.trainer.max_grad_norm)
             scaler.step(optimizer)
             scaler.update()
         else:
             loss.backward()
+            if cfg.trainer.max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(parameters=model.parameters(), max_norm=cfg.trainer.max_grad_norm)
             optimizer.step()
 
         if warmup_lr_scheduler is not None and epoch == 1:  # only in the first epoch
