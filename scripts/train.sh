@@ -27,15 +27,15 @@ used_port=""
 keep_trying=false
 
 while [ -z "$used_port" ] && [ $master_port -le $end_port ]; do
-    echo "Trying master_port $master_port..."
+    echo -e "\nTrying master_port $master_port..."
 
     run_cmd
 
     if [ $? -eq 0 ]; then
-        echo "DDP ran successfully with master_port $master_port."
+        echo -e "\nDDP ran successfully with master_port $master_port."
         used_port=$master_port
     else
-        echo "Failed to start DDP with master_port $master_port. (Maybe triggered by other ERRORs)"
+        echo -e "\nFailed to start DDP with master_port $master_port. (Maybe triggered by other ERRORs)"
 
         if [ "$keep_trying" = false ]; then
             read -p "Press Enter to continue searching for other master_port，or press 'Ctrl+C' to exit：" confirm

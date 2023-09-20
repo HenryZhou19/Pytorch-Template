@@ -20,10 +20,7 @@ def test_run(cfg):
     test_loader = data_manager.build_dataset(split='test')
     
     # model wrapper
-    if cfg.deepspeed.ds_enable:
-        model = ModelMisc.deepspeed_ddp_wrapper(cfg, model_without_ddp)
-    else:
-        model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
+    model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
 
     tester_status = {
         'model': model,

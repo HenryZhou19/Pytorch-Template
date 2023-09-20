@@ -34,10 +34,7 @@ def train_run(cfg):
     ) if cfg.trainer.warmup else None
     
     # model wrapper
-    if cfg.deepspeed.ds_enable:
-        model = ModelMisc.deepspeed_ddp_wrapper(cfg, model_without_ddp)
-    else:
-        model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
+    model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
 
     # prepare for cuda auto mixed precision(amp)
     scaler = torch.cuda.amp.GradScaler() if cfg.env.amp and cfg.env.device=='cuda' else None

@@ -438,18 +438,20 @@ class ModelMisc:
 
     @staticmethod
     def ddp_wrapper(cfg, model_without_ddp):
-        model = model_without_ddp
         if cfg.env.distributed:
-            if cfg.env.sync_bn:
-                model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[cfg.env.gpu],
+            model_without_ddp = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_without_ddp)
+            
+            if cfg.deepspeed.ds_enable:
+                return ModelMisc._deepspeed_ddp_wrapper(cfg, model_without_ddp)
+            else:
+                return torch.nn.parallel.DistributedDataParallel(model_without_ddp, device_ids=[cfg.env.gpu],
                 find_unused_parameters=cfg.env.find_unused_params,
             )
-        return model
+        else:
+            return model_without_ddp
     
     @staticmethod
-    def deepspeed_ddp_wrapper(cfg, model_without_ddp):
+    def _deepspeed_ddp_wrapper(cfg, model_without_ddp):
         assert cfg.env.distributed, 'DeepSpeed DDP wrapper only works in distributed mode.'
         
         print(StrMisc.block_wrapper('Using DeepSpeed DDP wrapper...\n', s='#', block_width=80))
@@ -458,9 +460,7 @@ class ModelMisc:
         import deepspeed
         deepspeed.logger.setLevel(logging.WARNING)
         
-        def ds_init_engine_wrapper(model_without_ddp) -> deepspeed.DeepSpeedEngine:
-            if cfg.env.sync_bn:
-                model_without_ddp = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_without_ddp)
+        def ds_init_engine_wrapper(model_without_ddp) -> deepspeed.DeepSpeedEngine:          
             return deepspeed.initialize(model=model_without_ddp, config=deepspeed_config)[0]
         
         with open(cfg.deepspeed.deepspeed_config, 'r') as json_file:
