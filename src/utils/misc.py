@@ -254,6 +254,8 @@ class PortalMisc:
             PortalMisc.force_print_config(cfg)
         try:
             if DistMisc.is_main_process():
+                for _ in tqdm(range(60), desc='Waiting for wandb to upload all files...'):
+                    time.sleep(1)
                 cfg.info.log_file.close()
                 print('log_file closed.')
                 if force:
@@ -681,7 +683,6 @@ class TesterMisc:
 class LoggerMisc:            
     @staticmethod   
     def wandb_log(cfg, group, output_dict, step):
-        torch.cuda.synchronize()
         if DistMisc.is_main_process():
             for k, v in output_dict.items():
                 if k == 'epoch':
