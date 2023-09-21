@@ -3,7 +3,7 @@ from torch import nn
 
 class LossBase(nn.Module):
     def forward(self, preds, gts):
-        # return loss, loss_dict as {'loss1': loss, 'loss2': loss2, ...}
+        # return loss (reduction as mean!), loss_dict as {'loss1': loss, 'loss2': loss2, ...}
         raise NotImplementedError
 
 

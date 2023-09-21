@@ -30,4 +30,4 @@ tester:
   use_best: True
   save_images: True
   checkpoint_path: TBD
-  train_cfg_path: ./outputs/2023-09-19-12-28-54_simple_simple_mse_128/cfg.yaml  # XXX: required
+  train_cfg_path: ./outputs/2023-09-21-19-36-50_simple_simple_mse_64/cfg.yaml  # XXX: required

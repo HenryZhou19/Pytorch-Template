@@ -133,9 +133,9 @@ class PortalMisc:
         if use_train_seed:
             cfg.env.seed = train_seed
 
-        cfg.env.distributed = False
         cfg.info.train_work_dir = cfg.info.work_dir
         cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + cfg.info.infer_start_time
+        cfg.trainer.grad_accumulation = 1
         if DistMisc.is_main_process():
             if not os.path.exists(cfg.info.work_dir):
                 os.makedirs(cfg.info.work_dir)
@@ -189,6 +189,8 @@ class PortalMisc:
     def special_config_adjustment(cfg):
         if cfg.special.debug:  # debug mode
             cfg.env.num_workers = 0
+        if cfg.trainer.grad_accumulation > 1:
+            warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm).')
 
     @staticmethod
     def save_configs(cfg):
@@ -233,7 +235,7 @@ class PortalMisc:
             wandb_name = '_'.join(ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
             wandb_name = f'[{cfg.info.task_type}] ' + wandb_name
             wandb_tags = ConfigMisc.get_specific_list(cfg, cfg.info.wandb_tags)
-            if TesterMisc.for_inference(cfg):
+            if TesterMisc.is_inference(cfg):
                 wandb_tags.append(f'Infer: {cfg.info.infer_start_time}')
             if cfg.trainer.resume != None:
                 wandb_tags.append(f'Re: {cfg.info.resume_start_time}')
@@ -398,12 +400,12 @@ class DistMisc:
         else:
             print("Not using distributed mode")
             cfg.env.distributed = False
-            cfg.data.batch_size_total = cfg.data.batch_size_per_rank
+            cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.trainer.grad_accumulation
             return
 
         cfg.env.distributed = True
         cfg.env.dist_backend = 'nccl'
-        cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size
+        cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
         torch.cuda.set_device(cfg.env.gpu)
         
         dist.distributed_c10d.logger.setLevel(logging.WARNING)
@@ -463,9 +465,12 @@ class ModelMisc:
         def ds_init_engine_wrapper(model_without_ddp) -> deepspeed.DeepSpeedEngine:          
             return deepspeed.initialize(model=model_without_ddp, config=deepspeed_config)[0]
         
-        with open(cfg.deepspeed.deepspeed_config, 'r') as json_file:
-            deepspeed_config = hjson.load(json_file)
+        # with open(cfg.deepspeed.deepspeed_config, 'r') as json_file:
+        #     deepspeed_config = hjson.load(json_file)
+        deepspeed_config = {}
         deepspeed_config.update({'train_batch_size': cfg.data.batch_size_total})
+        deepspeed_config.update({'gradient_accumulation_steps': 1})  # deepspeed will not handle gradient accumulation operations (manually do this in trainer, so keep it '1')
+        deepspeed_config.update({"zero_optimization": {"stage": 0}})
         return ds_init_engine_wrapper(model_without_ddp)
 
 
@@ -630,6 +635,52 @@ class TrainerMisc:
                     os.rename(last[0], os.path.join(cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
                 else:
                     torch.save(save_files, os.path.join(cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
+    
+    class BackwardAndStep:
+        def __init__(self, cfg, trainer_status):
+            assert cfg.trainer.grad_accumulation > 0 and isinstance(cfg.trainer.grad_accumulation, int), 'grad_accumulation should be a positive integer.'
+            self.gradient_accumulation_steps = cfg.trainer.grad_accumulation
+            self.do_gradient_accumulation = self.gradient_accumulation_steps > 1
+            self.max_grad_norm = cfg.trainer.max_grad_norm
+            self.model: torch.nn.Module = trainer_status['model']
+            self.optimizer: torch.optim.Optimizer = trainer_status['optimizer']
+            self.scaler: torch.cuda.amp.GradScaler = trainer_status['scaler']
+            self.step_count = 0
+            
+            self.optimizer.zero_grad()
+            
+        def _backward(self, loss):
+            if self.scaler is not None:
+                self.scaler.scale(loss).backward()
+            else:
+                loss.backward()
+            
+        def _optimize(self):
+            if self.scaler is not None:
+                if self.max_grad_norm > 0:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                if self.max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
+                self.optimizer.step()
+            self.optimizer.zero_grad()
+            
+        def __call__(self, loss, last_step):
+            if self.do_gradient_accumulation:
+                loss /= self.gradient_accumulation_steps  # Require that all losses are mean-reduction. (Otherwise meaningless)
+                self.step_count += 1
+            
+            self._backward(loss)
+            
+            if self.do_gradient_accumulation and not last_step:
+                if self.step_count % self.gradient_accumulation_steps == 0:
+                    self._optimize()
+                    self.step_count = 0
+            else:
+                self._optimize()
 
 
 class TesterMisc:
@@ -650,7 +701,7 @@ class TesterMisc:
         return tester_status
     
     @staticmethod
-    def for_inference(cfg):
+    def is_inference(cfg):
         return hasattr(cfg, 'tester')
     
     @staticmethod

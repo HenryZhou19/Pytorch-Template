@@ -60,6 +60,7 @@ trainer:
   #   main: 4.0e-4
   #   backbone: 4.0e-4
   weight_decay: 4.0e-5
-  max_grad_norm: 1.0  # < 0 means no gradient clipping
+  max_grad_norm: 1.0  # <= 0 means no gradient clipping
+  grad_accumulation: 1  # positive integer (keep it '1' in most cases)
   warmup: False
   save_interval: 1

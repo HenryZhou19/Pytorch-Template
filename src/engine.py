@@ -1,19 +1,18 @@
 import math
 
 import torch
-from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.utils.loss import LossBase
 from src.utils.metric import MetricBase
-from src.utils.misc import DistMisc, LoggerMisc
+from src.utils.misc import DistMisc, LoggerMisc, TrainerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV
 
 
 def train_one_epoch(cfg, trainer_status):
-    model: nn.Module = trainer_status['model']
+    model: torch.nn.Module = trainer_status['model']
     loss_criterion: LossBase = trainer_status['loss_criterion']
     loader: DataLoader = trainer_status['train_loader']
     epoch: int = trainer_status['epoch']  # start from 1
@@ -26,6 +25,8 @@ def train_one_epoch(cfg, trainer_status):
 
     model.train()
     loss_criterion.train()
+    
+    backward_and_step = TrainerMisc.BackwardAndStep(cfg, trainer_status)
         
     logger = MetricLogger(
         log_file=cfg.info.log_file,
@@ -55,22 +56,10 @@ def train_one_epoch(cfg, trainer_status):
         logger.update(
             loss=loss,
             lr=optimizer.param_groups[0]['lr'],
-            epoch=trainer_status['train_iters'] / len(loader), 
+            epoch=trainer_status['train_iters'] / logger.iter_len, 
             **loss_dict)
 
-        optimizer.zero_grad()
-        if scaler is not None:
-            scaler.scale(loss).backward()
-            if cfg.trainer.max_grad_norm > 0:
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(parameters=model.parameters(), max_norm=cfg.trainer.max_grad_norm)
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            if cfg.trainer.max_grad_norm > 0:
-                torch.nn.utils.clip_grad_norm_(parameters=model.parameters(), max_norm=cfg.trainer.max_grad_norm)
-            optimizer.step()
+        backward_and_step(loss, last_step=(trainer_status['train_iters'] % logger.iter_len == 0))
 
         if warmup_lr_scheduler is not None and epoch == 1:  # only in the first epoch
             warmup_lr_scheduler.step()  # update warmup_lr_scheduler after each iter (sub scheduler)
@@ -87,7 +76,7 @@ def train_one_epoch(cfg, trainer_status):
 
 
 def evaluate(cfg, trainer_status):
-    model: nn.Module = trainer_status['model']
+    model: torch.nn.Module = trainer_status['model']
     loss_criterion: LossBase = trainer_status['loss_criterion']
     metric_criterion: MetricBase = trainer_status['metric_criterion']
     loader: DataLoader = trainer_status['val_loader']
@@ -127,7 +116,7 @@ def evaluate(cfg, trainer_status):
 
 
 def test(cfg, tester_status):
-    model: nn.Module = tester_status['model']
+    model: torch.nn.Module = tester_status['model']
     metric_criterion: MetricBase = tester_status['metric_criterion']
     loader: DataLoader = tester_status['test_loader']
     device: torch.device = tester_status['device']
