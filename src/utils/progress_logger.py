@@ -11,11 +11,13 @@ from .misc import DistMisc, TimeMisc
 
 
 class SmoothedValue(object):
-    def __init__(self, window_size=None, fmt=None, final_fmt=None, prior=False, no_print=False, no_sync=False):
+    def __init__(self, window_size=None, fmt=None, final_fmt=None, final_fmt_no_sync=None, prior=False, no_print=False, no_sync=False):
         if fmt is None:
             fmt = '{value:.4f} ({avg:.4f})'
         if final_fmt is None:
             final_fmt = '({global_avg:.4f} ± {global_std:.4f}) [{global_min:.4f}, {global_max:.4f}]'
+        if final_fmt_no_sync is None:
+            final_fmt_no_sync = '({avg:.4f} ± {std:.4f}) [{min:.4f}, {max:.4f}]'
         self.value_now = 0.0
         self.deque = deque(maxlen=window_size)
         self.synced_deque = deque()
@@ -25,6 +27,7 @@ class SmoothedValue(object):
         self.synced_total = 0.0
         self.fmt = fmt
         self.final_fmt = final_fmt
+        self.final_fmt_no_sync = final_fmt_no_sync
         self.prior = prior
         self.no_print = no_print
         self.require_sync = not no_sync
@@ -68,6 +71,10 @@ class SmoothedValue(object):
         return max(self.synced_deque) if len(self.synced_deque) > 0 else nan
     
     @property
+    def std(self):
+        return statistics.stdev(self.deque) if len(self.deque) > 1 else nan
+    
+    @property
     def avg(self):
         return self.total / self.count if self.count > 0 else nan
     
@@ -83,13 +90,20 @@ class SmoothedValue(object):
     def value(self):
         return self.value_now
 
-    def get_str(self, final=False):
-        f = self.final_fmt if final else self.fmt
+    def get_str(self, final=False, synced=True):
+        if final:
+            if synced:
+                f = self.final_fmt
+            else:
+                f = self.final_fmt_no_sync
+        else:
+            f = self.fmt
         return f.format(
             value=self.value,
             avg=self.avg,
             min=self.min,
             max=self.max,
+            std=self.std,
             global_min=self.global_min,
             global_max=self.global_max,
             global_avg=self.global_avg,
@@ -109,6 +123,7 @@ class MetricLogger(object):
         self.global_tqdm = global_tqdm
         self.header = header
         self.epoch_str = epoch_str
+        self.synced = False
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
@@ -125,7 +140,7 @@ class MetricLogger(object):
         raise AttributeError("'{}' object has no attribute '{}'".format(
             type(self).__name__, attr))
 
-    def meters_str(self, final=False):
+    def meters_str(self, final=False, synced=True):
         prior_meter_s = []
         meters_s = []
         for name, meter in self.meters.items():
@@ -133,17 +148,19 @@ class MetricLogger(object):
                 continue
             if meter.prior:
                 prior_meter_s.append(
-                    '{}: {}'.format(name, meter.get_str(final))
+                    '{}: {}'.format(name, meter.get_str(final, synced))
                 )
             else:
                 meters_s.append(
-                    '{}: {}'.format(name, meter.get_str(final))
+                    '{}: {}'.format(name, meter.get_str(final, synced))
                 )
         return self.delimiter.join(prior_meter_s + meters_s)
     
     def _synchronize_between_processes(self):
         if not DistMisc.is_dist_avail_and_initialized():
             return
+        assert not self.synced, 'Meters have been synced.'
+        self.synced = True
         d_list = []
         t_list = []
         for meter in self.meters.values():
@@ -230,13 +247,15 @@ class MetricLogger(object):
 
             self.timer.press()
                  
-    def output_dict(self, no_avg_list=[], final_print=False):
-        if final_print:
+    def output_dict(self, no_avg_list=[], sync=False, final_print=False):
+        if sync:
             self._synchronize_between_processes()
-            self._final_print(print_time=True)
             avg_name = 'global_avg'
         else:
             avg_name = 'avg'
+        if final_print:
+            self._final_print(print_time=True, synced=sync)
+
         return_dict = {}         
         if 'all' in no_avg_list:
             return_dict.update({
@@ -250,11 +269,11 @@ class MetricLogger(object):
                 })
         return return_dict
                      
-    def _final_print(self, print_time=False):       
+    def _final_print(self, print_time=False, synced=True):       
         final_msg = self.delimiter.join([
             self.header + ' ' + self.epoch_str + ' finished. Summary of All Ranks:'
             '\n\t{meters}',
-        ]).format(meters=self.meters_str(final=True))
+        ]).format(meters=self.meters_str(final=True, synced=synced))
         if print_time:
             total_time = self.timer.info['all']
             total_time_str = str(datetime.timedelta(seconds=int(total_time)))

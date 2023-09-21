@@ -569,14 +569,14 @@ class TrainerMisc:
 
     @staticmethod
     def after_training_before_validation(cfg, trainer_status, **kwargs):
-        TrainerMisc.wandb_log(cfg,  'train_', trainer_status['train_outputs'], trainer_status['train_iters'])
+        TrainerMisc.wandb_log(cfg,  'train_epoch', trainer_status['train_outputs'], trainer_status['train_iters'])
 
         if DistMisc.is_main_process():        
             trainer_status['val_pbar'].unpause()
 
     @staticmethod
     def after_validation(cfg, trainer_status, **kwargs):
-        TrainerMisc.wandb_log(cfg, 'val_', trainer_status['metrics'], trainer_status['train_iters'])
+        TrainerMisc.wandb_log(cfg, 'val_epoch', trainer_status['metrics'], trainer_status['train_iters'])
         
         TrainerMisc.save_checkpoint(cfg, trainer_status)
     
@@ -587,13 +587,13 @@ class TrainerMisc:
             trainer_status['val_pbar'].close()
     
     @staticmethod   
-    def wandb_log(cfg, prefix, output_dict, step): 
+    def wandb_log(cfg, group, output_dict, step): 
         if DistMisc.is_main_process():          
             for k, v in output_dict.items():
                 if k == 'epoch':
-                    wandb.log({f'{k}': v}, step=step)  # log epoch without prefix
+                    wandb.log({f'{k}': v}, step=step)  # log epoch without group
                 else:
-                    wandb.log({f'{prefix}{k}': v}, step=step)
+                    wandb.log({f'{group}/{k}': v}, step=step)
                 # wandb.log({'output_image': [wandb.Image(trainer_status['output_image'])]})
                 # wandb.log({"output_video": wandb.Video(trainer_status['output_video'], fps=30, format="mp4")})
             

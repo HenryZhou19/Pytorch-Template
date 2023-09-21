@@ -53,7 +53,7 @@ env:
 
 trainer:
   resume: null
-  epochs: 100
+  epochs: 10
   lr: 4.0e-4
   # lr_groups:
   #   main: 4.0e-4

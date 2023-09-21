@@ -79,12 +79,12 @@ def train_one_epoch(cfg, trainer_status):
         if cfg.info.wandb_log_freq > 0:
             if trainer_status['train_iters'] % cfg.info.wandb_log_freq == 0:
                 output_dict = logger.output_dict(no_avg_list=['all'])
-                Trainer.wandb_log(cfg,  'iter_', output_dict, trainer_status['train_iters'])
+                Trainer.wandb_log(cfg,  'train_iter', output_dict, trainer_status['train_iters'])
             
     if lr_scheduler is not None:
             lr_scheduler.step()  # update lr_scheduler after each epoch (main scheduler)
 
-    return logger.output_dict(no_avg_list=['lr', 'epoch'], final_print=True)
+    return logger.output_dict(no_avg_list=['lr', 'epoch'], sync=True, final_print=True)
 
 
 def evaluate(cfg, trainer_status):
@@ -123,7 +123,7 @@ def evaluate(cfg, trainer_status):
             **loss_dict,
         )
 
-    return logger.output_dict(final_print=True)
+    return logger.output_dict(sync=True, final_print=True)
 
 
 def test(cfg, tester_status):
@@ -151,4 +151,4 @@ def test(cfg, tester_status):
 
         logger.update(**metrics)
             
-    return logger.output_dict(final_print=True)
+    return logger.output_dict(sync=True, final_print=True)
