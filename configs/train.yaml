@@ -52,6 +52,7 @@ env:
   pin_memory: False
 
 trainer:
+  dist_eval: True
   resume: null
   epochs: 10
   lr: 4.0e-4

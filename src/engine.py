@@ -5,10 +5,9 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.gears import Tester, Trainer
 from src.utils.loss import LossBase
 from src.utils.metric import MetricBase
-from src.utils.misc import DistMisc
+from src.utils.misc import DistMisc, LoggerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV
 
@@ -79,7 +78,7 @@ def train_one_epoch(cfg, trainer_status):
         if cfg.info.wandb_log_freq > 0:
             if trainer_status['train_iters'] % cfg.info.wandb_log_freq == 0:
                 output_dict = logger.output_dict(no_avg_list=['all'])
-                Trainer.wandb_log(cfg,  'train_iter', output_dict, trainer_status['train_iters'])
+                LoggerMisc.wandb_log(cfg,  'train_iter', output_dict, trainer_status['train_iters'])
             
     if lr_scheduler is not None:
             lr_scheduler.step()  # update lr_scheduler after each epoch (main scheduler)
@@ -122,8 +121,9 @@ def evaluate(cfg, trainer_status):
             loss=loss,
             **loss_dict,
         )
-
-    return logger.output_dict(sync=True, final_print=True)
+        
+    sync = cfg.trainer.dist_eval
+    return logger.output_dict(sync=sync, final_print=True)
 
 
 def test(cfg, tester_status):

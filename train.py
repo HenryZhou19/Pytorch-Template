@@ -75,7 +75,8 @@ def train_run(cfg):
         
         Trainer.after_training_before_validation(cfg, trainer_status)
 
-        trainer_status['metrics'] = evaluate(cfg, trainer_status)
+        if DistMisc.is_main_process() or cfg.trainer.dist_eval:
+            trainer_status['metrics'] = evaluate(cfg, trainer_status)
 
         Trainer.after_validation(cfg, trainer_status)
 

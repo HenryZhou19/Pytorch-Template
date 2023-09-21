@@ -33,14 +33,15 @@ class DataManager(object):
             if self.test_dataset is None:
                 self.test_dataset = self.data_module.get_test_dataset()
             dataset = self.test_dataset
-            
-        dataloader = self._get_dataloader(dataset, shuffle=shuffle)
+        
+        dist_sampler = True if split == 'train' else self.cfg.trainer.dist_eval
+        dataloader = self._get_dataloader(dataset, shuffle=shuffle, dist_sampler=dist_sampler)
         print(f'{split} dataloader built successfully.')
         return dataloader
         
-    def _get_dataloader(self, dataset: Dataset, shuffle: bool) -> DataLoaderX:
-        sampler = self._get_sampler(dataset, shuffle)
-            
+    def _get_dataloader(self, dataset: Dataset, shuffle: bool, dist_sampler: bool) -> DataLoaderX:
+        sampler = self._get_sampler(dataset, shuffle, dist_sampler)
+
         return DataLoaderX(
             dataset,
             self.cfg.data.batch_size_per_rank,
@@ -51,8 +52,8 @@ class DataManager(object):
             persistent_workers=True if self.cfg.env.num_workers > 0 else False,
         )
         
-    def _get_sampler(self, dataset: Dataset, shuffle: bool) -> Sampler:
-        if self.cfg.env.distributed:
+    def _get_sampler(self, dataset: Dataset, shuffle: bool, dist_sampler: bool) -> Sampler:
+        if self.cfg.env.distributed and dist_sampler:
             sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=shuffle)
         else:
             if shuffle:

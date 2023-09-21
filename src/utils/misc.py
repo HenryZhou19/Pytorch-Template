@@ -258,8 +258,6 @@ class PortalMisc:
                 print('log_file closed.')
                 if force:
                     wandb.finish(exit_code=-1)              
-                else:
-                    wandb.finish()
                 print('wandb closed.')
         finally:
             exit()           
@@ -560,6 +558,7 @@ class TrainerMisc:
             # shuffle data for each epoch (here needs epoch start from 0)
             trainer_status['train_loader'].sampler_set_epoch(trainer_status['epoch'] - 1)  
         
+        dist.barrier()
         if DistMisc.is_main_process():
             if cfg.info.global_tqdm:
                 trainer_status['train_pbar'].unpause()
@@ -569,14 +568,14 @@ class TrainerMisc:
 
     @staticmethod
     def after_training_before_validation(cfg, trainer_status, **kwargs):
-        TrainerMisc.wandb_log(cfg,  'train_epoch', trainer_status['train_outputs'], trainer_status['train_iters'])
+        LoggerMisc.wandb_log(cfg, 'train_epoch', trainer_status['train_outputs'], trainer_status['train_iters'])
 
-        if DistMisc.is_main_process():        
+        if DistMisc.is_main_process():
             trainer_status['val_pbar'].unpause()
 
     @staticmethod
     def after_validation(cfg, trainer_status, **kwargs):
-        TrainerMisc.wandb_log(cfg, 'val_epoch', trainer_status['metrics'], trainer_status['train_iters'])
+        LoggerMisc.wandb_log(cfg, 'val_epoch', trainer_status['metrics'], trainer_status['train_iters'])
         
         TrainerMisc.save_checkpoint(cfg, trainer_status)
     
@@ -586,16 +585,7 @@ class TrainerMisc:
             trainer_status['train_pbar'].close()
             trainer_status['val_pbar'].close()
     
-    @staticmethod   
-    def wandb_log(cfg, group, output_dict, step): 
-        if DistMisc.is_main_process():          
-            for k, v in output_dict.items():
-                if k == 'epoch':
-                    wandb.log({f'{k}': v}, step=step)  # log epoch without group
-                else:
-                    wandb.log({f'{group}/{k}': v}, step=step)
-                # wandb.log({'output_image': [wandb.Image(trainer_status['output_image'])]})
-                # wandb.log({"output_video": wandb.Video(trainer_status['output_video'], fps=30, format="mp4")})
+
             
     @staticmethod
     def save_checkpoint(cfg, trainer_status):
@@ -682,13 +672,24 @@ class TesterMisc:
 
     @staticmethod
     def after_inference(cfg, tester_status, **kwargs):
-        if DistMisc.is_main_process():
-            for k, v in tester_status['metrics'].items():
-                wandb.log({f'infer_{k}': v})
-                # wandb.log({'output_image': [wandb.Image(tester_status['output_image'])]})
-                # wandb.log({"output_video": wandb.Video(tester_status['output_video'], fps=30, format="mp4")})
-            
+        LoggerMisc.wandb_log(cfg,  'infer', tester_status['metrics'], None)
+        
+        if DistMisc.is_main_process():          
             tester_status['test_pbar'].close()
+
+
+class LoggerMisc:            
+    @staticmethod   
+    def wandb_log(cfg, group, output_dict, step):
+        torch.cuda.synchronize()
+        if DistMisc.is_main_process():
+            for k, v in output_dict.items():
+                if k == 'epoch':
+                    wandb.log({f'{k}': v}, step=step)  # log epoch without group
+                else:
+                    wandb.log({f'{group}/{k}': v}, step=step)
+                # wandb.log({'output_image': [wandb.Image(trainer_status['output_image'])]})
+                # wandb.log({"output_video": wandb.Video(trainer_status['output_video'], fps=30, format="mp4")})
 
 
 class StrMisc:
