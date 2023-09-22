@@ -24,8 +24,7 @@ def train_run(cfg):
     val_loader = data_manager.build_dataset(split='val')
 
     # prepare for optimizer
-    param_dicts_with_lr = OptimizerMisc.get_param_dicts_with_specific_lr(cfg, model_without_ddp)
-    optimizer = torch.optim.AdamW(param_dicts_with_lr, weight_decay=cfg.trainer.optimizer.weight_decay)
+    optimizer = OptimizerMisc.get_optimizer(cfg, model_without_ddp)
 
     # prepare for lr_scheduler
     lr_scheduler = SchudulerMisc.get_warmup_lr_scheduler(cfg, optimizer, train_loader)

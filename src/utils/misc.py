@@ -478,7 +478,7 @@ class ModelMisc:
 
 class OptimizerMisc:
     @staticmethod
-    def get_param_dicts_with_specific_lr(cfg, model_without_ddp: torch.nn.Module):
+    def _get_param_dicts_with_specific_lr(cfg, model_without_ddp: torch.nn.Module):
         def match_name_keywords(name, name_keywords):
             for keyword in name_keywords:
                 if keyword in name:
@@ -503,6 +503,14 @@ class OptimizerMisc:
                 ]
         
         return param_dicts_with_lr
+    
+    @staticmethod
+    def get_optimizer(cfg, model_without_ddp):
+        param_dicts_with_lr = OptimizerMisc._get_param_dicts_with_specific_lr(cfg, model_without_ddp)
+        if cfg.trainer.optimizer.optimizer_choice == 'adamw':
+            return torch.optim.AdamW(param_dicts_with_lr, weight_decay=cfg.trainer.optimizer.weight_decay)
+        else:
+            raise ValueError(f'Unknown optimizer choice: {cfg.trainer.optimizer.optimizer_choice}')
 
 
 class SchudulerMisc:   
@@ -516,7 +524,7 @@ class SchudulerMisc:
         else:
             warmup_iters = 0
             
-        if cfg.trainer.scheduler.lr_scheduler == 'cosine':
+        if cfg.trainer.scheduler.scheduler_choice == 'cosine':
             return WarmUpCosineAnnealingLR(
                 optimizer,
                 T_max=cfg.trainer.epochs * len_train_loader,
@@ -524,7 +532,7 @@ class SchudulerMisc:
                 warmup_factor=cfg.trainer.scheduler.warmup_factor,
                 lr_min=cfg.trainer.scheduler.lr_min,
             )
-        elif cfg.trainer.scheduler.lr_scheduler == 'linear':
+        elif cfg.trainer.scheduler.scheduler_choice == 'linear':
             return WarmupLinearLR(
                 optimizer,
                 T_max=cfg.trainer.epochs * len_train_loader,
@@ -532,7 +540,7 @@ class SchudulerMisc:
                 warmup_factor=cfg.trainer.scheduler.warmup_factor,
                 lr_min=cfg.trainer.scheduler.lr_min,
             )
-        elif cfg.trainer.scheduler.lr_scheduler == 'multistep':
+        elif cfg.trainer.scheduler.scheduler_choice == 'multistep':
             if cfg.trainer.scheduler.lr_milestones_steps is not None:
                 step_milestones = cfg.trainer.scheduler.lr_milestones_steps
             elif cfg.trainer.scheduler.lr_milestones_epochs is not None:
@@ -548,6 +556,8 @@ class SchudulerMisc:
                 warmup_factor=cfg.trainer.scheduler.warmup_factor,
                 lr_min=cfg.trainer.scheduler.lr_min,
             )
+        else:
+            raise ValueError(f'Unknown scheduler choice: {cfg.trainer.scheduler.scheduler_choice}')
     
 
 class TrainerMisc:
