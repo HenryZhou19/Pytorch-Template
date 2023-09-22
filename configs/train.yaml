@@ -33,6 +33,7 @@ info: # info & wandb
   wandb_watch_freq: 100
   cli_log_freq: 1
   wandb_log_freq: 10  # <= 0 means only log when an epoch ends
+  wandb_buffer_time: 300  # seconds
   global_tqdm: True
 
 env:
@@ -55,12 +56,21 @@ trainer:
   dist_eval: True
   resume: null
   epochs: 10
-  lr: 4.0e-4
-  # lr_groups:
-  #   main: 4.0e-4
-  #   backbone: 4.0e-4
-  weight_decay: 4.0e-5
+  optimizer:
+    lr: 4.0e-4
+    # lr_groups:
+    #   main: 4.0e-4
+    #   backbone: 4.0e-4
+    weight_decay: 4.0e-5
+  scheduler:
+    lr_scheduler: multistep  # multistep, cosine, linear
+    lr_min: 0.0
+    lr_milestones_epochs: [1, 3, 5]  # only for lr_scheduler == 'multistep'
+    lr_milestones_steps: null # only for lr_scheduler == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
+    lr_decay_gamma: 0.1  # only for lr_scheduler == 'multistep'
+    warmup_epochs: 10
+    warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
+    warmup_factor: 0.0  # [0., 1.] start warmup from: warmup_factor * lr
   max_grad_norm: 1.0  # <= 0 means no gradient clipping
   grad_accumulation: 1  # positive integer (keep it '1' in most cases)
-  warmup: False
   save_interval: 1

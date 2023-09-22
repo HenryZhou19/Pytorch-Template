@@ -19,7 +19,6 @@ def train_one_epoch(cfg, trainer_status):
     device: torch.device = trainer_status['device']
     optimizer: torch.optim.Optimizer = trainer_status['optimizer']
     lr_scheduler: torch.optim.lr_scheduler._LRScheduler = trainer_status['lr_scheduler']
-    warmup_lr_scheduler: torch.optim.lr_scheduler._LRScheduler = trainer_status['warmup_lr_scheduler']
     scaler: torch.cuda.amp.GradScaler = trainer_status['scaler']
     pbar: tqdm = trainer_status['train_pbar']
 
@@ -60,17 +59,12 @@ def train_one_epoch(cfg, trainer_status):
             **loss_dict)
 
         backward_and_step(loss, last_step=(trainer_status['train_iters'] % logger.iter_len == 0))
-
-        if warmup_lr_scheduler is not None and epoch == 1:  # only in the first epoch
-            warmup_lr_scheduler.step()  # update warmup_lr_scheduler after each iter (sub scheduler)
+        lr_scheduler.step()  # update special lr_scheduler after each iter
             
         if cfg.info.wandb_log_freq > 0:
             if trainer_status['train_iters'] % cfg.info.wandb_log_freq == 0:
                 output_dict = logger.output_dict(no_avg_list=['all'])
                 LoggerMisc.wandb_log(cfg,  'train_iter', output_dict, trainer_status['train_iters'])
-            
-    if lr_scheduler is not None:
-            lr_scheduler.step()  # update lr_scheduler after each epoch (main scheduler)
 
     return logger.output_dict(no_avg_list=['lr', 'epoch'], sync=True, final_print=True)
 

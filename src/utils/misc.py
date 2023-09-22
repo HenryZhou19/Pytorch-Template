@@ -10,7 +10,6 @@ from argparse import Namespace
 from glob import glob
 from math import inf
 
-import hjson
 import numpy as np
 import sacred
 import torch
@@ -18,6 +17,9 @@ import torch.distributed as dist
 import wandb
 import yaml
 from tqdm import tqdm
+
+from .scheduler.warmup_scheduler import (WarmUpCosineAnnealingLR,
+                                         WarmupLinearLR, WarmupMultiStepLR)
 
 
 class ConfigMisc:
@@ -207,7 +209,7 @@ class PortalMisc:
     def force_print_config(cfg):  
         def write_msg_lines(msg_in, cfg_in, indent=1):
             for m in sorted(vars(cfg_in).keys()):
-                m_indent = ' ' * (4*(indent - 1)) + ' ├─ ' + m
+                m_indent = ' ' * (4 * (indent - 1)) + ' ├─ ' + m
                 v = getattr(cfg_in, m)
                 if isinstance(v, Namespace):
                     msg_in += write_msg_lines(f'{m_indent}\n', v, indent + 1)
@@ -256,7 +258,7 @@ class PortalMisc:
             PortalMisc.force_print_config(cfg)
         try:
             if DistMisc.is_main_process():
-                for _ in tqdm(range(60), desc='Waiting for wandb to upload all files...'):
+                for _ in tqdm(range(cfg.info.wandb_buffer_time), desc='Waiting for wandb to upload all files...'):
                     time.sleep(1)
                 cfg.info.log_file.close()
                 print('log_file closed.')
@@ -313,7 +315,7 @@ class DistMisc:
         # receiving Tensor from all ranks
         # we pad the tensor because torch all_gather does not support
         # gathering tensors of different shapes
-        tensor_list = [None]*world_size
+        tensor_list = [None] * world_size
         # tensor_list = []
         # for _ in size_list:
         #     tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
@@ -483,24 +485,69 @@ class OptimizerMisc:
                     return True
             return False
 
-        if not hasattr(cfg.trainer, 'lr'):
-            assert hasattr(cfg.trainer, 'lr_groups')
+        if not hasattr(cfg.trainer.optimizer, 'lr'):
+            assert hasattr(cfg.trainer.optimizer, 'lr_groups')
             param_dicts_with_lr = [
                 {"params": [p for n, p in model_without_ddp.named_parameters()
                             if not match_name_keywords(n, 'backbone') and p.requires_grad],
-                "lr": cfg.trainer.lr_groups.main,},
+                "lr": cfg.trainer.optimizer.lr_groups.main,},
                 {"params": [p for n, p in model_without_ddp.named_parameters()
                             if match_name_keywords(n, 'backbone') and p.requires_grad],
-                "lr": cfg.trainer.lr_groups.backbone},
+                "lr": cfg.trainer.optimizer.lr_groups.backbone},
                 ]
         else:  # if cfg.trainer.lr exists, then all params use cfg.trainer.lr
             param_dicts_with_lr = [
                 {"params": [p for n, p in model_without_ddp.named_parameters()
                             if p.requires_grad],
-                "lr": cfg.trainer.lr},
+                "lr": cfg.trainer.optimizer.lr},
                 ]
         
         return param_dicts_with_lr
+
+
+class SchudulerMisc:   
+    @staticmethod
+    def get_warmup_lr_scheduler(cfg, optimizer, train_loader):
+        len_train_loader = len(train_loader)
+        if cfg.trainer.scheduler.warmup_steps >= 0:
+            warmup_iters = cfg.trainer.scheduler.warmup_steps
+        elif cfg.trainer.scheduler.warmup_epochs >= 0:
+            warmup_iters = cfg.trainer.scheduler.warmup_epochs * len_train_loader
+        else:
+            warmup_iters = 0
+            
+        if cfg.trainer.scheduler.lr_scheduler == 'cosine':
+            return WarmUpCosineAnnealingLR(
+                optimizer,
+                T_max=cfg.trainer.epochs * len_train_loader,
+                T_warmup=warmup_iters,
+                warmup_factor=cfg.trainer.scheduler.warmup_factor,
+                lr_min=cfg.trainer.scheduler.lr_min,
+            )
+        elif cfg.trainer.scheduler.lr_scheduler == 'linear':
+            return WarmupLinearLR(
+                optimizer,
+                T_max=cfg.trainer.epochs * len_train_loader,
+                T_warmup=warmup_iters,
+                warmup_factor=cfg.trainer.scheduler.warmup_factor,
+                lr_min=cfg.trainer.scheduler.lr_min,
+            )
+        elif cfg.trainer.scheduler.lr_scheduler == 'multistep':
+            if cfg.trainer.scheduler.lr_milestones_steps is not None:
+                step_milestones = cfg.trainer.scheduler.lr_milestones_steps
+            elif cfg.trainer.scheduler.lr_milestones_epochs is not None:
+                step_milestones = [len_train_loader * lr_milestones_epoch for lr_milestones_epoch in cfg.trainer.scheduler.lr_milestones_epochs]
+            else:
+                raise ValueError('lr_milestones_steps and lr_milestones_epochs cannot be both None.')
+            return WarmupMultiStepLR(
+                optimizer,
+                step_milestones=step_milestones,
+                gamma=cfg.trainer.scheduler.lr_decay_gamma,
+                T_max=cfg.trainer.epochs * len_train_loader,
+                T_warmup=warmup_iters,
+                warmup_factor=cfg.trainer.scheduler.warmup_factor,
+                lr_min=cfg.trainer.scheduler.lr_min,
+            )
     
 
 class TrainerMisc:
@@ -511,22 +558,22 @@ class TrainerMisc:
             len_val_loader = len(trainer_status['val_loader'])
             epoch_finished = trainer_status['start_epoch'] - 1
             train_pbar = tqdm(
-                total=cfg.trainer.epochs*len_train_loader if cfg.info.global_tqdm else len_train_loader,
+                total=cfg.trainer.epochs * len_train_loader if cfg.info.global_tqdm else len_train_loader,
                 dynamic_ncols=True,
                 colour='green',
                 position=0,
                 maxinterval=inf,
-                initial=epoch_finished*len_train_loader,
+                initial=epoch_finished * len_train_loader,
             )
             train_pbar.set_description_str('Train')
             print('')
             val_pbar = tqdm(
-                total=cfg.trainer.epochs*len_val_loader if cfg.info.global_tqdm else len_val_loader,
+                total=cfg.trainer.epochs * len_val_loader if cfg.info.global_tqdm else len_val_loader,
                 dynamic_ncols=True,
                 colour='green',
                 position=0,
                 maxinterval=inf,
-                initial=epoch_finished*len_val_loader,
+                initial=epoch_finished * len_val_loader,
             )
             val_pbar.set_description_str('Eval ')
             print('')
@@ -750,7 +797,7 @@ class StrMisc:
         str_input = str(input)
         if str_input[-1] != '\n':
             str_input += '\n'
-        return '\n' + s*block_width + '\n' + str(input) + s*block_width + '\n'
+        return '\n' + s * block_width + '\n' + str(input) + s * block_width + '\n'
 
 
 class TimeMisc:

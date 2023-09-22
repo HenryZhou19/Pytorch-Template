@@ -15,6 +15,7 @@ info:
   wandb_watch_freq: 100
   cli_log_freq: 1
   # wandb_log_freq: 10  # NO NEED. only one epoch with few iters
+  wandb_buffer_time: 300  # seconds
   # global_tqdm: True  # NO NEED. only one epoch
   
 env:

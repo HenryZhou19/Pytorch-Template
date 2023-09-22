@@ -5,7 +5,7 @@ from src.engine import evaluate, train_one_epoch
 from src.gears import Trainer
 from src.models import ModelManager
 from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, OptimizerMisc,
-                            PortalMisc, TimeMisc)
+                            PortalMisc, SchudulerMisc, TimeMisc)
 
 
 def train_run(cfg):
@@ -25,13 +25,10 @@ def train_run(cfg):
 
     # prepare for optimizer
     param_dicts_with_lr = OptimizerMisc.get_param_dicts_with_specific_lr(cfg, model_without_ddp)
-    optimizer = torch.optim.AdamW(param_dicts_with_lr, weight_decay=cfg.trainer.weight_decay)
+    optimizer = torch.optim.AdamW(param_dicts_with_lr, weight_decay=cfg.trainer.optimizer.weight_decay)
 
     # prepare for lr_scheduler
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.trainer.epochs)
-    warmup_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
-        optimizer, start_factor=1e-3, total_iters=min(1000, len(train_loader) - 1)
-    ) if cfg.trainer.warmup else None
+    lr_scheduler = SchudulerMisc.get_warmup_lr_scheduler(cfg, optimizer, train_loader)
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
@@ -49,7 +46,6 @@ def train_run(cfg):
         'val_loader': val_loader,
         'optimizer': optimizer,
         'lr_scheduler': lr_scheduler,
-        'warmup_lr_scheduler': warmup_lr_scheduler,
         'scaler': scaler,
         'device': model_manager.device,  # torch.device
         'start_epoch': 1,
