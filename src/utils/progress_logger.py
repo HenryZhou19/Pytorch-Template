@@ -112,13 +112,12 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
-    def __init__(self, log_file=sys.stdout, delimiter='  ', print_freq=1, debug=False, pbar=None, global_tqdm=False, header=None, epoch_str=''):
+    def __init__(self, log_file=sys.stdout, delimiter='  ', print_freq=1, debug=False, pbar=None, global_tqdm=False, header='', epoch_str=''):
         self.meters = defaultdict(SmoothedValue)
         self.log_file = log_file
         self.delimiter = delimiter
         self.print_freq = print_freq
         self.debug = debug
-        self.header = ''
         self.pbar = pbar
         self.global_tqdm = global_tqdm
         self.header = header

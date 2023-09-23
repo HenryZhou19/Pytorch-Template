@@ -2,8 +2,8 @@ from src.datasets import DataManager
 from src.engine import test
 from src.gears import Tester
 from src.models import ModelManager
-from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, PortalMisc, SweepMisc,
-                            TimeMisc)
+from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, PortalMisc,
+                            SweepMisc, TimeMisc)
 
 
 def test_run(cfg):

@@ -1,5 +1,5 @@
-from copy import deepcopy
 import logging
+import math
 import os
 import pickle
 import random
@@ -8,6 +8,7 @@ import sys
 import time
 import warnings
 from argparse import Namespace
+from copy import deepcopy
 from glob import glob
 from math import inf
 
@@ -718,18 +719,21 @@ class TrainerMisc:
     
     class BackwardAndStep:
         def __init__(self, cfg, trainer_status):
+            self.trainer_status = trainer_status
             assert cfg.trainer.grad_accumulation > 0 and isinstance(cfg.trainer.grad_accumulation, int), 'grad_accumulation should be a positive integer.'
             self.gradient_accumulation_steps = cfg.trainer.grad_accumulation
             self.do_gradient_accumulation = self.gradient_accumulation_steps > 1
             self.max_grad_norm = cfg.trainer.max_grad_norm
             self.model: torch.nn.Module = trainer_status['model']
             self.optimizer: torch.optim.Optimizer = trainer_status['optimizer']
+            self.lr_scheduler: torch.optim.lr_scheduler._LRScheduler = trainer_status['lr_scheduler']
             self.scaler: torch.cuda.amp.GradScaler = trainer_status['scaler']
+            self.iter_len = len(trainer_status['train_loader'])
             self.step_count = 0
             
             self.optimizer.zero_grad()
             
-        def _backward(self, loss):
+        def _backward(self, loss: torch.Tensor):
             if self.scaler is not None:
                 self.scaler.scale(loss).backward()
             else:
@@ -748,19 +752,24 @@ class TrainerMisc:
                 self.optimizer.step()
             self.optimizer.zero_grad()
             
-        def __call__(self, loss, last_step):
+        def __call__(self, loss):
+            if not math.isfinite(loss):
+                raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss}, stopping training')
+            
             if self.do_gradient_accumulation:
-                loss /= self.gradient_accumulation_steps  # Require that all losses are mean-reduction. (Otherwise meaningless)
+                loss /= self.gradient_accumulation_steps  # Assume that all losses are mean-reduction. (Otherwise meaningless)
                 self.step_count += 1
             
             self._backward(loss)
             
-            if self.do_gradient_accumulation and not last_step:
+            if self.do_gradient_accumulation and (self.trainer_status['train_iters'] % self.iter_len != 0):
                 if self.step_count % self.gradient_accumulation_steps == 0:
                     self._optimize()
                     self.step_count = 0
             else:
                 self._optimize()
+            
+            self.lr_scheduler.step()  # update special lr_scheduler after each iter
 
 
 class TesterMisc:

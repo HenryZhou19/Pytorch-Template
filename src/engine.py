@@ -1,12 +1,10 @@
-import math
-
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.utils.loss import LossBase
 from src.utils.metric import MetricBase
-from src.utils.misc import DistMisc, LoggerMisc, TrainerMisc
+from src.utils.misc import LoggerMisc, TrainerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV
 
@@ -18,15 +16,13 @@ def train_one_epoch(cfg, trainer_status):
     epoch: int = trainer_status['epoch']  # start from 1
     device: torch.device = trainer_status['device']
     optimizer: torch.optim.Optimizer = trainer_status['optimizer']
-    lr_scheduler: torch.optim.lr_scheduler._LRScheduler = trainer_status['lr_scheduler']
     scaler: torch.cuda.amp.GradScaler = trainer_status['scaler']
     pbar: tqdm = trainer_status['train_pbar']
 
     model.train()
-    loss_criterion.train()
-    
+    loss_criterion.train()   
     backward_and_step = TrainerMisc.BackwardAndStep(cfg, trainer_status)
-        
+    
     logger = MetricLogger(
         log_file=cfg.info.log_file,
         print_freq=cfg.info.cli_log_freq,
@@ -46,25 +42,20 @@ def train_one_epoch(cfg, trainer_status):
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             outputs = model(inputs)
             loss, loss_dict = loss_criterion(outputs, targets)
-
-        if not math.isfinite(loss):
-            raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss}, stopping training')
-            
-        trainer_status['train_iters'] += 1 
-
+        trainer_status['train_iters'] += 1
+        
         logger.update(
+            lr=optimizer.param_groups[0]['lr'],  # Assume only one group. TODO: multiple groups lr logging
+            epoch=trainer_status['train_iters'] / logger.iter_len,
             loss=loss,
-            lr=optimizer.param_groups[0]['lr'],
-            epoch=trainer_status['train_iters'] / logger.iter_len, 
-            **loss_dict)
-
-        backward_and_step(loss, last_step=(trainer_status['train_iters'] % logger.iter_len == 0))
-        lr_scheduler.step()  # update special lr_scheduler after each iter
-            
+            **loss_dict,
+        )
+        
         if cfg.info.wandb_log_freq > 0:
             if trainer_status['train_iters'] % cfg.info.wandb_log_freq == 0:
-                output_dict = logger.output_dict(no_avg_list=['all'])
-                LoggerMisc.wandb_log(cfg,  'train_iter', output_dict, trainer_status['train_iters'])
+                LoggerMisc.wandb_log(cfg,  'train_iter', logger.output_dict(no_avg_list=['all']), trainer_status['train_iters'])
+
+        backward_and_step(loss)
 
     return logger.output_dict(no_avg_list=['lr', 'epoch'], sync=True, final_print=True)
 
@@ -97,13 +88,13 @@ def evaluate(cfg, trainer_status):
             outputs = model(inputs)
             loss, loss_dict = loss_criterion(outputs, targets)
 
-            metrics, *_ = metric_criterion.get_metrics(outputs, targets)
-            logger.update(**metrics)
-
         logger.update(
             loss=loss,
             **loss_dict,
         )
+
+        metrics, *_ = metric_criterion.get_metrics(outputs, targets)
+        logger.update(**metrics)
         
     sync = cfg.trainer.dist_eval
     return logger.output_dict(sync=sync, final_print=True)
@@ -131,7 +122,6 @@ def test(cfg, tester_status):
             outputs = model(inputs)
 
         metrics, *_= metric_criterion.get_metrics(outputs, targets)
-
         logger.update(**metrics)
             
     return logger.output_dict(sync=True, final_print=True)
