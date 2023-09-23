@@ -81,8 +81,11 @@ def train_run(cfg):
     Trainer.after_all_epochs(cfg, trainer_status)
 
 
-def portal(cfg):
+def train_portal(cfg):
     setattr(cfg.info, 'start_time', TimeMisc.get_time_str())
+    
+    # special config adjustment(debug)
+    PortalMisc.special_config_adjustment(cfg)
     
     # resume training or new one (makedirs & write configs to file)
     PortalMisc.resume_or_new_train_dir(cfg)
@@ -90,11 +93,8 @@ def portal(cfg):
     # seed everything
     PortalMisc.seed_everything(cfg)
 
-    # special config adjustment(debug)
-    PortalMisc.special_config_adjustment(cfg)
-
     # save configs to work_dir as .yaml file
-    PortalMisc.save_configs(cfg)
+    PortalMisc.save_configs(cfg, ignore_name_list=['sweep'])
 
     # choose whether to print configs of each rank
     PortalMisc.print_config(cfg, ignore_name_list=['sweep'], force_all_rank=False)
@@ -119,4 +119,4 @@ if __name__ == '__main__':
     # init distributed mode
     DistMisc.init_distributed_mode(cfg)
     
-    SweepMisc.init_sweep_mode(cfg, portal)
+    SweepMisc.init_sweep_mode(cfg, train_portal)

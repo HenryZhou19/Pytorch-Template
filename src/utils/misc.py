@@ -53,20 +53,25 @@ class ConfigMisc:
         return cfg
 
     @staticmethod 
-    def nested_dict_to_nested_namespace(dictionary):
+    def nested_dict_to_nested_namespace(dictionary, ignore_key_list=[]):
         namespace = dictionary
         if isinstance(dictionary, dict):
             namespace = Namespace(**dictionary)
             for key, value in dictionary.items():
-                setattr(namespace, key, ConfigMisc.nested_dict_to_nested_namespace(value))
+                if key in ignore_key_list:
+                    delattr(namespace, key)
+                    continue
+                setattr(namespace, key, ConfigMisc.nested_dict_to_nested_namespace(value, ignore_key_list))
         return namespace
     
     @staticmethod 
-    def nested_namespace_to_nested_dict(namespace):
+    def nested_namespace_to_nested_dict(namespace, ignore_name_list=[]):
         dictionary = {}
         for name, value in vars(namespace).items():
+            if name in ignore_name_list:
+                continue
             if isinstance(value, Namespace):
-                dictionary[name] = ConfigMisc.nested_namespace_to_nested_dict(value)
+                dictionary[name] = ConfigMisc.nested_namespace_to_nested_dict(value, ignore_name_list)
             else:
                 dictionary[name] = value
         return dictionary
@@ -82,7 +87,7 @@ class ConfigMisc:
             if name in ignore_name_list:
                 continue
             if isinstance(value, Namespace):
-                plain_subnamespace = ConfigMisc.nested_namespace_to_plain_namespace(value)
+                plain_subnamespace = ConfigMisc.nested_namespace_to_plain_namespace(value, ignore_name_list)
                 for subname, subvalue in vars(plain_subnamespace).items():
                     setattr_safely(plain_namespace, subname, subvalue)
             else:
@@ -114,9 +119,9 @@ class ConfigMisc:
         return ConfigMisc.nested_dict_to_nested_namespace(config)
 
     @staticmethod
-    def write(path, config):
+    def write(path, config, ignore_name_list):
         with open(path, 'w', encoding='utf-8') as f:
-            yaml.safe_dump(ConfigMisc.nested_namespace_to_nested_dict(config), f)
+            yaml.safe_dump(ConfigMisc.nested_namespace_to_nested_dict(config, ignore_name_list), f)
 
     @staticmethod
     def get_specific_list(cfg, cfg_keys):
@@ -139,7 +144,7 @@ class ConfigMisc:
 class PortalMisc:
     @staticmethod
     def combine_train_infer_configs(infer_cfg, use_train_seed=True):
-        cfg = ConfigMisc.read(infer_cfg.tester.train_cfg_path)
+        cfg = ConfigMisc.read(infer_cfg.tester.train_cfg_path)  # config in training
         train_seed = cfg.env.seed
         ConfigMisc.update_nested_namespace(cfg, infer_cfg)
         if use_train_seed:
@@ -206,15 +211,16 @@ class PortalMisc:
         cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
 
     @staticmethod
-    def save_configs(cfg):
+    def save_configs(cfg, ignore_name_list=[]):
         if DistMisc.is_main_process():
             if not os.path.exists(cfg.info.work_dir):
                 os.makedirs(cfg.info.work_dir)
-            if cfg.trainer.resume==None:
+            if cfg.trainer.resume is None:
                 cfg_file_name = 'cfg.yaml'
             else:
-                cfg_file_name = f'cfg_resume_{cfg.info.resume_start_time}.yaml'
-            ConfigMisc.write(os.path.join(cfg.info.work_dir, cfg_file_name), cfg)
+                cfg_file_name = f'cfg_resume_{cfg.info.resume_start_time}.yaml'  
+            
+            ConfigMisc.write(os.path.join(cfg.info.work_dir, cfg_file_name), cfg, ignore_name_list=ignore_name_list)
 
     @staticmethod
     def print_config(cfg, ignore_name_list=[], force_all_rank=False):  
@@ -822,7 +828,10 @@ class SweepMisc:
     @staticmethod
     def init_sweep_mode(cfg, portal_fn):
         if cfg.sweep.sweep_enabled:
-            assert cfg.trainer.resume is None, 'Sweep mode cannot be used with resume.'
+            if hasattr(cfg, 'trainer'):
+                assert cfg.trainer.resume is None, 'Sweep mode cannot be used with resume in phase of training.'
+            else:
+                assert hasattr(cfg, 'tester'), 'Sweep mode can only be used in phase of training or inference.'
             sweep_cfg_dict = ConfigMisc.nested_namespace_to_nested_dict(cfg.sweep.sweep_params)
             
             from itertools import product
@@ -844,9 +853,9 @@ class StrMisc:
     @staticmethod
     def block_wrapper(input, s='=', block_width=80):
         str_input = str(input)
-        if str_input.endswith('\n'):
+        if not str_input.endswith('\n'):
             str_input += '\n'
-        return '\n' + s * block_width + '\n' + str(input) + s * block_width + '\n'
+        return '\n' + s * block_width + '\n' + str_input + s * block_width + '\n'
 
 
 class TimeMisc:

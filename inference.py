@@ -2,7 +2,7 @@ from src.datasets import DataManager
 from src.engine import test
 from src.gears import Tester
 from src.models import ModelManager
-from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, PortalMisc,
+from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, PortalMisc, SweepMisc,
                             TimeMisc)
 
 
@@ -46,24 +46,23 @@ def test_run(cfg):
     Tester.after_inference(cfg, tester_status)
 
 
-def portal(infer_cfg):
+def infer_portal(infer_cfg):
+    setattr(infer_cfg.info, 'infer_start_time', TimeMisc.get_time_str())
+    
     # combine train(read) inference(input) configs
     cfg = PortalMisc.combine_train_infer_configs(infer_cfg)
-
-    # init distributed mode
-    DistMisc.init_distributed_mode(cfg)
+    
+    # special config adjustment(debug and work_dir for inference)
+    PortalMisc.special_config_adjustment(cfg)
     
     # seed everything
     PortalMisc.seed_everything(cfg)
 
-    # special config adjustment(debug and work_dir for inference)
-    PortalMisc.special_config_adjustment(cfg)
-
     # save configs to work_dir as .yaml file
-    PortalMisc.save_configs(cfg)
+    PortalMisc.save_configs(cfg, ignore_name_list=['sweep'])
 
-    # force to print configs of each rank
-    PortalMisc.force_print_config(cfg)
+    # choose whether to print configs of each rank
+    PortalMisc.print_config(cfg, ignore_name_list=['sweep'], force_all_rank=False)
 
     # init loggers(wandb and local:log_file)
     PortalMisc.init_loggers(cfg)
@@ -81,6 +80,8 @@ def portal(infer_cfg):
 if __name__ == '__main__':
     infer_cfg = ConfigMisc.get_configs_from_sacred(main_config='./configs/inference.yaml')
     assert hasattr(infer_cfg, 'info'), 'infer_cfg.info not found'
-    setattr(infer_cfg.info, 'infer_start_time', TimeMisc.get_time_str())
-    portal(infer_cfg)
 
+    # init distributed mode
+    DistMisc.init_distributed_mode(infer_cfg)
+    
+    SweepMisc.init_sweep_mode(infer_cfg, infer_portal)

@@ -21,8 +21,8 @@ nproc_per_node=$num_devices
 echo "CUDA_VISIBLE_DEVICES: $cuda_devices"
 echo "nproc_per_node: $nproc_per_node"
 
-master_port=25900
-end_port=25920
+master_port=25950
+end_port=25955
 used_port=""
 keep_trying=false
 
