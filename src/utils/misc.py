@@ -1,3 +1,4 @@
+from copy import deepcopy
 import logging
 import os
 import pickle
@@ -71,13 +72,15 @@ class ConfigMisc:
         return dictionary
     
     @staticmethod
-    def nested_namespace_to_plain_namespace(namespace):
+    def nested_namespace_to_plain_namespace(namespace, ignore_name_list=[]):
         def setattr_safely(ns, n, v):
             assert not hasattr(ns, n), f'Namespace conflict: {v}'
             setattr(ns, n, v)
         
         plain_namespace = Namespace()
         for name, value in vars(namespace).items():
+            if name in ignore_name_list:
+                continue
             if isinstance(value, Namespace):
                 plain_subnamespace = ConfigMisc.nested_namespace_to_plain_namespace(value)
                 for subname, subvalue in vars(plain_subnamespace).items():
@@ -96,6 +99,13 @@ class ConfigMisc:
                 ConfigMisc.update_nested_namespace(getattr(cfg_base, name), value)
             else:
                 setattr(cfg_base, name, value)
+                
+    @staticmethod
+    def setattr_for_nested_namespace(cfg, name_list, value):
+        namespace_now = cfg
+        for name in name_list[:-1]:
+            namespace_now = getattr(namespace_now, name)
+        setattr(namespace_now, name_list[-1], value)
 
     @staticmethod
     def read(path):
@@ -193,6 +203,7 @@ class PortalMisc:
             cfg.env.num_workers = 0
         if cfg.trainer.grad_accumulation > 1:
             warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm).')
+        cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
 
     @staticmethod
     def save_configs(cfg):
@@ -206,16 +217,18 @@ class PortalMisc:
             ConfigMisc.write(os.path.join(cfg.info.work_dir, cfg_file_name), cfg)
 
     @staticmethod
-    def force_print_config(cfg):  
+    def print_config(cfg, ignore_name_list=[], force_all_rank=False):  
         def write_msg_lines(msg_in, cfg_in, indent=1):
-            for m in sorted(vars(cfg_in).keys()):
-                m_indent = ' ' * (4 * (indent - 1)) + ' ├─ ' + m
-                v = getattr(cfg_in, m)
+            for name in sorted(vars(cfg_in).keys()):
+                if name in ignore_name_list:
+                    continue
+                m_indent = ' ' * (4 * (indent - 1)) + ' ├─ ' + name
+                v = getattr(cfg_in, name)
                 if isinstance(v, Namespace):
                     msg_in += write_msg_lines(f'{m_indent}\n', v, indent + 1)
                 else:
                     if len(m_indent) > 40:
-                        warnings.warn(f'Config key "{m}" with indent is too long (>40) to display, please check.')
+                        warnings.warn(f'Config key "{name}" with indent is too long (>40) to display, please check.')
                     if len(m_indent) < 38:
                         m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
                     msg_in += f'{m_indent:40}{v}\n'
@@ -226,7 +239,7 @@ class PortalMisc:
 
         DistMisc.avoid_print_mess()
         if cfg.env.distributed:
-            print(msg, force=True)
+            print(msg, force=force_all_rank)
         else:
             print(msg)
         DistMisc.avoid_print_mess()
@@ -246,7 +259,7 @@ class PortalMisc:
                 name=wandb_name,
                 tags=wandb_tags,
                 dir=cfg.info.work_dir,
-                config=ConfigMisc.nested_namespace_to_plain_namespace(cfg)
+                config=ConfigMisc.nested_namespace_to_plain_namespace(cfg, ignore_name_list=['info', 'dummy', 'sweep']),
                 )
             cfg.info.log_file = open(os.path.join(cfg.info.work_dir, 'logs.txt'), 'a' if cfg.trainer.resume is None else 'a+')
         else:
@@ -255,19 +268,22 @@ class PortalMisc:
     @staticmethod 
     def end_everything(cfg, end_with_printed_cfg=False, force=False):
         if end_with_printed_cfg:
-            PortalMisc.force_print_config(cfg)
-        try:
-            if DistMisc.is_main_process():
-                for _ in tqdm(range(cfg.info.wandb_buffer_time), desc='Waiting for wandb to upload all files...'):
-                    time.sleep(1)
-                cfg.info.log_file.close()
-                print('log_file closed.')
+            PortalMisc.print_config(cfg)
+        if DistMisc.is_main_process():
+            cfg.info.log_file.close()
+            print('log_file closed.')
+            try:
                 if force:
-                    wandb.finish(exit_code=-1)              
-                print('wandb closed.')
-        finally:
-            exit()           
-
+                    wandb.finish(exit_code=-1)
+                    print('wandb closed.')
+                    sys.exit(0)  # 0 for shutting down bash master_port sweeper
+                else:
+                    for _ in tqdm(range(cfg.info.wandb_buffer_time), desc='Waiting for wandb to upload all files...'):
+                        time.sleep(1)
+                    wandb.finish()
+                    print('wandb closed.')
+            finally:
+                pass
 
     @staticmethod 
     def interrupt_handler(cfg):
@@ -400,14 +416,15 @@ class DistMisc:
             cfg.env.rank = int(os.environ["SLURM_PROCID"])
             cfg.env.gpu = cfg.env.rank % torch.cuda.device_count()
         else:
-            print("Not using distributed mode")
-            cfg.env.distributed = False
-            cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.trainer.grad_accumulation
-            return
-
+            raise NotImplementedError("Must use distributed mode")
+            
+            # print("Not using distributed mode")
+            # cfg.env.distributed = False
+            # cfg.env.distributed = 1
+            # return
+            
         cfg.env.distributed = True
         cfg.env.dist_backend = 'nccl'
-        cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
         torch.cuda.set_device(cfg.env.gpu)
         
         dist.distributed_c10d.logger.setLevel(logging.WARNING)
@@ -458,7 +475,7 @@ class ModelMisc:
     def _deepspeed_ddp_wrapper(cfg, model_without_ddp):
         assert cfg.env.distributed, 'DeepSpeed DDP wrapper only works in distributed mode.'
         
-        print(StrMisc.block_wrapper('Using DeepSpeed DDP wrapper...\n', s='#', block_width=80))
+        print(StrMisc.block_wrapper('Using DeepSpeed DDP wrapper...', s='#', block_width=80))
         DistMisc.avoid_print_mess()
         
         import deepspeed
@@ -801,11 +818,33 @@ class LoggerMisc:
                 # wandb.log({"output_video": wandb.Video(trainer_status['output_video'], fps=30, format="mp4")})
 
 
+class SweepMisc:
+    @staticmethod
+    def init_sweep_mode(cfg, portal_fn):
+        if cfg.sweep.sweep_enabled:
+            assert cfg.trainer.resume is None, 'Sweep mode cannot be used with resume.'
+            sweep_cfg_dict = ConfigMisc.nested_namespace_to_nested_dict(cfg.sweep.sweep_params)
+            
+            from itertools import product
+            combinations = [dict(zip(sweep_cfg_dict.keys(), values)) for values in product(*sweep_cfg_dict.values())]
+            
+            for idx, combination in enumerate(combinations):              
+                print(StrMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(combinations)}] combinations', s='#', block_width=80))
+                
+                cfg_now = deepcopy(cfg)
+                for chained_k, v in combination.items():
+                    k_list = chained_k.split('-')
+                    ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v)
+                portal_fn(cfg_now)
+        else:
+            portal_fn(cfg)
+
+
 class StrMisc:
     @staticmethod
     def block_wrapper(input, s='=', block_width=80):
         str_input = str(input)
-        if str_input[-1] != '\n':
+        if str_input.endswith('\n'):
             str_input += '\n'
         return '\n' + s * block_width + '\n' + str(input) + s * block_width + '\n'
 

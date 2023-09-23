@@ -1,7 +1,6 @@
 dummy: null
 deepspeed:
   ds_enable: True
-  deepspeed_config: configs/ds_config.json
 
 special:
   debug: False
@@ -50,7 +49,7 @@ env:
   find_unused_params: True
   amp: True
   num_workers: 4
-  pin_memory: False
+  pin_memory: True
 
 trainer:
   dist_eval: True
@@ -75,3 +74,10 @@ trainer:
   max_grad_norm: 1.0  # <= 0 means no gradient clipping
   grad_accumulation: 1  # positive integer (keep it '1' in most cases)
   save_interval: 1
+
+sweep:
+  sweep_enabled: True
+  sweep_params:  # use '-' as connect symbols for sub-params 
+    trainer-optimizer-lr: [1.0e-4, 2.0e-4, 4.0e-4]
+    trainer-scheduler-scheduler_choice: [linear, cosine]
+

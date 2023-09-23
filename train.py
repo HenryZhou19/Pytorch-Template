@@ -5,7 +5,7 @@ from src.engine import evaluate, train_one_epoch
 from src.gears import Trainer
 from src.models import ModelManager
 from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, OptimizerMisc,
-                            PortalMisc, SchudulerMisc, TimeMisc)
+                            PortalMisc, SchudulerMisc, SweepMisc, TimeMisc)
 
 
 def train_run(cfg):
@@ -82,9 +82,8 @@ def train_run(cfg):
 
 
 def portal(cfg):
-    # init distributed mode
-    DistMisc.init_distributed_mode(cfg)
-
+    setattr(cfg.info, 'start_time', TimeMisc.get_time_str())
+    
     # resume training or new one (makedirs & write configs to file)
     PortalMisc.resume_or_new_train_dir(cfg)
 
@@ -97,8 +96,8 @@ def portal(cfg):
     # save configs to work_dir as .yaml file
     PortalMisc.save_configs(cfg)
 
-    # force to print configs of each rank
-    PortalMisc.force_print_config(cfg)
+    # choose whether to print configs of each rank
+    PortalMisc.print_config(cfg, ignore_name_list=['sweep'], force_all_rank=False)
 
     # init loggers(wandb and local:log_file)
     PortalMisc.init_loggers(cfg)
@@ -116,5 +115,8 @@ def portal(cfg):
 if __name__ == '__main__':
     cfg = ConfigMisc.get_configs_from_sacred(main_config='./configs/train.yaml')
     assert hasattr(cfg, 'info'), 'cfg.info not found'
-    setattr(cfg.info, 'start_time', TimeMisc.get_time_str())
-    portal(cfg)
+    
+    # init distributed mode
+    DistMisc.init_distributed_mode(cfg)
+    
+    SweepMisc.init_sweep_mode(cfg, portal)
