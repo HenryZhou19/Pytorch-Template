@@ -93,7 +93,7 @@ def train_portal(cfg):
     # seed everything
     PortalMisc.seed_everything(cfg)
 
-    # save configs to work_dir as .yaml file
+    # save configs to work_dir as .yaml file (and save current project files if needed)
     PortalMisc.save_configs(cfg, ignore_name_list=['sweep'])
 
     # choose whether to print configs of each rank

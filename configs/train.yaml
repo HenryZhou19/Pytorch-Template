@@ -4,6 +4,7 @@ deepspeed:
 
 special:
   debug: False
+  save_current_project: True  # src/, scripts/, configs/, train.py, inference.py
 
 model:
   backbone: simple

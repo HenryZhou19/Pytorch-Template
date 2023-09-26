@@ -3,6 +3,7 @@ import math
 import os
 import pickle
 import random
+import shutil
 import signal
 import sys
 import time
@@ -144,6 +145,28 @@ class ConfigMisc:
 
 class PortalMisc:
     @staticmethod
+    def _save_currect_project(cfg):
+        if DistMisc.is_main_process():
+            source_paths = [
+                './src',
+                './scripts',
+                './configs',
+                './train.py',
+                './inference.py'
+            ]
+            destination_dir = os.path.join(cfg.info.work_dir, 'current_project')
+            
+            for source_path in source_paths:
+                if os.path.isdir(source_path):
+                    shutil.copytree(source_path, os.path.join(destination_dir, os.path.basename(source_path)),
+                                    ignore=shutil.ignore_patterns('__pycache__'))
+                elif os.path.isfile(source_path):
+                    shutil.copy(source_path, destination_dir)
+                else:
+                    print(f"Skipping {source_path} as it is neither a file nor a directory.")
+            print(StrMisc.block_wrapper('Files and folders of currect project are copied successfully.'))
+    
+    @staticmethod
     def combine_train_infer_configs(infer_cfg, use_train_seed=True):
         cfg = ConfigMisc.read(infer_cfg.tester.train_cfg_path)  # config in training
         train_seed = cfg.env.seed
@@ -222,6 +245,9 @@ class PortalMisc:
                 cfg_file_name = f'cfg_resume_{cfg.info.resume_start_time}.yaml'  
             
             ConfigMisc.write(os.path.join(cfg.info.work_dir, cfg_file_name), cfg, ignore_name_list=ignore_name_list)
+            
+        if cfg.special.save_current_project:
+            PortalMisc._save_currect_project(cfg)
 
     @staticmethod
     def print_config(cfg, ignore_name_list=[], force_all_rank=False):  
