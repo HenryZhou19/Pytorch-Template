@@ -4,6 +4,10 @@ from torch import nn
 class MetricBase:
     def __init__(self, cfg):
         self.primary_criterion = cfg.model.primary_criterion
+        if cfg.model.primary_criterion_higher_better:
+            self.choose_better_fn = lambda now, stored: now > stored  # higher better  
+        else:
+            self.choose_better_fn = lambda now, stored: now < stored  # lower better
     
     def get_metrics(self, cfg):
         raise NotImplementedError
@@ -17,7 +21,7 @@ class MetricBase:
             
         def compare_primary_criterion(m, b_m):
             assert self.primary_criterion in m, f'best_criterion "{self.primary_criterion}" not in metric {m}'
-            if m[self.primary_criterion] < b_m[self.primary_criterion]:
+            if self.choose_better_fn(m[self.primary_criterion], b_m[self.primary_criterion]):
                 return m, True
             else:
                 return b_m, False
