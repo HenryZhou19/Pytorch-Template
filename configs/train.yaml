@@ -9,6 +9,8 @@ special:
 model:
   backbone: simple
   loss: mse
+  primary_criterion: null  # null (None) to use loss as primary_criterion
+
 
 data:
   dataset: simple
