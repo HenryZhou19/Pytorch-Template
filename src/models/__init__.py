@@ -1,9 +1,9 @@
 import torch
 
-from src.utils.loss import SimpleLoss
-from src.utils.metric import SimpleMetric
+from src.utils.simple_loss import SimpleLoss
+from src.utils.simple_metric import SimpleMetric
 
-from .model import SimpleModel
+from .simple_model import SimpleModel
 
 
 class ModelManager(object):

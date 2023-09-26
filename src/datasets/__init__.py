@@ -2,7 +2,7 @@
 import torch
 from torch.utils.data import DataLoader, Dataset, Sampler
 
-from .dataset import SimpleDataModule, collate_fn
+from .simple_dataset import SimpleDataModule, collate_fn
 
 
 class DataLoaderX(DataLoader):
