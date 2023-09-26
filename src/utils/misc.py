@@ -145,6 +145,18 @@ class ConfigMisc:
 
 class PortalMisc:
     @staticmethod
+    def _find_available_new_path(path, suffix=''):
+        if os.path.exists(path):
+            counter = 1
+            new_path = f"{path}_{suffix}{counter}"
+            while os.path.exists(new_path):
+                new_path = f"{path}_{suffix}{counter}"
+                counter += 1
+            return new_path
+        else:
+            return path
+    
+    @staticmethod
     def _save_currect_project(cfg):
         if DistMisc.is_main_process():
             source_paths = [
@@ -155,6 +167,7 @@ class PortalMisc:
                 './inference.py'
             ]
             destination_dir = os.path.join(cfg.info.work_dir, 'current_project')
+            destination_dir = PortalMisc._find_available_new_path(destination_dir, suffix='resume_')
             
             for source_path in source_paths:
                 if os.path.isdir(source_path):
@@ -287,12 +300,16 @@ class PortalMisc:
                 wandb_tags.append(f'Infer: {cfg.info.infer_start_time}')
             if cfg.trainer.resume != None:
                 wandb_tags.append(f'Re: {cfg.info.resume_start_time}')
+                if cfg.info.wandb_resume_enabled:
+                    resumed_wandb_id = glob(cfg.info.work_dir + '/wandb/latest-run/*.wandb')[0].split('-')[-1].split('.')[0]
             cfg.info.wandb_run = wandb.init(
                 project=cfg.info.project_name,
                 name=wandb_name,
                 tags=wandb_tags,
                 dir=cfg.info.work_dir,
                 config=ConfigMisc.nested_namespace_to_plain_namespace(cfg, ignore_name_list=['info', 'dummy', 'sweep']),
+                resume='allow' if cfg.trainer.resume and cfg.info.wandb_resume_enabled else None,
+                id=resumed_wandb_id if cfg.trainer.resume and cfg.info.wandb_resume_enabled else None,
                 )
             cfg.info.log_file = open(os.path.join(cfg.info.work_dir, 'logs.txt'), 'a' if cfg.trainer.resume is None else 'a+')
         else:
@@ -864,7 +881,9 @@ class SweepMisc:
     def init_sweep_mode(cfg, portal_fn):
         if cfg.sweep.sweep_enabled:
             if hasattr(cfg, 'trainer'):
-                assert cfg.trainer.resume is None, 'Sweep mode cannot be used with resume in phase of training.'
+                if cfg.trainer.resume is not None:
+                    print(StrMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', '$'))
+                    portal_fn(cfg)
             else:
                 assert hasattr(cfg, 'tester'), 'Sweep mode can only be used in phase of training or inference.'
             sweep_cfg_dict = ConfigMisc.nested_namespace_to_nested_dict(cfg.sweep.sweep_params)
