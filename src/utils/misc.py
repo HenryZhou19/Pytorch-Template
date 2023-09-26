@@ -248,7 +248,7 @@ class PortalMisc:
         cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
 
     @staticmethod
-    def save_configs(cfg, ignore_name_list=[]):
+    def save_configs(cfg):
         if DistMisc.is_main_process():
             if not os.path.exists(cfg.info.work_dir):
                 os.makedirs(cfg.info.work_dir)
@@ -257,16 +257,16 @@ class PortalMisc:
             else:
                 cfg_file_name = f'cfg_resume_{cfg.info.resume_start_time}.yaml'  
             
-            ConfigMisc.write(os.path.join(cfg.info.work_dir, cfg_file_name), cfg, ignore_name_list=ignore_name_list)
+            ConfigMisc.write(os.path.join(cfg.info.work_dir, cfg_file_name), cfg, ignore_name_list=cfg.special.print_save_config_ignore)
             
         if cfg.special.save_current_project:
             PortalMisc._save_currect_project(cfg)
 
     @staticmethod
-    def print_config(cfg, ignore_name_list=[], force_all_rank=False):  
+    def print_config(cfg, force_all_rank=False):  
         def write_msg_lines(msg_in, cfg_in, indent=1):
             for name in sorted(vars(cfg_in).keys()):
-                if name in ignore_name_list:
+                if name in cfg.special.print_save_config_ignore:
                     continue
                 m_indent = ' ' * (4 * (indent - 1)) + ' ├─ ' + name
                 v = getattr(cfg_in, name)
@@ -307,7 +307,7 @@ class PortalMisc:
                 name=wandb_name,
                 tags=wandb_tags,
                 dir=cfg.info.work_dir,
-                config=ConfigMisc.nested_namespace_to_plain_namespace(cfg, ignore_name_list=['info', 'dummy', 'sweep']),
+                config=ConfigMisc.nested_namespace_to_plain_namespace(cfg, cfg.special.wandb_config_ignore),
                 resume='allow' if cfg.trainer.resume and cfg.info.wandb_resume_enabled else None,
                 id=resumed_wandb_id if cfg.trainer.resume and cfg.info.wandb_resume_enabled else None,
                 )

@@ -6,6 +6,8 @@ deepspeed:
 special:
   debug: False
   save_current_project: False  # maybe always False in inference
+  print_save_config_ignore: [dummy, sweep]
+  wandb_config_ignore: [dummy, special, info, sweep]
 
 data:
   batch_size_per_rank: 1

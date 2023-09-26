@@ -5,13 +5,14 @@ deepspeed:
 special:
   debug: False
   save_current_project: True  # src/, scripts/, configs/, train.py, inference.py
+  print_save_config_ignore: [dummy, sweep]
+  wandb_config_ignore: [info, dummy, sweep, special]
 
 model:
   backbone: simple
   loss: mse
   primary_criterion: null  # null (None) to use loss as primary_criterion
   primary_criterion_higher_better: False
-
 
 data:
   dataset: simple
@@ -25,13 +26,8 @@ info: # info & wandb
   work_dir: TBD
   project_name: template
   task_type: Train  # Pretrain, Train, Pretrain_Re, Train_Re, ...
-  name_tags: 
-  - model.backbone
-  - data.dataset
-  - model.loss
-  - data.batch_size_total
-  wandb_tags:
-  - info.start_time
+  name_tags: [model.backbone, data.dataset, model.loss, data.batch_size_total]
+  wandb_tags: [info.start_time]
   wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
   wandb_watch_model: False  # do not use
   wandb_watch_freq: 100

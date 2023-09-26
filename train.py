@@ -94,10 +94,10 @@ def train_portal(cfg):
     PortalMisc.seed_everything(cfg)
 
     # save configs to work_dir as .yaml file (and save current project files if needed)
-    PortalMisc.save_configs(cfg, ignore_name_list=['sweep'])
+    PortalMisc.save_configs(cfg)
 
     # choose whether to print configs of each rank
-    PortalMisc.print_config(cfg, ignore_name_list=['sweep'], force_all_rank=False)
+    PortalMisc.print_config(cfg, force_all_rank=False)
 
     # init loggers(wandb and local:log_file)
     PortalMisc.init_loggers(cfg)
