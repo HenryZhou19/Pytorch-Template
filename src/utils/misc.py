@@ -171,6 +171,7 @@ class PortalMisc:
         if cfg.trainer.resume is not None:  # read "work_dir", "start_time" from the .yaml file
             print('Resuming from: ', cfg.trainer.resume, ', reading configs from .yaml file...')
             cfg_old = ConfigMisc.read(cfg.trainer.resume)
+            # TODO: assert critial params are the same, but others can be changed(e.g. info...)
             work_dir = cfg_old.info.work_dir
             setattr(cfg.info, 'resume_start_time', cfg.info.start_time)
             cfg.info.start_time = cfg_old.info.start_time
@@ -180,7 +181,6 @@ class PortalMisc:
                 print('New start at: ', work_dir)
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir)
-            cfg.info.work_dir = work_dir
         cfg.info.work_dir = work_dir
 
     @staticmethod

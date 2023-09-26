@@ -7,7 +7,7 @@ from math import nan
 import torch
 import torch.distributed as dist
 
-from .misc import DistMisc, TimeMisc
+from .misc import DistMisc, TesterMisc, TimeMisc
 
 
 class SmoothedValue(object):
@@ -112,16 +112,24 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
-    def __init__(self, log_file=sys.stdout, delimiter='  ', print_freq=1, debug=False, pbar=None, global_tqdm=False, header='', epoch_str=''):
-        self.meters = defaultdict(SmoothedValue)
-        self.log_file = log_file
-        self.delimiter = delimiter
-        self.print_freq = print_freq
-        self.debug = debug
+    def __init__(self, cfg=None, log_file=sys.stdout, print_freq=1, debug=False, global_tqdm=False, pbar=None, delimiter='  ', header='', epoch_str=''):
+        if cfg is not None:
+            self.log_file=cfg.info.log_file
+            self.print_freq=cfg.info.cli_log_freq
+            self.debug=cfg.special.debug
+            self.global_tqdm=cfg.info.global_tqdm if not TesterMisc.is_inference(cfg) else False
+        else:
+            self.log_file = log_file
+            self.print_freq = print_freq
+            self.debug = debug
+            self.global_tqdm = global_tqdm
+
         self.pbar = pbar
-        self.global_tqdm = global_tqdm
+        self.delimiter = delimiter
         self.header = header
         self.epoch_str = epoch_str
+        
+        self.meters = defaultdict(SmoothedValue)
         self.synced = False
 
     def update(self, **kwargs):

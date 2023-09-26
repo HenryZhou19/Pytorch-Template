@@ -53,7 +53,7 @@ env:
 
 trainer:
   dist_eval: True
-  resume: null
+  resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
   epochs: 10
   optimizer:
     optimizer_choice: adamw  # adamw only for now

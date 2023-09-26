@@ -24,17 +24,14 @@ def train_one_epoch(cfg, trainer_status):
     backward_and_step = TrainerMisc.BackwardAndStep(cfg, trainer_status)
     
     logger = MetricLogger(
-        log_file=cfg.info.log_file,
-        print_freq=cfg.info.cli_log_freq,
-        debug=cfg.special.debug,
-        pbar=pbar,
-        global_tqdm=cfg.info.global_tqdm,
+        cfg=cfg,
+        pbar=pbar,  
         header='Train',
         epoch_str='epoch: [{}/{}]'.format(epoch, cfg.trainer.epochs),
         )
     logger.add_meters([{
         'loss': SV(prior=True),
-        'lr': SV(window_size=1, fmt='{value:.2e}', final_fmt='[{min:.2e}, {max:.2e}]', no_sync=True),
+        'lr': SV(fmt='{value:.2e}', final_fmt='[{min:.2e}, {max:.2e}]', no_sync=True),
         'epoch': SV(window_size=1, no_print=True, no_sync=True)
         }])
     for batch in logger.log_every(loader):
@@ -71,13 +68,10 @@ def evaluate(cfg, trainer_status):
 
     model.eval()
     loss_criterion.eval()
-
+    
     logger = MetricLogger(
-        log_file=cfg.info.log_file,
-        print_freq=cfg.info.cli_log_freq,
-        debug=cfg.special.debug,
-        pbar=pbar,
-        global_tqdm=cfg.info.global_tqdm,
+        cfg=cfg,
+        pbar=pbar,  
         header='Eval ',
         epoch_str='epoch: [{}/{}]'.format(epoch, cfg.trainer.epochs),
         )
@@ -110,10 +104,8 @@ def test(cfg, tester_status):
     model.eval()
 
     logger = MetricLogger(
-        log_file=cfg.info.log_file,
-        print_freq=cfg.info.cli_log_freq,
-        debug=cfg.special.debug,
-        pbar=pbar,
+        cfg=cfg,
+        pbar=pbar,  
         header='Test',
         )
     for batch in logger.log_every(loader):
