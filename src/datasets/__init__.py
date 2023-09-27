@@ -2,7 +2,7 @@
 import torch
 from torch.utils.data import DataLoader, Dataset, Sampler
 
-from .simple_dataset import SimpleDataModule, collate_fn
+from .simple_dataset import DataModuleBase, SimpleDataModule, collate_fn
 
 
 class DataLoaderX(DataLoader):
@@ -14,25 +14,23 @@ class DataLoaderX(DataLoader):
 class DataManager(object):
     def __init__(self, cfg) -> None:
         self.cfg = cfg
-        self.data_module = SimpleDataModule(cfg)
-        self.train_dataset = None
-        self.val_dataset = None
-        self.test_dataset = None
-
+        self.data_module = self._get_data_module()
+        
+    def _get_data_module(self) -> DataModuleBase:  # DataModule provides methods for getting train/val/test datasets
+        if self.cfg.data.dataset == 'simple':
+            data_module = SimpleDataModule(self.cfg)
+        else:
+            raise NotImplementedError(f'dataset "{self.cfg.data.dataset}" has not been implemented yet.')
+        return data_module
+        
     def build_dataset(self, split=None, shuffle=False) -> DataLoaderX:
         assert split in ['train', 'val', 'test'], f'Invalid split {split}'
         if split == 'train':
-            if self.train_dataset is None:
-                self.train_dataset, self.val_dataset = self.data_module.get_train_and_val_dataset()
-            dataset = self.train_dataset
+            dataset = self.data_module.get_train_dataset()
         elif split == 'val':
-            if self.val_dataset is None:
-                _, self.val_dataset = self.data_module.get_train_and_val_dataset()
-            dataset = self.val_dataset
+            dataset = self.data_module.get_val_dataset()
         else: # split == 'test':
-            if self.test_dataset is None:
-                self.test_dataset = self.data_module.get_test_dataset()
-            dataset = self.test_dataset
+            dataset = self.data_module.get_test_dataset()
         
         dist_sampler = True if split == 'train' else self.cfg.trainer.dist_eval
         dataloader = self._get_dataloader(dataset, shuffle=shuffle, dist_sampler=dist_sampler)

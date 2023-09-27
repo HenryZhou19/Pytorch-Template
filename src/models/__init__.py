@@ -12,7 +12,10 @@ class ModelManager(object):
         self.device = torch.device(cfg.env.device)
 
     def build_model(self):
-        model = SimpleModel(self.cfg).to(self.device)
+        if self.cfg.model.architecture == 'simple':
+            model = SimpleModel(self.cfg).to(self.device)
+        else:
+            raise NotImplementedError(f'model architecture {self.cfg.model.architecture} not implemented.')
         print('model built successfully.')
 
         if hasattr(self.cfg.info, 'wandb_run'):

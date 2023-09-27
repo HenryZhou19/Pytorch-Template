@@ -2,6 +2,10 @@ from torch import nn
 
 
 class LossBase(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.loss_config = cfg.model.loss
+        
     def forward(self, preds, gts):
         # return loss (reduction as mean!), loss_dict as {'loss1': loss, 'loss2': loss2, ...}
         raise NotImplementedError
@@ -9,8 +13,7 @@ class LossBase(nn.Module):
 
 class SimpleLoss(LossBase):
     def __init__(self, cfg):
-        super().__init__()
-        self.loss_config = cfg.model.loss
+        super().__init__(cfg)
         self.mse_loss = nn.MSELoss()
 
     def forward(self, preds, gts):
