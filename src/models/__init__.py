@@ -1,7 +1,7 @@
 import torch
 
-from src.utils.simple_loss import SimpleLoss
-from src.utils.simple_metric import SimpleMetric
+from src.criterions.simple_loss import SimpleLoss
+from src.criterions.simple_metric import SimpleMetric
 
 from .simple_model import SimpleModel
 

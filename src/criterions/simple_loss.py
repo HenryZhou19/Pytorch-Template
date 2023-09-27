@@ -6,7 +6,7 @@ class LossBase(nn.Module):
         super().__init__()
         self.loss_config = cfg.model.loss
         
-    def forward(self, preds, gts):
+    def forward(self, output, target):
         # return loss (reduction as mean!), loss_dict as {'loss1': loss, 'loss2': loss2, ...}
         raise NotImplementedError
 
@@ -16,9 +16,9 @@ class SimpleLoss(LossBase):
         super().__init__(cfg)
         self.mse_loss = nn.MSELoss()
 
-    def forward(self, preds, gts):
+    def forward(self, output, target):
         if self.loss_config == 'mse':
-            mse_loss = self.mse_loss(preds, gts)
+            mse_loss = self.mse_loss(output, target)
             loss = 1 * mse_loss
             return loss, {
                 'mse_loss': mse_loss
