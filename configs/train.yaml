@@ -19,7 +19,7 @@ criterion:
 
 data:
   dataset: simple
-  batch_size_per_rank: 2
+  batch_size_per_rank: 32
   batch_size_total: TBD
   split_rate: 0.8
   

@@ -508,10 +508,18 @@ class ModelMisc:
                 cfg.info.log_file.flush()
             
     @staticmethod
-    def print_model_info_with_torchinfo(cfg, model, train_loader, info_columns):
+    def print_model_info_with_torchinfo(cfg, model, train_loader, info_columns=None):
         if DistMisc.is_main_process():
             import torchinfo
-            
+            info_columns = info_columns if info_columns is not None else [
+                'input_size',
+                'output_size',
+                'num_params',
+                'params_percent',
+                'kernel_size',
+                'mult_adds',
+                'trainable',
+                ]
             input_shape = train_loader.dataset.__getitem__(0)['inputs'].shape
             assert cfg.data.batch_size_per_rank == train_loader.batch_size
             print_str = torchinfo.summary(model, input_size=(cfg.data.batch_size_per_rank, *input_shape), col_names=info_columns, verbose=0)
