@@ -3,8 +3,8 @@ from torch import nn
 
 class MetricBase:
     def __init__(self, cfg):
-        self.primary_criterion = cfg.model.primary_criterion
-        if cfg.model.primary_criterion_higher_better:
+        self.primary_criterion = cfg.criterion.primary_criterion
+        if cfg.criterion.primary_criterion_higher_better:
             self.choose_better_fn = lambda now, stored: now > stored  # higher better  
         else:
             self.choose_better_fn = lambda now, stored: now < stored  # lower better

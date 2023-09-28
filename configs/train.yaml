@@ -11,6 +11,8 @@ special:
 model:
   architecture: simple
   backbone: default
+
+criterion:
   loss: mse
   primary_criterion: null  # null (None) to use loss as primary_criterion
   primary_criterion_higher_better: False
@@ -27,7 +29,7 @@ info: # info & wandb
   work_dir: TBD
   project_name: template
   task_type: Train  # Pretrain, Train, Pretrain_Re, Train_Re, ...
-  name_tags: [model.architecture, data.dataset, model.loss, data.batch_size_total]
+  name_tags: [model.architecture, data.dataset, criterion.loss, data.batch_size_total]
   wandb_tags: [info.start_time]
   wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
   wandb_watch_model: False  # do not use
