@@ -14,7 +14,6 @@ def train_run(cfg):
     # prepare for model, postprocessor
     model_manager = ModelManager(cfg)
     model_without_ddp = model_manager.build_model()
-    ModelMisc.print_model_info(cfg, model_without_ddp, 'model_structure', 'trainable_params', 'total_params')
     # postprocessor = model_manager.build_postprocessor()
     
     # prepare for criterion
@@ -34,6 +33,10 @@ def train_run(cfg):
 
     # prepare for lr_scheduler
     lr_scheduler = SchudulerMisc.get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader)
+    
+    # print model info
+    # ModelMisc.print_model_info(cfg, model_without_ddp, 'model_structure', 'torchinfo')
+    ModelMisc.print_model_info_with_torchinfo(cfg, model_without_ddp, train_loader, ['input_size', 'output_size', 'num_params', 'params_percent', 'kernel_size', 'mult_adds', 'trainable',])
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)

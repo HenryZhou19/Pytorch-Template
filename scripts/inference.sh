@@ -7,7 +7,7 @@ run_cmd() {
     OMP_NUM_THREADS=$omp_num_threads \
     torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port inference.py --loglevel=ERROR with $params\
         dummy=None \
-        # special.device='cpu' \
+        #
 }
 
 

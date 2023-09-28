@@ -491,22 +491,34 @@ class DistMisc:
 class ModelMisc:
     @staticmethod
     def print_model_info(cfg, model, *args):
-        args = set(args)
-        if len(args) > 0:
-            print_str = ''
-            if 'model_structure' in args:
-                print_str += str(model) + '\n'
-            if 'trainable_params' in args:
-                print_str += f'Trainable parameters: {sum(map(lambda p: p.numel() if p.requires_grad else 0, model.parameters()))}\n'
-            if 'total_params' in args:
-                print_str += f'Total parameters: {sum(map(lambda p: p.numel(), model.parameters()))}\n'
+        if DistMisc.is_main_process():
+            args = set(args)
+            if len(args) > 0:
+                print_str = ''
+                if 'model_structure' in args:
+                    print_str += str(model) + '\n'
+                if 'trainable_params' in args:
+                    print_str += f'Trainable parameters: {sum(map(lambda p: p.numel() if p.requires_grad else 0, model.parameters()))}\n'
+                if 'total_params' in args:
+                    print_str += f'Total parameters: {sum(map(lambda p: p.numel(), model.parameters()))}\n'
+                
+                print_str = StrMisc.block_wrapper(print_str, s='-', block_width=80)
+                print(print_str)
+                print(print_str, file=cfg.info.log_file)
+                cfg.info.log_file.flush()
             
-            print_str = StrMisc.block_wrapper(print_str, s='-', block_width=80)
+    @staticmethod
+    def print_model_info_with_torchinfo(cfg, model, train_loader, info_columns):
+        if DistMisc.is_main_process():
+            import torchinfo
+            
+            input_shape = train_loader.dataset.__getitem__(0)['inputs'].shape
+            assert cfg.data.batch_size_per_rank == train_loader.batch_size
+            print_str = torchinfo.summary(model, input_size=(cfg.data.batch_size_per_rank, *input_shape), col_names=info_columns, verbose=0)
             print(print_str)
             print(print_str, file=cfg.info.log_file)
             cfg.info.log_file.flush()
-        
-
+    
     @staticmethod
     def ddp_wrapper(cfg, model_without_ddp):
         if cfg.env.distributed:

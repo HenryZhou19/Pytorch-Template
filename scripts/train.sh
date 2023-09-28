@@ -1,4 +1,4 @@
-cuda_devices="0,1"
+cuda_devices="6,7"
 omp_num_threads=3
 params="$@"
 
@@ -7,9 +7,7 @@ run_cmd() {
     OMP_NUM_THREADS=$omp_num_threads \
     torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port train.py --loglevel=ERROR with $params\
         dummy=None \
-        env.num_workers=4 \
-        data.batch_size_per_rank=32 \
-        # special.debug=True \
+        #
 }
 
 
