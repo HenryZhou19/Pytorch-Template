@@ -159,13 +159,12 @@ class PortalMisc:
     @staticmethod
     def _save_currect_project(cfg):
         if DistMisc.is_main_process():
+            main_py_files = glob('./*.py')
             source_paths = [
                 './src',
                 './scripts',
                 './configs',
-                './train.py',
-                './inference.py'
-            ]
+            ] + main_py_files
             destination_dir = os.path.join(cfg.info.work_dir, 'current_project')
             destination_dir = PortalMisc._find_available_new_path(destination_dir, suffix='resume_')
             
