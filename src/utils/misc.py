@@ -243,7 +243,7 @@ class PortalMisc:
         if cfg.special.debug:  # debug mode
             cfg.env.num_workers = 0
         if cfg.trainer.grad_accumulation > 1:
-            warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm).')
+            warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
         cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
 
     @staticmethod
@@ -582,7 +582,7 @@ class OptimizerMisc:
 
 class SchudulerMisc:   
     @staticmethod
-    def get_warmup_lr_scheduler(cfg, optimizer, train_loader):
+    def get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader):
         len_train_loader = len(train_loader)
         if cfg.trainer.scheduler.warmup_steps >= 0:
             warmup_iters = cfg.trainer.scheduler.warmup_steps
@@ -591,22 +591,20 @@ class SchudulerMisc:
         else:
             warmup_iters = 0
             
+        kwargs = {
+            "optimizer": optimizer,
+            "scaler": scaler,
+            "do_grad_accumulation": cfg.trainer.grad_accumulation > 1,
+            "T_max": cfg.trainer.epochs * len_train_loader,
+            "T_warmup": warmup_iters,
+            "warmup_factor": cfg.trainer.scheduler.warmup_factor,
+            "lr_min": cfg.trainer.scheduler.lr_min,
+        }
+            
         if cfg.trainer.scheduler.scheduler_choice == 'cosine':
-            return WarmUpCosineAnnealingLR(
-                optimizer,
-                T_max=cfg.trainer.epochs * len_train_loader,
-                T_warmup=warmup_iters,
-                warmup_factor=cfg.trainer.scheduler.warmup_factor,
-                lr_min=cfg.trainer.scheduler.lr_min,
-            )
+            return WarmUpCosineAnnealingLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'linear':
-            return WarmupLinearLR(
-                optimizer,
-                T_max=cfg.trainer.epochs * len_train_loader,
-                T_warmup=warmup_iters,
-                warmup_factor=cfg.trainer.scheduler.warmup_factor,
-                lr_min=cfg.trainer.scheduler.lr_min,
-            )
+            return WarmupLinearLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'multistep':
             if cfg.trainer.scheduler.lr_milestones_steps is not None:
                 step_milestones = cfg.trainer.scheduler.lr_milestones_steps
@@ -614,15 +612,11 @@ class SchudulerMisc:
                 step_milestones = [len_train_loader * lr_milestones_epoch for lr_milestones_epoch in cfg.trainer.scheduler.lr_milestones_epochs]
             else:
                 raise ValueError('lr_milestones_steps and lr_milestones_epochs cannot be both None.')
-            return WarmupMultiStepLR(
-                optimizer,
-                step_milestones=step_milestones,
-                gamma=cfg.trainer.scheduler.lr_decay_gamma,
-                T_max=cfg.trainer.epochs * len_train_loader,
-                T_warmup=warmup_iters,
-                warmup_factor=cfg.trainer.scheduler.warmup_factor,
-                lr_min=cfg.trainer.scheduler.lr_min,
-            )
+            kwargs.update({
+                "step_milestones": step_milestones,
+                "gamma": cfg.trainer.scheduler.lr_decay_gamma,
+            })    
+            return WarmupMultiStepLR(**kwargs)
         else:
             raise ValueError(f'Unknown scheduler choice: {cfg.trainer.scheduler.scheduler_choice}')
     

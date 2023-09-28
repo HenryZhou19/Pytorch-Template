@@ -28,15 +28,15 @@ def train_run(cfg):
 
     # prepare for optimizer
     optimizer = OptimizerMisc.get_optimizer(cfg, model_without_ddp)
+    
+    # prepare for cuda auto mixed precision(amp)
+    scaler = torch.cuda.amp.GradScaler() if cfg.env.amp and cfg.env.device=='cuda' else None
 
     # prepare for lr_scheduler
-    lr_scheduler = SchudulerMisc.get_warmup_lr_scheduler(cfg, optimizer, train_loader)
+    lr_scheduler = SchudulerMisc.get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader)
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
-
-    # prepare for cuda auto mixed precision(amp)
-    scaler = torch.cuda.amp.GradScaler() if cfg.env.amp and cfg.env.device=='cuda' else None
 
     # trainer_status as the global status for inputs and outputs of each epoch
     trainer_status = {
