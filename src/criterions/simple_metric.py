@@ -39,8 +39,8 @@ class SimpleMetric(MetricBase):
         super().__init__(cfg)
         self.l1_loss = nn.L1Loss()
     
-    def get_metrics(self, output, target):
-        l1_loss = self.l1_loss(output, target)
+    def get_metrics(self, outputs, targets):
+        l1_loss = self.l1_loss(outputs, targets.view_as(outputs))
         return {
             'L1_loss': l1_loss
-            }, None
+            }

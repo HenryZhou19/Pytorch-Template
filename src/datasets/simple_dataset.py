@@ -18,10 +18,10 @@ class DataModuleBase:
 
 
 def collate_fn(data):  # input: list, len() = batch_size
-    output = dict()
+    batch = dict()
     for k in data[0].keys():
-        output[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
-    return output  # output: dataloader's output
+        batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
+    return batch  # batch: dataloader's output
 
 
 class SimpleDataset(Dataset):
@@ -31,12 +31,12 @@ class SimpleDataset(Dataset):
         self.y_tensor = torch.tensor(y, dtype=torch.float32)
 
     def __getitem__(self, idx):
-        input = self.X_tensor[idx]
-        target = self.y_tensor[idx]
+        inputs = self.X_tensor[idx]
+        targets = self.y_tensor[idx]
 
         return {
-            'inputs': input,
-            'targets': target,
+            'inputs': inputs,
+            'targets': targets,
         }
 
     def __len__(self):

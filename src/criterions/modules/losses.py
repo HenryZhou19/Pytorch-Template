@@ -22,8 +22,8 @@ def one_hot_after_batch(x: torch.Tensor):
 
 class DiceLoss(nn.Module):
     """
-    output: Tensor of shape (batch_size, ...) type: float, output score of foreground
-    target: Tensor of shape (batch_size, ...) type: int, ground truth class(foreground or background)
+    outputs: Tensor of shape (batch_size, ...) type: float, output score of foreground
+    targets: Tensor of shape (batch_size, ...) type: int, ground truth class(foreground or background)
     """
 
     def __init__(self, smooth=1e-8, reduction='mean'):
@@ -31,14 +31,14 @@ class DiceLoss(nn.Module):
         self.smooth = smooth
         self.reduction = reduction
 
-    def forward(self, output, target):
-        batch_size = target.size(0)
+    def forward(self, outputs, targets):
+        batch_size = targets.size(0)
 
-        output = output.view(batch_size, -1)
-        target = target.view(batch_size, -1)
+        outputs = outputs.view(batch_size, -1)
+        targets = targets.view(batch_size, -1)
 
-        intersection = (output * target).sum(1)
-        union = output.sum(1) + target.sum(1)
+        intersection = (outputs * targets).sum(1)
+        union = outputs.sum(1) + targets.sum(1)
 
         loss = 1 - 2 * (intersection + self.smooth) / (union + self.smooth)
 
@@ -47,8 +47,8 @@ class DiceLoss(nn.Module):
 
 class MulticlassDiceLoss(nn.Module):
     """
-    output: Tensor of shape (batch_size, classes, ...) type: float, output scores of classes
-    target: Tensor of shape (batch_size, ...) type: int, ground truth class
+    outputs: Tensor of shape (batch_size, classes, ...) type: float, output scores of classes
+    targets: Tensor of shape (batch_size, ...) type: int, ground truth class
     """
 
     def __init__(self, classes, weights=None, reduction='mean'):
@@ -58,21 +58,21 @@ class MulticlassDiceLoss(nn.Module):
         self.weights = weights if weights is not None else torch.ones(classes)  # uniform weights for all classes
         self.reduction = reduction
 
-    def forward(self, output, target):
-        assert self.classes == output.shape[1], f'MulticlassDiceLoss: classes {self.classes} does not match target shape {target.shape}'
-        target = one_hot_after_batch(target)
+    def forward(self, outputs, targets):
+        assert self.classes == outputs.shape[1], f'MulticlassDiceLoss: classes {self.classes} does not match targets shape {targets.shape}'
+        targets = one_hot_after_batch(targets)
 
         loss = 0
         for c in range(self.classes):
-            loss += self.dice_loss(output[:, c], target[:, c]) * self.weights[c]
+            loss += self.dice_loss(outputs[:, c], targets[:, c]) * self.weights[c]
 
         return reduce_loss(loss, self.reduction)
 
 
 class FocalLoss(nn.Module):
     """
-    output: Tensor of shape (batch_size, ...) type: float, output score of foreground
-    target: Tensor of shape (batch_size, ...) type: int, ground truth class(foreground or background)
+    outputs: Tensor of shape (batch_size, ...) type: float, output score of foreground
+    targets: Tensor of shape (batch_size, ...) type: int, ground truth class(foreground or background)
     """
 
     def __init__(self, alpha=0.25, gamma=2, weight=None, reduction='mean'):
@@ -83,12 +83,12 @@ class FocalLoss(nn.Module):
         self.reduction = reduction
         self.bce_fn = nn.BCEWithLogitsLoss(weight=self.weight, reduction='none')  # sigmoid + BCEloss
 
-    def forward(self, output, target):
-        batch_size = target.size(0)
+    def forward(self, outputs, targets):
+        batch_size = targets.size(0)
 
-        log_p_t = -self.bce_fn(output, target.float())
+        log_p_t = -self.bce_fn(outputs, targets.float())
         p_t = torch.exp(log_p_t)
-        alpha_t = self.alpha * target + (1 - self.alpha) * (1 - target)
+        alpha_t = self.alpha * targets + (1 - self.alpha) * (1 - targets)
         loss = -alpha_t * (1 - p_t) ** self.gamma * log_p_t
         loss = loss.view(batch_size, -1).mean(1)
 
@@ -97,8 +97,8 @@ class FocalLoss(nn.Module):
 
 class MulticlassFocalLoss(nn.Module):
     """
-    output: Tensor of shape (batch_size, classes, ...) type: float, output scores of classes
-    target: Tensor of shape (batch_size, ...) type: int, indicates the ground truth class
+    outputs: Tensor of shape (batch_size, classes, ...) type: float, output scores of classes
+    targets: Tensor of shape (batch_size, ...) type: int, indicates the ground truth class
     """
     def __init__(self, classes, alpha: Union[float, List[float]] = 0.25, gamma=2, weight=None, ignore_index=-100, reduction='mean'):
         super().__init__()
@@ -115,13 +115,13 @@ class MulticlassFocalLoss(nn.Module):
         self.ce_fn = nn.CrossEntropyLoss(weight=self.weight, reduction='none',
                                          ignore_index=self.ignore_index)  # raw scores in
 
-    def forward(self, output, target):
-        assert self.classes == output.shape[
-            1], f'MulticlassDiceLoss: classes {self.classes} does not match target shape {target.shape}'
-        batch_size = target.size(0)
-        alpha = torch.tensor(self.alpha, device=output.device)[target]
+    def forward(self, outputs, targets):
+        assert self.classes == outputs.shape[
+            1], f'MulticlassDiceLoss: classes {self.classes} does not match targets shape {targets.shape}'
+        batch_size = targets.size(0)
+        alpha = torch.tensor(self.alpha, device=outputs.device)[targets]
 
-        log_p_t = -self.ce_fn(output, target)
+        log_p_t = -self.ce_fn(outputs, targets)
         p_t = torch.exp(log_p_t)
         loss = -alpha * (1 - p_t) ** self.gamma * log_p_t
 

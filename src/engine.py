@@ -87,7 +87,7 @@ def evaluate(cfg, trainer_status):
             **loss_dict,
         )
 
-        metrics, *_ = metric_criterion.get_metrics(outputs, targets)
+        metrics = metric_criterion.get_metrics(outputs, targets)
         logger.update(**metrics)
         
     sync = cfg.trainer.dist_eval
@@ -113,7 +113,7 @@ def test(cfg, tester_status):
         with torch.no_grad():
             outputs = model(inputs)
 
-        metrics, *_= metric_criterion.get_metrics(outputs, targets)
+        metrics = metric_criterion.get_metrics(outputs, targets)
         logger.update(**metrics)
             
     return logger.output_dict(sync=True, final_print=True)
