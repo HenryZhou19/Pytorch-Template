@@ -1,3 +1,4 @@
+from src.criterions import CriterionManager
 from src.datasets import DataManager
 from src.engine import test
 from src.gears import Tester
@@ -8,12 +9,14 @@ from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, PortalMisc,
 
 def test_run(cfg):
 
-    # prepare for model, criterion, postprocessor
+    # prepare for model, postprocessor
     model_manager = ModelManager(cfg)
     model_without_ddp = model_manager.build_model()
-
-    loss_criterion, metric_criterion = model_manager.build_criterion()
     # postprocessor = model_manager.build_postprocessor()
+    
+    # prepare for criterion
+    criterion_manager = CriterionManager(cfg)
+    loss_criterion, metric_criterion = criterion_manager.build_criterion()
 
     # prepare for data
     data_manager = DataManager(cfg)

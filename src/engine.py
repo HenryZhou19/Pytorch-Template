@@ -2,8 +2,8 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.utils.simple_loss import LossBase
-from src.utils.simple_metric import MetricBase
+from src.criterions.simple_loss import LossBase
+from src.criterions.simple_metric import MetricBase
 from src.utils.misc import LoggerMisc, TrainerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV

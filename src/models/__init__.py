@@ -1,8 +1,5 @@
 import torch
 
-from src.criterions.simple_loss import SimpleLoss
-from src.criterions.simple_metric import SimpleMetric
-
 from .simple_model import SimpleModel
 
 
@@ -23,9 +20,3 @@ class ModelManager(object):
                 self.cfg.info.wandb_run.watch(model, log='all', log_freq=self.cfg.info.wandb_watch_freq, log_graph=True)
 
         return model
- 
-    def build_criterion(self):
-        loss_criterion = SimpleLoss(self.cfg).to(self.device)
-        metric_criterion = SimpleMetric(self.cfg)
-        print('criterion built successfully.')
-        return loss_criterion, metric_criterion
