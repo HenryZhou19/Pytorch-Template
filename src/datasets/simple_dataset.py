@@ -17,7 +17,7 @@ class DataModuleBase:
         raise NotImplementedError
 
 
-def collate_fn(data):  # input: list, len() = batch_size
+def collate_fn(data):  # input: list({'a': Tensor, 'b': Tensor}), len(input) = batch_size
     batch = dict()
     for k in data[0].keys():
         batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)

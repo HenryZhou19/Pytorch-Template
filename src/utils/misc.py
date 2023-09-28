@@ -326,7 +326,7 @@ class PortalMisc:
                 if force:
                     wandb.finish(exit_code=-1)
                     print('wandb closed.')
-                    sys.exit(0)  # 0 for shutting down bash master_port sweeper
+                    exit(0)  # 0 for shutting down bash master_port sweeper
                 else:
                     if not cfg.special.debug:
                         for _ in tqdm(range(cfg.info.wandb_buffer_time), desc='Waiting for wandb to upload all files...'):
