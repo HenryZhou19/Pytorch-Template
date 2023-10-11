@@ -1,6 +1,8 @@
+#!/bin/bash
+
 cuda_devices="6,7"
-omp_num_threads=3
-params="$@"
+omp_num_threads=6
+params=()
 
 run_cmd() {
     CUDA_VISIBLE_DEVICES=$cuda_devices \
@@ -13,6 +15,23 @@ run_cmd() {
 }
 
 
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -d|-devices)
+      cuda_devices="$2"
+      shift 2
+      ;;
+    -t|-threads)
+      omp_num_threads="$2"
+      shift 2
+      ;;
+    *)
+      params+=("$1")
+      shift
+      ;;
+  esac
+done
 
 IFS=',' read -ra devices <<< $cuda_devices
 num_devices=${#devices[@]}
