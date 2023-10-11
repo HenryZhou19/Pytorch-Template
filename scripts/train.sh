@@ -5,6 +5,8 @@ params="$@"
 run_cmd() {
     CUDA_VISIBLE_DEVICES=$cuda_devices \
     OMP_NUM_THREADS=$omp_num_threads \
+    WANDB_CACHE_DIR=~/.cache/wandb \
+    WANDB_CONFIG_DIR=~/.config/wandb \
     torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port train.py --loglevel=ERROR with $params\
         dummy=None \
         #
@@ -17,6 +19,7 @@ num_devices=${#devices[@]}
 nproc_per_node=$num_devices
 
 echo "CUDA_VISIBLE_DEVICES: $cuda_devices"
+echo "OMP_NUM_THREADS": $omp_num_threads
 echo "nproc_per_node: $nproc_per_node"
 
 master_port=25950
