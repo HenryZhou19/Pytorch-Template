@@ -41,28 +41,26 @@ echo "CUDA_VISIBLE_DEVICES: $cuda_devices"
 echo "OMP_NUM_THREADS": $omp_num_threads
 echo "nproc_per_node: $nproc_per_node"
 
-master_port=25950
-end_port=25955
-used_port=""
-keep_trying=false
+start_port=25950
+end_port=25999
+master_port=$start_port
 
-while [ -z "$used_port" ] && [ $master_port -le $end_port ]; do
-    echo -e "\nTrying master_port $master_port..."
-
-    run_cmd
-
-    if [ $? -eq 0 ]; then
-        echo -e "\nDDP ran successfully with master_port $master_port."
-        used_port=$master_port
+while [ $master_port -le $end_port ]; do
+    if netstat -tuln | grep -q ":$master_port "; then
+        # echo "Port: $master_port is occupied."
+        ((master_port++))
     else
-        echo -e "\nFailed to start DDP with master_port $master_port. (Maybe triggered by other ERRORs)"
-
-        if [ "$keep_trying" = false ]; then
-            read -p "Press Enter to continue searching for other master_port，or press 'Ctrl+C' to exit：" confirm
-            if [ -z "$confirm" ]; then
-                keep_trying=true
-            fi
+        echo -e "\nTrying DDP with a potentially free port: $master_port"
+        run_cmd
+        if [ $? -eq 0 ]; then
+            echo -e "\nDDP ran successfully with master_port: $master_port."
+        else
+            echo -e "\nDDP failed with master_port: $master_port. (Maybe triggered by other ERRORs)"
         fi
-        master_port=$((master_port + 1))
+        break
+    fi
+    if [ $master_port -gt $end_port ]; then
+        echo -e "\nAll ports from $start_port to $end_port are occupied."
+        break
     fi
 done
