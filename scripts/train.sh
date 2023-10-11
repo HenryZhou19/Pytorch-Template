@@ -9,7 +9,7 @@ run_cmd() {
     OMP_NUM_THREADS=$omp_num_threads \
     WANDB_CACHE_DIR=~/.cache/wandb \
     WANDB_CONFIG_DIR=~/.config/wandb \
-    torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port train.py --loglevel=ERROR with $params\
+    torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port train.py --loglevel=ERROR with ${params[@]}\
         dummy=None \
         #
 }

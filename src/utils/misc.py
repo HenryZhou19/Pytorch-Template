@@ -523,7 +523,7 @@ class ModelMisc:
             input_shape = train_loader.dataset.__getitem__(0)['inputs'].shape
             assert cfg.data.batch_size_per_rank == train_loader.batch_size
             print_str = torchinfo.summary(model, input_size=(cfg.data.batch_size_per_rank, *input_shape), col_names=info_columns, depth=9, verbose=0)
-            print(print_str)
+            # Check model info in OUTPUT_PATH/logs.txt
             print(print_str, file=cfg.info.log_file)
             cfg.info.log_file.flush()
     
