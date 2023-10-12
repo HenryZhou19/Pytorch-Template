@@ -199,30 +199,30 @@ class MetricLogger(object):
         self.iter_len = len(iterable)
 
         i = 0
-        iter_time = SmoothedValue(fmt='{avg:.4f}')
-        data_time = SmoothedValue(fmt='{avg:.4f}')
+        iter_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
+        loader_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
         
         if self.pbar is not None:
             if self.global_tqdm:
                 log_msg = self.delimiter.join([
                     self.epoch_str + ' [{0}/{1}]' + ' eta: {eta}',
                     '{meters}',
-                    'dataloader_time: {data}',
-                    'one_iter_time: {time}',
+                    'loader_time: {loader_time}',
+                    # 'iter_time: {iter_time}',
                 ])
             else:
                 self.pbar.set_description_str(self.header + ' ' + self.epoch_str)
                 log_msg = self.delimiter.join([
                     '{meters}',
-                    'dataloader_time: {data}',
-                    'one_iter_time: {time}',
+                    'loader_time: {loader_time}',
+                    # 'iter_time: {iter_time}',
                 ])
 
         last_infos = '\n'
         self.timer = TimeMisc.Timer()
         for obj in iterable:
             i += 1
-            data_time.update(self.timer.info['last'])
+            loader_time.update(self.timer.info['last'])
             yield obj
             iter_time.update(self.timer.info['last'])
             
@@ -233,11 +233,13 @@ class MetricLogger(object):
                         eta_second = iter_time.avg * (self.iter_len - i)
                         eta_string = str(datetime.timedelta(seconds=int(eta_second)))
                         last_infos = log_msg.format(
-                            i, self.iter_len, eta=eta_string, meters=self.meters_str(), time=iter_time.get_str(), data=data_time.get_str()
+                            i, self.iter_len, eta=eta_string, meters=self.meters_str(), loader_time=loader_time.get_str(), 
+                            # iter_time=iter_time.get_str(),
                         )
                     else:
                         last_infos = log_msg.format(
-                            meters=self.meters_str(), time=iter_time.get_str(), data=data_time.get_str()
+                            meters=self.meters_str(), loader_time=loader_time.get_str(), 
+                            # iter_time=iter_time.get_str(),
                         )
                         
                     self.pbar.set_postfix_str(last_infos)
