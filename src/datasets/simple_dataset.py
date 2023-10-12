@@ -17,10 +17,29 @@ class DataModuleBase:
         raise NotImplementedError
 
 
-def collate_fn(data):  # input: list({'a': Tensor, 'b': Tensor}), len(input) = batch_size
+def collate_fn(data):
+    """
+    data: 
+        list(
+            [0] dict{
+                'a': Tensor,
+                'b': Tensor,
+                'c': dict{
+                    'x': Tensor,
+                    'y': Tensor
+                    }
+                }
+            [1] ...
+            ), len(data) = batch_size
+    """
     batch = dict()
-    for k in data[0].keys():
-        batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
+    for k, v in data[0].items():
+        if isinstance(v, torch.Tensor):
+            # every d in data, get d[k] to form a list, then stack them as batched Tensor 
+            batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
+        elif isinstance(v, dict):
+            batch[k] = collate_fn(list(map(lambda d: d[k], data)))
+            
     return batch  # batch: dataloader's output
 
 
@@ -31,12 +50,16 @@ class SimpleDataset(Dataset):
         self.y_tensor = torch.tensor(y, dtype=torch.float32)
 
     def __getitem__(self, idx):
-        inputs = self.X_tensor[idx]
-        targets = self.y_tensor[idx]
+        X = self.X_tensor[idx]
+        gt_y = self.y_tensor[idx]
 
         return {
-            'inputs': inputs,
-            'targets': targets,
+            'inputs': {
+                'x': X,
+            },
+            'targets': {
+                'gt_y': gt_y,
+            },
         }
 
     def __len__(self):

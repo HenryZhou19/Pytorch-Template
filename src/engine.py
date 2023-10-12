@@ -1,10 +1,12 @@
+from typing import Dict
+
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.criterions.simple_loss import LossBase
 from src.criterions.simple_metric import MetricBase
-from src.utils.misc import LoggerMisc, TrainerMisc
+from src.utils.misc import LoggerMisc, TensorMisc, TrainerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV
 
@@ -35,9 +37,10 @@ def train_one_epoch(cfg, trainer_status):
         'epoch': SV(window_size=1, no_print=True, no_sync=True)
         }])
     for batch in logger.log_every(loader):
-        inputs, targets = batch['inputs'].to(device), batch['targets'].to(device)
+        inputs: Dict = TensorMisc.to(batch['inputs'], device)
+        targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.cuda.amp.autocast(enabled=scaler is not None):
-            outputs = model(inputs)
+            outputs = model(**inputs)
             loss, loss_dict = loss_criterion(outputs, targets)
         trainer_status['train_iters'] += 1
         
@@ -77,9 +80,10 @@ def evaluate(cfg, trainer_status):
         )
     logger.add_meters([{'loss': SV(prior=True)}])
     for batch in logger.log_every(loader):
-        inputs, targets = batch['inputs'].to(device), batch['targets'].to(device)
+        inputs: Dict = TensorMisc.to(batch['inputs'], device)
+        targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
-            outputs = model(inputs)
+            outputs = model(**inputs)
             loss, loss_dict = loss_criterion(outputs, targets)
 
         logger.update(
@@ -109,9 +113,10 @@ def test(cfg, tester_status):
         header='Test',
         )
     for batch in logger.log_every(loader):
-        inputs, targets = batch['inputs'].to(device), batch['targets'].to(device)
+        inputs: Dict = TensorMisc.to(batch['inputs'], device)
+        targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
-            outputs = model(inputs)
+            outputs = model(**inputs)
 
         metrics = metric_criterion.get_metrics(outputs, targets)
         logger.update(**metrics)

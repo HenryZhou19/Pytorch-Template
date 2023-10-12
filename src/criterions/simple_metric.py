@@ -40,7 +40,9 @@ class SimpleMetric(MetricBase):
         self.l1_loss = nn.L1Loss()
     
     def get_metrics(self, outputs, targets):
-        l1_loss = self.l1_loss(outputs, targets.view_as(outputs))
+        pred_y = outputs['pred_y']
+        gt_y = targets['gt_y']
+        l1_loss = self.l1_loss(pred_y, gt_y.view_as(pred_y))
         return {
-            'L1_loss': l1_loss
+            'L1_loss': l1_loss,
             }

@@ -508,7 +508,7 @@ class ModelMisc:
                 cfg.info.log_file.flush()
             
     @staticmethod
-    def print_model_info_with_torchinfo(cfg, model, train_loader, info_columns=None):
+    def print_model_info_with_torchinfo(cfg, model, train_loader, device, info_columns=None):
         if DistMisc.is_main_process():
             import torchinfo
             info_columns = info_columns if info_columns is not None else [
@@ -520,9 +520,10 @@ class ModelMisc:
                 'mult_adds',
                 'trainable',
                 ]
-            input_shape = train_loader.dataset.__getitem__(0)['inputs'].shape
+            input_data = train_loader.dataset.__getitem__(0)['inputs']
+            input_data = TensorMisc.to({k: v.unsqueeze(0).expand(cfg.data.batch_size_per_rank, *v.shape) for k, v in input_data.items()}, device)
             assert cfg.data.batch_size_per_rank == train_loader.batch_size
-            print_str = torchinfo.summary(model, input_size=(cfg.data.batch_size_per_rank, *input_shape), col_names=info_columns, depth=9, verbose=0)
+            print_str = torchinfo.summary(model, input_data=input_data, col_names=info_columns, depth=9, verbose=0)
             # Check model info in OUTPUT_PATH/logs.txt
             print(print_str, file=cfg.info.log_file)
             cfg.info.log_file.flush()
@@ -924,6 +925,21 @@ class StrMisc:
         if not str_input.endswith('\n'):
             str_input += '\n'
         return '\n' + s * block_width + '\n' + str_input + s * block_width + '\n'
+
+
+class TensorMisc:
+    @staticmethod
+    def to(data, device):
+        if isinstance(data, torch.Tensor):
+            return data.to(device)
+        elif isinstance(data, tuple):
+            return tuple(TensorMisc.to(d, device) for d in data)
+        elif isinstance(data, list):
+            return [TensorMisc.to(d, device) for d in data]
+        elif isinstance(data, dict):
+            return {k: TensorMisc.to(v, device) for k, v in data.items()}
+        else:
+            raise TypeError(f'Unknown type: {type(data)}')
 
 
 class TimeMisc:

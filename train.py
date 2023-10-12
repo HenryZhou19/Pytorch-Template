@@ -36,7 +36,7 @@ def train_run(cfg):
     
     # print model info
     # ModelMisc.print_model_info(cfg, model_without_ddp, 'model_structure', 'torchinfo')
-    ModelMisc.print_model_info_with_torchinfo(cfg, model_without_ddp, train_loader)
+    ModelMisc.print_model_info_with_torchinfo(cfg, model_without_ddp, train_loader, model_manager.device)
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)

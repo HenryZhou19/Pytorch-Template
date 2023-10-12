@@ -12,5 +12,8 @@ class SimpleModel(nn.Module):
             raise NotImplementedError(f'backbone "{cfg.model.backbone}" has not been implemented yet for {self.__class__}.')
 
     def forward(self, x):
-        return self.model(x)
+        x = self.model(x)
+        return {
+            'pred_y': x
+        }
 
