@@ -9,7 +9,7 @@ cd "$script_dir/.."
 source_folder=$(pwd)
 echo -e "Source project path：\n\t$source_folder"
 
-destination_folder=$(readlink -m "$source_folder/../Pytorch-template-public-cloned")
+destination_folder=$(readlink -m "$source_folder-cloned")
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
