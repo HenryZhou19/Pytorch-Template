@@ -1,8 +1,10 @@
 from torch import nn
 
-from src.models.modules.simple_net import SimpleNet
+from .modules.model_register import register
+from .modules.simple_net import SimpleNet
 
 
+@register('simple')
 class SimpleModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -16,4 +18,3 @@ class SimpleModel(nn.Module):
         return {
             'pred_y': x
         }
-

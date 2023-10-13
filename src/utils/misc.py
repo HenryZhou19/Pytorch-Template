@@ -1,3 +1,4 @@
+import importlib
 import logging
 import math
 import os
@@ -955,7 +956,17 @@ class TensorMisc:
             return {k: TensorMisc.to(v, device) for k, v in data.items()}
         else:
             raise TypeError(f'Unknown type: {type(data)}')
-
+        
+class ImportMisc:
+    @staticmethod
+    def import_current_dir_all(current_file, current_module_name):
+        current_directory = os.path.dirname(current_file)
+        current_file_name = os.path.basename(current_file)
+        files = os.listdir(current_directory)
+        for file in files:
+            if file.endswith(".py") and file != current_file_name:
+                module_name = os.path.splitext(file)[0]
+                importlib.import_module(f"{current_module_name}.{module_name}")      
 
 class TimeMisc:
     @staticmethod

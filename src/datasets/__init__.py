@@ -1,15 +1,12 @@
-
 import torch
-from torch.utils.data import DataLoader, Dataset, Sampler
+from torch.utils.data import Dataset, Sampler
 
-from .simple_dataset import DataModuleBase, SimpleDataModule, collate_fn
+from src.utils.misc import ImportMisc
 
+from .modules.data_module_base import DataLoaderX, DataModuleBase, collate_fn
+from .modules.data_module_register import get_data_module
 
-class DataLoaderX(DataLoader):
-    def sampler_set_epoch(self, epoch):
-        if self.sampler is not None:
-            self.sampler.set_epoch(epoch)
-
+ImportMisc.import_current_dir_all(__file__, __name__)
 
 class DataManager(object):
     def __init__(self, cfg) -> None:
@@ -17,10 +14,7 @@ class DataManager(object):
         self.data_module = self._get_data_module()
         
     def _get_data_module(self) -> DataModuleBase:  # DataModule provides methods for getting train/val/test datasets
-        if self.cfg.data.dataset == 'simple':
-            data_module = SimpleDataModule(self.cfg)
-        else:
-            raise NotImplementedError(f'dataset "{self.cfg.data.dataset}" has not been implemented yet.')
+        data_module = get_data_module(self.cfg.data.dataset)(self.cfg)
         return data_module
         
     def build_dataset(self, split=None, shuffle=False) -> DataLoaderX:

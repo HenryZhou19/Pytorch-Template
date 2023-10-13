@@ -1,7 +1,10 @@
 import torch
 
-from .simple_criterion import SimpleCriterion
+from src.utils.misc import ImportMisc
 
+from .modules.criterion_register import get_criterion
+
+ImportMisc.import_current_dir_all(__file__, __name__)
 
 class CriterionManager(object):
     def __init__(self, cfg) -> None:
@@ -9,6 +12,6 @@ class CriterionManager(object):
         self.device = torch.device(cfg.env.device)
  
     def build_criterion(self):
-        criterion = SimpleCriterion(self.cfg).to(self.device)
+        criterion = get_criterion(self.cfg.model.architecture)(self.cfg).to(self.device)
         print('criterion built successfully.')
         return criterion
