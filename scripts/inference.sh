@@ -2,6 +2,7 @@
 
 cuda_devices="6"
 omp_num_threads=6
+config_file_name="inference"
 params=()
 
 run_cmd() {
@@ -9,9 +10,10 @@ run_cmd() {
     OMP_NUM_THREADS=$omp_num_threads \
     WANDB_CACHE_DIR=~/.cache/wandb \
     WANDB_CONFIG_DIR=~/.config/wandb \
-    torchrun --nproc_per_node=$nproc_per_node --master_port=$master_port inference.py --loglevel=ERROR with ${params[@]}\
-        dummy=None \
-        #
+    torchrun \
+    --nproc_per_node=$nproc_per_node \
+    --master_port=$master_port \
+    inference.py --loglevel=ERROR with ${params[@]}
 }
 
 
@@ -26,12 +28,22 @@ while [[ $# -gt 0 ]]; do
       omp_num_threads="$2"
       shift 2
       ;;
+    -c|-config)
+      config_file_name="$2"
+      shift 2
+      ;;
     *)
+if [[ $1 == config=* ]]; then
+        value="${1#config=}"
+        config_file_name=$value
+      else
       params+=("$1")
+fi
       shift
       ;;
   esac
 done
+params="config=$config_file_name $params"
 
 IFS=',' read -ra devices <<< $cuda_devices
 num_devices=${#devices[@]}

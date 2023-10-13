@@ -1,15 +1,13 @@
-dummy: null
-config: inference  # config file name, will be overwritten by sacred if not 'inference'
+config: TBD  # config file name, will be overwritten by sacred
 
 deepspeed:
   ds_enable: True
-  deepspeed_config: configs/ds_config.json
 
 special:
   debug: False
   save_current_project: False  # maybe always False in inference
-  print_save_config_ignore: [dummy, sweep]
-  wandb_config_ignore: [dummy, special, info, sweep]
+  print_save_config_ignore: [sweep]
+  wandb_config_ignore: [info, sweep, special]
 
 data:
   batch_size_per_rank: 1
@@ -36,9 +34,9 @@ tester:
   use_best: True
   save_images: True
   checkpoint_path: TBD
-  train_cfg_path: outputs/2023-09-23-13-37-56_simple_simple_mse_64/cfg.yaml  # XXX: required
+  train_cfg_path: ./outputs/2023-10-13-11-02-32_simple_simple_mse_32/cfg.yaml  # XXX: required
 
 sweep:
-  sweep_enabled: True
+  sweep_enabled: False
   sweep_params:  # use '-' as connect symbols for sub-params 
     data-batch_size_per_rank: [1, 2]

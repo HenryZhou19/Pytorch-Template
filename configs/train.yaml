@@ -1,14 +1,13 @@
-dummy: null
-config: train  # config file name, will be overwritten by sacred
+config: TBD  # config file name, will be overwritten by sacred
 
 deepspeed:
   ds_enable: True
 
 special:
   debug: False
-  save_current_project: True  # src/, scripts/, configs/, train.py, inference.py
-  print_save_config_ignore: [dummy, sweep]
-  wandb_config_ignore: [info, dummy, sweep, special]
+  save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
+  print_save_config_ignore: [sweep]
+  wandb_config_ignore: [info, sweep, special]
 
 model:
   architecture: simple
