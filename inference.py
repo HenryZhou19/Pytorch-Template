@@ -81,7 +81,7 @@ def infer_portal(infer_cfg):
 
 
 if __name__ == '__main__':
-    infer_cfg = ConfigMisc.get_configs_from_sacred(main_config='./configs/inference.yaml')
+    infer_cfg = ConfigMisc.get_configs(config_dir='./configs/', default_config_name='train')
     assert hasattr(infer_cfg, 'info'), 'infer_cfg.info not found'
 
     # init distributed mode

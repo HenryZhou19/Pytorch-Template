@@ -1,4 +1,6 @@
 dummy: null
+config: inference  # config file name, will be overwritten by sacred if not 'inference'
+
 deepspeed:
   ds_enable: True
   deepspeed_config: configs/ds_config.json

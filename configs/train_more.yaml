@@ -1,5 +1,5 @@
 dummy: null
-config: train  # config file name, will be overwritten by sacred
+config: train  # config file name, will be overwritten by sacred if not 'train'
 
 deepspeed:
   ds_enable: True
@@ -60,7 +60,7 @@ env:
 trainer:
   dist_eval: True
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
-  epochs: 10
+  epochs: 100
   optimizer:
     optimizer_choice: adamw  # adamw only for now
     lr: 4.0e-4
@@ -82,7 +82,7 @@ trainer:
   save_interval: 1
 
 sweep:
-  sweep_enabled: True
+  sweep_enabled: False
   sweep_params:  # use '-' as connect symbols for sub-params 
     trainer-optimizer-lr: [2.0e-4, 4.0e-4]
     trainer-scheduler-scheduler_choice: [linear, cosine]

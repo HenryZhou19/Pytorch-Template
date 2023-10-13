@@ -119,7 +119,7 @@ def train_portal(cfg):
 
             
 if __name__ == '__main__':
-    cfg = ConfigMisc.get_configs_from_sacred(main_config='./configs/train.yaml')
+    cfg = ConfigMisc.get_configs(config_dir='./configs/', default_config_name='train')
     assert hasattr(cfg, 'info'), 'cfg.info not found'
     
     # init distributed mode

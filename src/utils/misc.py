@@ -27,9 +27,24 @@ from .scheduler.warmup_scheduler import (WarmUpCosineAnnealingLR,
 
 class ConfigMisc:
     @staticmethod
-    def get_configs_from_sacred(main_config):
+    def get_configs(config_dir, default_config_name):
+        config_path = ConfigMisc._get_config_file_path(config_dir, default_config_name)
+        return ConfigMisc._get_configs_from_sacred(config_path)
+    
+    @staticmethod
+    def _get_config_file_path(config_dir, default_config_name):
+        args = sys.argv
+        config_name = default_config_name
+        for arg in args:
+            if arg.startswith("config="):
+                config_name = arg.split("=")[1]
+                break
+        return os.path.join(config_dir, config_name + ".yaml")
+    
+    @staticmethod
+    def _get_configs_from_sacred(config_path):
         ex = sacred.Experiment('Config Collector', save_git_info=False)
-        ex.add_config(main_config)
+        ex.add_config(config_path)
         
         def print_sacred_configs(_run):
             final_config = _run.config
