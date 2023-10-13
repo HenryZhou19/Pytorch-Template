@@ -204,19 +204,14 @@ class MetricLogger(object):
         
         if self.pbar is not None:
             if self.global_tqdm:
-                log_msg = self.delimiter.join([
-                    self.epoch_str + ' [{0}/{1}]' + ' eta: {eta}',
-                    '{meters}',
-                    'loader_time: {loader_time}',
-                    # 'iter_time: {iter_time}',
-                ])
+                post_msg = self.epoch_str + ' [{0}/{1}]' + ' eta: {eta}'
             else:
-                self.pbar.set_description_str(self.header + ' ' + self.epoch_str)
-                log_msg = self.delimiter.join([
-                    '{meters}',
-                    'loader_time: {loader_time}',
-                    # 'iter_time: {iter_time}',
-                ])
+                self.pbar.set_description_str(self.header + ' ' + self.epoch_str, refresh=False)
+            postlines_msg = self.delimiter.join([
+                '\t{meters}',
+                'loader_time: {loader_time}',
+                # 'iter_time: {iter_time}',
+            ])
 
         last_infos = '\n'
         self.timer = TimeMisc.Timer()
@@ -232,17 +227,14 @@ class MetricLogger(object):
                     if self.global_tqdm:
                         eta_second = iter_time.avg * (self.iter_len - i)
                         eta_string = str(datetime.timedelta(seconds=int(eta_second)))
-                        last_infos = log_msg.format(
-                            i, self.iter_len, eta=eta_string, meters=self.meters_str(), loader_time=loader_time.get_str(), 
-                            # iter_time=iter_time.get_str(),
-                        )
-                    else:
-                        last_infos = log_msg.format(
-                            meters=self.meters_str(), loader_time=loader_time.get_str(), 
-                            # iter_time=iter_time.get_str(),
-                        )
-                        
-                    self.pbar.set_postfix_str(last_infos)
+                        self.pbar.set_postfix_str(post_msg.format(i, self.iter_len, eta=eta_string), refresh=False)
+
+                    last_infos = postlines_msg.format(
+                        meters=self.meters_str(), loader_time=loader_time.get_str(), 
+                        # iter_time=iter_time.get_str(),
+                    )
+
+                    self.pbar.set_postlines_str([last_infos], refresh=False)
                     if i % self.print_freq == 0:
                         step = self.print_freq        
                     else:
@@ -294,5 +286,5 @@ class MetricLogger(object):
         self.log_file.flush()
         if self.pbar is not None:
             print(
-                final_msg, '\n'
+                '\n\n' + final_msg, '\n'
             )

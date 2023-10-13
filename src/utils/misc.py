@@ -21,6 +21,7 @@ import torch.distributed as dist
 import wandb
 import yaml
 from tqdm import tqdm
+from tqdm.utils import disp_trim
 
 from .scheduler.warmup_scheduler import (WarmUpCosineAnnealingLR,
                                          WarmupLinearLR, WarmupMultiStepLR)
@@ -665,7 +666,7 @@ class TrainerMisc:
             len_train_loader = len(trainer_status['train_loader'])
             len_val_loader = len(trainer_status['val_loader'])
             epoch_finished = trainer_status['start_epoch'] - 1
-            train_pbar = tqdm(
+            train_pbar = StrMisc.MultiTQDM(
                 total=cfg.trainer.epochs * len_train_loader if cfg.info.global_tqdm else len_train_loader,
                 dynamic_ncols=True,
                 colour='green',
@@ -675,7 +676,7 @@ class TrainerMisc:
             )
             train_pbar.set_description_str('Train')
             print('')
-            val_pbar = tqdm(
+            val_pbar = StrMisc.MultiTQDM(
                 total=cfg.trainer.epochs * len_val_loader if cfg.info.global_tqdm else len_val_loader,
                 dynamic_ncols=True,
                 colour='green',
@@ -850,7 +851,7 @@ class TesterMisc:
     @staticmethod
     def get_pbar(cfg, tester_status):
         if DistMisc.is_main_process():
-            test_pbar = tqdm(
+            test_pbar = StrMisc.MultiTQDM(
                 total=len(tester_status['test_loader']),
                 dynamic_ncols=True,
                 colour='green',
@@ -935,6 +936,51 @@ class SweepMisc:
 
 
 class StrMisc:
+    class MultiTQDM:
+        def __init__(self, postlines=1, *args, **kwargs) -> None:
+            self.bar_main = tqdm(*args, **kwargs)
+            self.bar_postlines = [tqdm(
+                total=0,
+                dynamic_ncols=True,
+                position=i + 1,
+                maxinterval=inf,
+                bar_format="{desc}" 
+            ) for i in range(postlines)]
+
+        def unpause(self):
+            self.bar_main.unpause()
+
+        def update(self, n):
+            self.bar_main.update(n)
+
+        def reset(self):
+            self.bar_main.reset()
+
+        def close(self):
+            self.bar_main.close()
+            for bar_postline in self.bar_postlines:
+                bar_postline.close()
+
+        def refresh(self):
+            self.bar_main.refresh()
+            for bar_postline in self.bar_postlines:
+                bar_postline.refresh()
+
+        def set_description_str(self, desc, refresh=True):
+            self.bar_main.set_description_str(desc, refresh)
+        
+        def set_postfix_str(self, desc, refresh=True):
+            self.bar_main.set_postfix_str(desc, refresh)
+
+        def _trim(self, desc):
+            desc = str(desc)
+            return disp_trim(desc, self.bar_main.ncols)
+        
+        def set_postlines_str(self, desc: list, refresh=True):
+            assert len(desc) == len(self.bar_postlines)
+            for bar_postline, d in zip(self.bar_postlines, desc):
+                bar_postline.set_description_str(self._trim(d), refresh)
+
     @staticmethod
     def block_wrapper(input_object, s='=', block_width=80):
         str_input = str(input_object)
