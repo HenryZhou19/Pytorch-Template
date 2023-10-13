@@ -752,7 +752,7 @@ class TrainerMisc:
     def save_checkpoint(cfg, trainer_status):
         if DistMisc.is_main_process():
             epoch_finished = trainer_status['epoch']
-            trainer_status['best_metrics'], save_flag = trainer_status['metric_criterion'].choose_best(
+            trainer_status['best_metrics'], save_flag = trainer_status['criterion'].choose_best(
                 trainer_status['metrics'], trainer_status['best_metrics']
             )
 

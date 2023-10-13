@@ -18,7 +18,7 @@ def train_run(cfg):
     
     # prepare for criterion
     criterion_manager = CriterionManager(cfg)
-    loss_criterion, metric_criterion = criterion_manager.build_criterion()
+    criterion = criterion_manager.build_criterion()
 
     # prepare for data
     data_manager = DataManager(cfg)
@@ -45,8 +45,7 @@ def train_run(cfg):
     trainer_status = {
         'model': model,
         'model_without_ddp': model_without_ddp,
-        'loss_criterion': loss_criterion,
-        'metric_criterion': metric_criterion,
+        'criterion': criterion,
         'train_loader': train_loader,
         'val_loader': val_loader,
         'optimizer': optimizer,

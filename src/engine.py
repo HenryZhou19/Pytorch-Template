@@ -4,8 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.criterions.simple_loss import LossBase
-from src.criterions.simple_metric import MetricBase
+from src.criterions.simple_criterion import CriterionBase
 from src.utils.misc import LoggerMisc, TensorMisc, TrainerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV
@@ -13,7 +12,7 @@ from src.utils.progress_logger import SmoothedValue as SV
 
 def train_one_epoch(cfg, trainer_status):
     model: torch.nn.Module = trainer_status['model']
-    loss_criterion: LossBase = trainer_status['loss_criterion']
+    criterion: CriterionBase = trainer_status['criterion']
     loader: DataLoader = trainer_status['train_loader']
     epoch: int = trainer_status['epoch']  # start from 1
     device: torch.device = trainer_status['device']
@@ -22,7 +21,7 @@ def train_one_epoch(cfg, trainer_status):
     pbar: tqdm = trainer_status['train_pbar']
 
     model.train()
-    loss_criterion.train()   
+    criterion.train()
     backward_and_step = TrainerMisc.BackwardAndStep(cfg, trainer_status)
     
     logger = MetricLogger(
@@ -41,14 +40,14 @@ def train_one_epoch(cfg, trainer_status):
         targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             outputs = model(**inputs)
-            loss, loss_dict = loss_criterion(outputs, targets)
+            loss, metrics_dict = criterion(outputs, targets, mode='train')
         trainer_status['train_iters'] += 1
         
         logger.update(
             lr=optimizer.param_groups[0]['lr'],  # Assume only one group. TODO: multiple groups lr logging
             epoch=trainer_status['train_iters'] / logger.iter_len,
             loss=loss,
-            **loss_dict,
+            **metrics_dict,
         )
         
         if cfg.info.wandb_log_freq > 0:
@@ -62,15 +61,14 @@ def train_one_epoch(cfg, trainer_status):
 
 def evaluate(cfg, trainer_status):
     model: torch.nn.Module = trainer_status['model']
-    loss_criterion: LossBase = trainer_status['loss_criterion']
-    metric_criterion: MetricBase = trainer_status['metric_criterion']
+    criterion: CriterionBase = trainer_status['criterion']
     loader: DataLoader = trainer_status['val_loader']
     epoch: int = trainer_status['epoch']
     device: torch.device = trainer_status['device']
     pbar: tqdm = trainer_status['val_pbar']
 
     model.eval()
-    loss_criterion.eval()
+    criterion.eval()
     
     logger = MetricLogger(
         cfg=cfg,
@@ -84,14 +82,12 @@ def evaluate(cfg, trainer_status):
         targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
             outputs = model(**inputs)
-            loss, loss_dict = loss_criterion(outputs, targets)
-            metrics = metric_criterion.get_metrics(outputs, targets)
+            loss, metrics_dict = criterion(outputs, targets, mode='eval')
 
         logger.update(
             loss=loss,
-            **loss_dict,
+            **metrics_dict,
         )      
-        logger.update(**metrics)
         
     sync = cfg.trainer.dist_eval
     return logger.output_dict(sync=sync, final_print=True)
@@ -99,7 +95,7 @@ def evaluate(cfg, trainer_status):
 
 def test(cfg, tester_status):
     model: torch.nn.Module = tester_status['model']
-    metric_criterion: MetricBase = tester_status['metric_criterion']
+    criterion: CriterionBase = tester_status['criterion']
     loader: DataLoader = tester_status['test_loader']
     device: torch.device = tester_status['device']
     pbar: tqdm = tester_status['test_pbar']
@@ -116,8 +112,8 @@ def test(cfg, tester_status):
         targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
             outputs = model(**inputs)
-            metrics = metric_criterion.get_metrics(outputs, targets)
+            _, metrics_dict = criterion(outputs, targets, mode='test')
             
-        logger.update(**metrics)
+        logger.update(**metrics_dict)
             
     return logger.output_dict(sync=True, final_print=True)

@@ -16,7 +16,7 @@ def test_run(cfg):
     
     # prepare for criterion
     criterion_manager = CriterionManager(cfg)
-    loss_criterion, metric_criterion = criterion_manager.build_criterion()
+    criterion = criterion_manager.build_criterion()
 
     # prepare for data
     data_manager = DataManager(cfg)
@@ -28,8 +28,7 @@ def test_run(cfg):
     tester_status = {
         'model': model,
         'model_without_ddp': model_without_ddp,
-        'loss_criterion': loss_criterion,
-        'metric_criterion': metric_criterion,
+        'criterion': criterion,
         'test_loader': test_loader,
         'device': model_manager.device,  # torch.device
         'metrics': {},

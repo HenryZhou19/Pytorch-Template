@@ -1,7 +1,6 @@
 import torch
 
-from .simple_loss import SimpleLoss
-from .simple_metric import SimpleMetric
+from .simple_criterion import SimpleCriterion
 
 
 class CriterionManager(object):
@@ -10,7 +9,6 @@ class CriterionManager(object):
         self.device = torch.device(cfg.env.device)
  
     def build_criterion(self):
-        loss_criterion = SimpleLoss(self.cfg).to(self.device)
-        metric_criterion = SimpleMetric(self.cfg)
+        criterion = SimpleCriterion(self.cfg).to(self.device)
         print('criterion built successfully.')
-        return loss_criterion, metric_criterion
+        return criterion
