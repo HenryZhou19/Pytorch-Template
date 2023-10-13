@@ -226,7 +226,7 @@ class PortalMisc:
             setattr(cfg.info, 'resume_start_time', cfg.info.start_time)
             cfg.info.start_time = cfg_old.info.start_time
         else:
-            work_dir = cfg.info.output_dir + ConfigMisc.output_dir_extras(cfg)
+            work_dir = os.path.join(cfg.info.output_dir, ConfigMisc.output_dir_extras(cfg))
             if DistMisc.is_main_process():
                 print('New start at: ', work_dir)
                 if not os.path.exists(work_dir):
