@@ -85,13 +85,12 @@ def evaluate(cfg, trainer_status):
         with torch.no_grad():
             outputs = model(**inputs)
             loss, loss_dict = loss_criterion(outputs, targets)
+            metrics = metric_criterion.get_metrics(outputs, targets)
 
         logger.update(
             loss=loss,
             **loss_dict,
-        )
-
-        metrics = metric_criterion.get_metrics(outputs, targets)
+        )      
         logger.update(**metrics)
         
     sync = cfg.trainer.dist_eval
@@ -117,8 +116,8 @@ def test(cfg, tester_status):
         targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
             outputs = model(**inputs)
-
-        metrics = metric_criterion.get_metrics(outputs, targets)
+            metrics = metric_criterion.get_metrics(outputs, targets)
+            
         logger.update(**metrics)
             
     return logger.output_dict(sync=True, final_print=True)
