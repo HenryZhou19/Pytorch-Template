@@ -1039,8 +1039,9 @@ class TimeMisc:
                 }
         
     class TimerContext:
-        def __init__(self, block_name, do_print=True):
+        def __init__(self, block_name, print_threshold=0.0, do_print=True):
             self.block_name = block_name
+            self.print_threshold = print_threshold
             self.do_print = do_print
             
         def __enter__(self):
@@ -1048,9 +1049,10 @@ class TimeMisc:
 
         def __exit__(self, *_):
             if self.do_print:
-                m_indent = '    ' + self.block_name
-                if len(m_indent) > 40:
-                    warnings.warn(f'Block name "{self.block_name}" with indent is too long (>40) to display, please check.')
-                if len(m_indent) < 38:
-                        m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
-                print(f"{m_indent:40s}elapsed time: {self.timer.info['all']:.4f}")
+                if self.timer.info['all'] >= self.print_threshold:
+                    m_indent = '    ' + self.block_name
+                    if len(m_indent) > 40:
+                        warnings.warn(f'Block name "{self.block_name}" with indent is too long (>40) to display, please check.')
+                    if len(m_indent) < 38:
+                            m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
+                    print(f"{m_indent:40s}elapsed time: {self.timer.info['all']:.4f}")
