@@ -234,7 +234,7 @@ class MetricLogger(object):
                         # iter_time=iter_time.get_str(),
                     )
 
-                    self.pbar.set_postlines_str([last_infos], refresh=False)
+                    self.pbar.set_postlines_str([last_infos], refresh=False)  # len(list()) == self.pbar.postlines
                     if i % self.print_freq == 0:
                         step = self.print_freq        
                     else:
@@ -286,5 +286,5 @@ class MetricLogger(object):
         self.log_file.flush()
         if self.pbar is not None:
             print(
-                '\n\n' + final_msg, '\n'
+                '\n' * (self.pbar.postlines + 1) + final_msg, '\n'
             )

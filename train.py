@@ -6,7 +6,7 @@ from src.engine import evaluate, train_one_epoch
 from src.gears import Trainer
 from src.models import ModelManager
 from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, OptimizerMisc,
-                            PortalMisc, SchudulerMisc, SweepMisc, TimeMisc)
+                            PortalMisc, SchedulerMisc, SweepMisc, TimeMisc)
 
 
 def train_run(cfg):
@@ -32,7 +32,7 @@ def train_run(cfg):
     scaler = torch.cuda.amp.GradScaler() if cfg.env.amp and cfg.env.device=='cuda' else None
 
     # prepare for lr_scheduler
-    lr_scheduler = SchudulerMisc.get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader)
+    lr_scheduler = SchedulerMisc.get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader)
     
     # print model info
     # ModelMisc.print_model_info(cfg, model_without_ddp, 'model_structure', 'torchinfo')

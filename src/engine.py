@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.criterions.simple_criterion import CriterionBase
-from src.utils.misc import LoggerMisc, StrMisc, TensorMisc, TrainerMisc
+from src.utils.misc import LoggerMisc, TensorMisc, TrainerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV
 
@@ -17,7 +17,7 @@ def train_one_epoch(cfg, trainer_status):
     device: torch.device = trainer_status['device']
     optimizer: torch.optim.Optimizer = trainer_status['optimizer']
     scaler: torch.cuda.amp.GradScaler = trainer_status['scaler']
-    pbar: StrMisc.MultiTQDM = trainer_status['train_pbar']
+    pbar: LoggerMisc.MultiTQDM = trainer_status['train_pbar']
 
     model.train()
     criterion.train()
@@ -64,7 +64,7 @@ def evaluate(cfg, trainer_status):
     loader: DataLoader = trainer_status['val_loader']
     epoch: int = trainer_status['epoch']
     device: torch.device = trainer_status['device']
-    pbar: StrMisc.MultiTQDM = trainer_status['val_pbar']
+    pbar: LoggerMisc.MultiTQDM = trainer_status['val_pbar']
 
     model.eval()
     criterion.eval()
@@ -97,7 +97,7 @@ def test(cfg, tester_status):
     criterion: CriterionBase = tester_status['criterion']
     loader: DataLoader = tester_status['test_loader']
     device: torch.device = tester_status['device']
-    pbar: StrMisc.MultiTQDM = tester_status['test_pbar']
+    pbar: LoggerMisc.MultiTQDM = tester_status['test_pbar']
     
     model.eval()
 

@@ -193,7 +193,7 @@ class PortalMisc:
                     shutil.copy(source_path, destination_dir)
                 else:
                     print(f"Skipping {source_path} as it is neither a file nor a directory.")
-            print(StrMisc.block_wrapper('Files and folders of currect project are copied successfully.'))
+            print(LoggerMisc.block_wrapper('Files and folders of currect project are copied successfully.'))
     
     @staticmethod
     def combine_train_infer_configs(infer_cfg, use_train_seed=True):
@@ -297,7 +297,7 @@ class PortalMisc:
             return msg_in
 
         msg = f"Rank {DistMisc.get_rank()} --- Parameters:\n"
-        msg = StrMisc.block_wrapper(write_msg_lines(msg, cfg), s='=', block_width=80)
+        msg = LoggerMisc.block_wrapper(write_msg_lines(msg, cfg), s='=', block_width=80)
 
         DistMisc.avoid_print_mess()
         if cfg.env.distributed:
@@ -519,7 +519,7 @@ class ModelMisc:
                 if 'total_params' in args:
                     print_str += f'Total parameters: {sum(map(lambda p: p.numel(), model.parameters()))}\n'
                 
-                print_str = StrMisc.block_wrapper(print_str, s='-', block_width=80)
+                print_str = LoggerMisc.block_wrapper(print_str, s='-', block_width=80)
                 print(print_str)
                 print(print_str, file=cfg.info.log_file)
                 cfg.info.log_file.flush()
@@ -563,7 +563,7 @@ class ModelMisc:
     def _deepspeed_ddp_wrapper(cfg, model_without_ddp):
         assert cfg.env.distributed, 'DeepSpeed DDP wrapper only works in distributed mode.'
         
-        print(StrMisc.block_wrapper('Using DeepSpeed DDP wrapper...', s='#', block_width=80))
+        print(LoggerMisc.block_wrapper('Using DeepSpeed DDP wrapper...', s='#', block_width=80))
         DistMisc.avoid_print_mess()
         
         import deepspeed
@@ -618,7 +618,7 @@ class OptimizerMisc:
             raise ValueError(f'Unknown optimizer choice: {cfg.trainer.optimizer.optimizer_choice}')
 
 
-class SchudulerMisc:   
+class SchedulerMisc:   
     @staticmethod
     def get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader):
         len_train_loader = len(train_loader)
@@ -666,7 +666,7 @@ class TrainerMisc:
             len_train_loader = len(trainer_status['train_loader'])
             len_val_loader = len(trainer_status['val_loader'])
             epoch_finished = trainer_status['start_epoch'] - 1
-            train_pbar = StrMisc.MultiTQDM(
+            train_pbar = LoggerMisc.MultiTQDM(
                 total=cfg.trainer.epochs * len_train_loader if cfg.info.global_tqdm else len_train_loader,
                 dynamic_ncols=True,
                 colour='green',
@@ -676,7 +676,7 @@ class TrainerMisc:
             )
             train_pbar.set_description_str('Train')
             print('')
-            val_pbar = StrMisc.MultiTQDM(
+            val_pbar = LoggerMisc.MultiTQDM(
                 total=cfg.trainer.epochs * len_val_loader if cfg.info.global_tqdm else len_val_loader,
                 dynamic_ncols=True,
                 colour='green',
@@ -851,7 +851,7 @@ class TesterMisc:
     @staticmethod
     def get_pbar(cfg, tester_status):
         if DistMisc.is_main_process():
-            test_pbar = StrMisc.MultiTQDM(
+            test_pbar = LoggerMisc.MultiTQDM(
                 total=len(tester_status['test_loader']),
                 dynamic_ncols=True,
                 colour='green',
@@ -895,50 +895,11 @@ class TesterMisc:
             tester_status['test_pbar'].close()
 
 
-class LoggerMisc:            
-    @staticmethod   
-    def wandb_log(cfg, group, output_dict, step):
-        if DistMisc.is_main_process():
-            for k, v in output_dict.items():
-                if k == 'epoch':
-                    wandb.log({f'{k}': v}, step=step)  # log epoch without group
-                else:
-                    wandb.log({f'{group}/{k}': v}, step=step)
-                # wandb.log({'output_image': [wandb.Image(trainer_status['output_image'])]})
-                # wandb.log({"output_video": wandb.Video(trainer_status['output_video'], fps=30, format="mp4")})
-
-
-class SweepMisc:
-    @staticmethod
-    def init_sweep_mode(cfg, portal_fn):
-        if cfg.sweep.sweep_enabled:
-            if hasattr(cfg, 'trainer'):
-                if cfg.trainer.resume is not None:
-                    print(StrMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', '$'))
-                    portal_fn(cfg)
-            else:
-                assert hasattr(cfg, 'tester'), 'Sweep mode can only be used in phase of training or inference.'
-            sweep_cfg_dict = ConfigMisc.nested_namespace_to_nested_dict(cfg.sweep.sweep_params)
-            
-            from itertools import product
-            combinations = [dict(zip(sweep_cfg_dict.keys(), values)) for values in product(*sweep_cfg_dict.values())]
-            
-            for idx, combination in enumerate(combinations):              
-                print(StrMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(combinations)}] combinations', s='#', block_width=80))
-                
-                cfg_now = deepcopy(cfg)
-                for chained_k, v in combination.items():
-                    k_list = chained_k.split('-')
-                    ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v)
-                portal_fn(cfg_now)
-        else:
-            portal_fn(cfg)
-
-
-class StrMisc:
+class LoggerMisc:
     class MultiTQDM:
         def __init__(self, postlines=1, *args, **kwargs) -> None:
             self.bar_main = tqdm(*args, **kwargs)
+            self.postlines = postlines
             self.bar_postlines = [tqdm(
                 total=0,
                 dynamic_ncols=True,
@@ -977,7 +938,7 @@ class StrMisc:
             return disp_trim(desc, self.bar_main.ncols)
         
         def set_postlines_str(self, desc: list, refresh=True):
-            assert len(desc) == len(self.bar_postlines)
+            assert len(desc) == self.postlines
             for bar_postline, d in zip(self.bar_postlines, desc):
                 bar_postline.set_description_str(self._trim(d), refresh)
 
@@ -987,6 +948,44 @@ class StrMisc:
         if not str_input.endswith('\n'):
             str_input += '\n'
         return '\n' + s * block_width + '\n' + str_input + s * block_width + '\n'
+    
+    @staticmethod
+    def wandb_log(cfg, group, output_dict, step):
+        if DistMisc.is_main_process():
+            for k, v in output_dict.items():
+                if k == 'epoch':
+                    wandb.log({f'{k}': v}, step=step)  # log epoch without group
+                else:
+                    wandb.log({f'{group}/{k}': v}, step=step)
+                # wandb.log({'output_image': [wandb.Image(trainer_status['output_image'])]})
+                # wandb.log({"output_video": wandb.Video(trainer_status['output_video'], fps=30, format="mp4")})
+
+
+class SweepMisc:
+    @staticmethod
+    def init_sweep_mode(cfg, portal_fn):
+        if cfg.sweep.sweep_enabled:
+            if hasattr(cfg, 'trainer'):
+                if cfg.trainer.resume is not None:
+                    print(LoggerMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', '$'))
+                    portal_fn(cfg)
+            else:
+                assert hasattr(cfg, 'tester'), 'Sweep mode can only be used in phase of training or inference.'
+            sweep_cfg_dict = ConfigMisc.nested_namespace_to_nested_dict(cfg.sweep.sweep_params)
+            
+            from itertools import product
+            combinations = [dict(zip(sweep_cfg_dict.keys(), values)) for values in product(*sweep_cfg_dict.values())]
+            
+            for idx, combination in enumerate(combinations):              
+                print(LoggerMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(combinations)}] combinations', s='#', block_width=80))
+                
+                cfg_now = deepcopy(cfg)
+                for chained_k, v in combination.items():
+                    k_list = chained_k.split('-')
+                    ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v)
+                portal_fn(cfg_now)
+        else:
+            portal_fn(cfg)
 
 
 class TensorMisc:
