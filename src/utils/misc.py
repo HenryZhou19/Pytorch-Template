@@ -262,6 +262,7 @@ class PortalMisc:
         if cfg.trainer.grad_accumulation > 1:
             warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
         cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
+        cfg.data.batch_info = f'{cfg.data.batch_size_total}={cfg.data.batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
 
     @staticmethod
     def save_configs(cfg):
