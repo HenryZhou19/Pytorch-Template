@@ -2,8 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .modules.data_module_base import DataModuleBase
-from .modules.data_module_register import register
+from .modules.data_module_base import DataModuleBase, register
 
 
 class SimpleDataset(Dataset):

@@ -1,5 +1,8 @@
 from torch import nn
 
+from src.utils.register import Register
+
+register = Register('criterion')
 
 class CriterionBase(nn.Module):
     def __init__(self, cfg):

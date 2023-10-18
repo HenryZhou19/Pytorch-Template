@@ -6,7 +6,9 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.utils.misc import DistMisc
+from src.utils.register import Register
 
+register = Register('data_module')
 
 class DataModuleBase:
     def __init__(self, cfg):

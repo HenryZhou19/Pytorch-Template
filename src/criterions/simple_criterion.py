@@ -1,7 +1,6 @@
 from torch import nn
 
-from .modules.criterion_base import CriterionBase
-from .modules.criterion_register import register
+from .modules.criterion_base import CriterionBase, register
 
 
 @register('simple')
