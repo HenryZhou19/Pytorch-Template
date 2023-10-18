@@ -1,9 +1,9 @@
-import torch
-from torch.utils.data import Dataset, Sampler
+from torch.utils.data import (Dataset, RandomSampler, Sampler,
+                              SequentialSampler, distributed)
 
 from src.utils.misc import ImportMisc
 
-from .modules.data_module_base import DataLoaderX, DataModuleBase, collate_fn
+from .modules.data_module_base import DataLoaderX, DataModuleBase
 from .modules.data_module_register import get_data_module
 
 ImportMisc.import_current_dir_all(__file__, __name__)
@@ -39,17 +39,19 @@ class DataManager(object):
             self.cfg.data.batch_size_per_rank,
             sampler=sampler,
             pin_memory=self.cfg.env.pin_memory,
-            collate_fn=collate_fn,
+            collate_fn=self.data_module.collate_fn,
             num_workers=self.cfg.env.num_workers,
+            worker_init_fn=self.data_module.get_worker_init_fn(),
+            generator=self.data_module.get_generator(),
             persistent_workers=True if self.cfg.env.num_workers > 0 else False,
         )
         
     def _get_sampler(self, dataset: Dataset, shuffle: bool, dist_sampler: bool) -> Sampler:
         if self.cfg.env.distributed and dist_sampler:
-            sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=shuffle)
+            sampler = distributed.DistributedSampler(dataset, shuffle=shuffle)
         else:
             if shuffle:
-                sampler = torch.utils.data.RandomSampler(dataset)
+                sampler = RandomSampler(dataset)
             else:
-                sampler = torch.utils.data.SequentialSampler(dataset)
+                sampler = SequentialSampler(dataset)
         return sampler

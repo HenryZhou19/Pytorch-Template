@@ -198,10 +198,10 @@ class PortalMisc:
     @staticmethod
     def combine_train_infer_configs(infer_cfg, use_train_seed=True):
         cfg = ConfigMisc.read(infer_cfg.tester.train_cfg_path)  # config in training
-        train_seed = cfg.env.seed
+        train_seed_base = cfg.env.seed_base
         ConfigMisc.update_nested_namespace(cfg, infer_cfg)
         if use_train_seed:
-            cfg.env.seed = train_seed
+            cfg.env.seed_base = train_seed_base
 
         cfg.info.train_work_dir = cfg.info.work_dir
         cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + cfg.info.infer_start_time
@@ -239,16 +239,18 @@ class PortalMisc:
     def seed_everything(cfg):
         assert hasattr(cfg.env, 'distributed')
         if cfg.env.seed_with_rank:
-            cfg.env.seed = cfg.env.seed + DistMisc.get_rank()
+            seed_rank = cfg.env.seed_base + DistMisc.get_rank()
+        else:
+            seed_rank = cfg.env.seed_base
         
-        os.environ['PYTHONHASHSEED'] = str(cfg.env.seed)
+        os.environ['PYTHONHASHSEED'] = str(seed_rank)
 
-        random.seed(cfg.env.seed)
-        np.random.seed(cfg.env.seed)
+        random.seed(seed_rank)
+        np.random.seed(seed_rank)
         
-        torch.manual_seed(cfg.env.seed)
-        torch.cuda.manual_seed(cfg.env.seed)
-        torch.cuda.manual_seed_all(cfg.env.seed)
+        torch.manual_seed(seed_rank)
+        torch.cuda.manual_seed(seed_rank)
+        # torch.cuda.manual_seed_all(seed_rank)  # no need here as each process has a different seed
 
         if cfg.env.cuda_deterministic:
             os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'

@@ -49,7 +49,7 @@ env:
   dist_backend: TBD
   world_size: TBD
   rank: TBD
-  seed: 42
+  seed_base: 42
   seed_with_rank: True
   cuda_deterministic: False
   find_unused_params: True
