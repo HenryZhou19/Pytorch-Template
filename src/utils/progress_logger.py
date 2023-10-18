@@ -208,7 +208,8 @@ class MetricLogger(object):
             else:
                 self.pbar.set_description_str(self.header + ' ' + self.epoch_str, refresh=False)
             postlines_msg = self.delimiter.join([
-                '\t{meters}',
+                # '\t{meters}',
+                '    {meters}',
                 'loader_time: {loader_time}',
                 # 'iter_time: {iter_time}',
             ])
