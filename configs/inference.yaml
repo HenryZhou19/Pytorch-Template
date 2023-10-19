@@ -1,7 +1,7 @@
 config: TBD  # config file name, will be overwritten by sacred
 
-deepspeed:
-  ds_enable: True
+# deepspeed:
+#   ds_enable: True
 
 special:
   debug: False

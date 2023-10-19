@@ -545,6 +545,8 @@ class ModelMisc:
             assert cfg.data.batch_size_per_rank == train_loader.batch_size
             print_str = torchinfo.summary(model, input_data=input_data, col_names=info_columns, depth=9, verbose=0)
             # Check model info in OUTPUT_PATH/logs.txt
+            del torchinfo, input_data, info_columns
+            torch.cuda.empty_cache()
             print(print_str, file=cfg.info.log_file)
             cfg.info.log_file.flush()
     
@@ -553,35 +555,11 @@ class ModelMisc:
         if cfg.env.distributed:
             model_without_ddp = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_without_ddp)
             
-            if cfg.deepspeed.ds_enable:
-                return ModelMisc._deepspeed_ddp_wrapper(cfg, model_without_ddp)
-            else:
-                return torch.nn.parallel.DistributedDataParallel(model_without_ddp, device_ids=[cfg.env.gpu],
+            return torch.nn.parallel.DistributedDataParallel(model_without_ddp, device_ids=[cfg.env.gpu],
                 find_unused_parameters=cfg.env.find_unused_params,
             )
         else:
             return model_without_ddp
-    
-    @staticmethod
-    def _deepspeed_ddp_wrapper(cfg, model_without_ddp):
-        assert cfg.env.distributed, 'DeepSpeed DDP wrapper only works in distributed mode.'
-        
-        print(LoggerMisc.block_wrapper('Using DeepSpeed DDP wrapper...', s='#', block_width=80))
-        DistMisc.avoid_print_mess()
-        
-        import deepspeed
-        deepspeed.logger.setLevel(logging.WARNING)
-        
-        def ds_init_engine_wrapper(model_without_ddp) -> deepspeed.DeepSpeedEngine:          
-            return deepspeed.initialize(model=model_without_ddp, config=deepspeed_config)[0]
-        
-        # with open(cfg.deepspeed.deepspeed_config, 'r') as json_file:
-        #     deepspeed_config = hjson.load(json_file)
-        deepspeed_config = {}
-        deepspeed_config.update({'train_batch_size': cfg.data.batch_size_total})
-        deepspeed_config.update({'gradient_accumulation_steps': 1})  # deepspeed will not handle gradient accumulation operations (manually do this in trainer, so keep it '1')
-        deepspeed_config.update({"zero_optimization": {"stage": 0}})
-        return ds_init_engine_wrapper(model_without_ddp)
 
 
 class OptimizerMisc:
