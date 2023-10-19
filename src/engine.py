@@ -2,13 +2,14 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.criterions.simple_criterion import CriterionBase
+from src.models.modules.model_base import ModelBase
 from src.utils.misc import LoggerMisc, TensorMisc, TrainerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV
 
 
 def train_one_epoch(cfg, trainer_status):
-    model: torch.nn.Module = trainer_status['model']
+    model: ModelBase = trainer_status['model']
     criterion: CriterionBase = trainer_status['criterion']
     loader: DataLoader = trainer_status['train_loader']
     epoch: int = trainer_status['epoch']  # start from 1
@@ -57,7 +58,7 @@ def train_one_epoch(cfg, trainer_status):
 
 
 def evaluate(cfg, trainer_status):
-    model: torch.nn.Module = trainer_status['model']
+    model: ModelBase = trainer_status['model']
     criterion: CriterionBase = trainer_status['criterion']
     loader: DataLoader = trainer_status['val_loader']
     epoch: int = trainer_status['epoch']
@@ -91,7 +92,7 @@ def evaluate(cfg, trainer_status):
 
 
 def test(cfg, tester_status):
-    model: torch.nn.Module = tester_status['model']
+    model: ModelBase = tester_status['model']
     criterion: CriterionBase = tester_status['criterion']
     loader: DataLoader = tester_status['test_loader']
     device: torch.device = tester_status['device']

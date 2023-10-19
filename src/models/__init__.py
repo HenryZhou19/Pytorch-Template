@@ -2,7 +2,7 @@ import torch
 
 from src.utils.misc import ImportMisc
 
-from .modules.model_base import register
+from .modules.model_base import ModelBase, register
 
 ImportMisc.import_current_dir_all(__file__, __name__)
 
@@ -12,7 +12,7 @@ class ModelManager(object):
         self.device = torch.device(cfg.env.device)
 
     def build_model(self): 
-        model = register.get(self.cfg.model.architecture)(self.cfg).to(self.device)
+        model: ModelBase = register.get(self.cfg.model.architecture)(self.cfg).to(self.device)
         print('model built successfully.')
 
         if hasattr(self.cfg.info, 'wandb_run'):

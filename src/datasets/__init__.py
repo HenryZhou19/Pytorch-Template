@@ -12,8 +12,8 @@ class DataManager(object):
         self.cfg = cfg
         self.data_module = self._get_data_module()
         
-    def _get_data_module(self) -> DataModuleBase:  # DataModule provides methods for getting train/val/test datasets
-        data_module = register.get(self.cfg.data.dataset)(self.cfg)
+    def _get_data_module(self):  # DataModule provides methods for getting train/val/test datasets
+        data_module: DataModuleBase = register.get(self.cfg.data.dataset)(self.cfg)
         return data_module
         
     def build_dataset(self, split=None, shuffle=False) -> DataLoaderX:
@@ -30,7 +30,7 @@ class DataManager(object):
         print(f'{split} dataloader built successfully.')
         return dataloader
         
-    def _get_dataloader(self, dataset: Dataset, shuffle: bool, dist_sampler: bool) -> DataLoaderX:
+    def _get_dataloader(self, dataset: Dataset, shuffle: bool, dist_sampler: bool):
         sampler = self._get_sampler(dataset, shuffle, dist_sampler)
 
         return DataLoaderX(

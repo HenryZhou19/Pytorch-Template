@@ -13,6 +13,10 @@ class CriterionBase(nn.Module):
             self.choose_better_fn = lambda now, stored: now > stored  # higher better  
         else:
             self.choose_better_fn = lambda now, stored: now < stored  # lower better
+            
+    def untrainable_check(self):
+        trainable_params = [p for p in self.parameters() if p.requires_grad]
+        assert len(trainable_params) == 0, f'Criterion {self.__class__} has trainable parameters.'
 
     def choose_best(self, metric: dict, best_metric: dict):
         def compare_loss(m, b_m):

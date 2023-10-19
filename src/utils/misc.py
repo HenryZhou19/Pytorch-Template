@@ -728,8 +728,6 @@ class TrainerMisc:
         if DistMisc.is_main_process():
             trainer_status['train_pbar'].close()
             trainer_status['val_pbar'].close()
-    
-
             
     @staticmethod
     def save_checkpoint(cfg, trainer_status):

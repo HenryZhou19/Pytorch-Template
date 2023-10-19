@@ -13,7 +13,7 @@ model:
 criterion:
   loss: mse
   primary_criterion: null  # null (None) to use loss as primary_criterion
-  primary_criterion_higher_better: False
+  primary_criterion_higher_better: False  # XXX: important for choosing best model
 
 data:
   dataset: simple
@@ -50,7 +50,7 @@ env:
   seed_with_rank: True
   cuda_deterministic: False
   find_unused_params: True
-  amp: False
+  amp: True
   num_workers: 4
   pin_memory: True
 
