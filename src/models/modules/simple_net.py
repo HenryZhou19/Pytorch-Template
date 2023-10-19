@@ -11,8 +11,6 @@ class SimpleNet(nn.Module):
             nn.Linear(100, 100),
             nn.BatchNorm1d(100),
             nn.ReLU(),
-            nn.Linear(100, 1),
-            nn.Sigmoid()
         )
 
     def forward(self, x):

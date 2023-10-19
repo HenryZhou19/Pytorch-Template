@@ -79,6 +79,7 @@ trainer:
     warmup_factor: 0.0  # [0., 1.] start warmup from: warmup_factor * lr
   max_grad_norm: 1.0  # <= 0 means no gradient clipping
   grad_accumulation: 1  # positive integer (keep it '1' in most cases)
+  grad_checkpoint: False
   save_interval: 1
 
 sweep:

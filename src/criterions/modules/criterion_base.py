@@ -35,16 +35,10 @@ class CriterionBase(nn.Module):
         else:
             return compare_loss(metric, best_metric)
         
-    def forward(self, outputs, targets, mode):
-        if mode == 'train':
-            pass
-        elif mode == 'eval':
-            pass
-        elif mode == 'test':
-            pass
-        else:
-            raise NotImplementedError(f'mode "{mode}" has not been implemented yet.')
+    def forward(self, outputs, targets, test_mode=False):
         """
+        outputs: dict
+        targets: dict
         return 
             loss (reduction as mean!), 
             metrics_dict as {
@@ -52,5 +46,12 @@ class CriterionBase(nn.Module):
                 'loss2': loss2,
                 'metric1': metric1,
                 ...}
+            
+        Maybe differ in 
+            1. self.training=True [train]
+            2. self.training=False [eval]
+            3. self.training=False and test_mode=True [test]
         """
+        if test_mode:
+            assert self.training == False, f'CriterionModule {self.__class__} is in training mode while test_mode is True.'
         

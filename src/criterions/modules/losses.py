@@ -100,14 +100,14 @@ class MulticlassFocalLoss(nn.Module):
     outputs: Tensor of shape (batch_size, classes, ...) type: float, output scores of classes
     targets: Tensor of shape (batch_size, ...) type: int, indicates the ground truth class
     """
-    def __init__(self, classes, alpha: Union[float, List[float]] = 0.25, gamma=2, weight=None, ignore_index=-100, reduction='mean'):
+    def __init__(self, classes, alpha: Union[float, List[float]] = 0.25, gamma=2, weight=None, ignore_index=-100, reduction='mean', device='cuda'):
         super().__init__()
         self.classes = classes
         if type(alpha) == list:
             assert len(alpha) == classes
         else:
             alpha = [alpha] * classes
-        self.alpha = alpha
+        self.alpha = torch.as_tensor(self.alpha, device=device)
         self.gamma = gamma
         self.weight = weight
         self.ignore_index = ignore_index
@@ -119,7 +119,7 @@ class MulticlassFocalLoss(nn.Module):
         assert self.classes == outputs.shape[
             1], f'MulticlassDiceLoss: classes {self.classes} does not match targets shape {targets.shape}'
         batch_size = targets.size(0)
-        alpha = torch.tensor(self.alpha, device=outputs.device)[targets]
+        alpha = self.alpha[targets]
 
         log_p_t = -self.ce_fn(outputs, targets)
         p_t = torch.exp(log_p_t)

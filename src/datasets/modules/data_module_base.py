@@ -52,7 +52,6 @@ class DataModuleBase:
     def get_worker_init_fn(self):
         def _seed_worker(worker_id, rank_seed):    
             worker_seed = rank_seed + worker_id
-            print(f'Rank {DistMisc.get_rank()}, worker_id:{worker_id}, worker_seed:{worker_seed}', force=True)
             random.seed(worker_seed)
             np.random.seed(worker_seed)
         return partial(_seed_worker, rank_seed=self.cfg.env.seed_base + self.cfg.env.num_workers * DistMisc.get_rank())

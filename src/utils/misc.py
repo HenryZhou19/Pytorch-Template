@@ -392,8 +392,8 @@ class DistMisc:
         tensor = torch.ByteTensor(storage).to("cuda")
 
         # obtain Tensor size of each rank
-        local_size = torch.tensor([tensor.numel()], device="cuda")
-        size_list = [torch.tensor([0], device="cuda") for _ in range(world_size)]
+        local_size = torch.as_tensor([tensor.numel()], device="cuda")
+        size_list = [torch.as_tensor([0], device="cuda") for _ in range(world_size)]
         dist.all_gather(size_list, local_size)
         size_list = [int(size.item()) for size in size_list]
         max_size = max(size_list)

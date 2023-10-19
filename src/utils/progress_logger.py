@@ -40,8 +40,8 @@ class SmoothedValue(object):
         self.total += value
         
     def prepare_sync_meters(self):
-        d = torch.tensor(list(self.deque), dtype=torch.float64, device='cpu')
-        t = torch.tensor([self.count, self.total], dtype=torch.float64, device='cuda')
+        d = torch.as_tensor(list(self.deque), dtype=torch.float64, device='cpu')
+        t = torch.as_tensor([self.count, self.total], dtype=torch.float64, device='cuda')
         return d, t
     
     def write_synced_meters(self, d, t):

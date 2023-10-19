@@ -8,8 +8,8 @@ from .modules.data_module_base import DataModuleBase, register
 class SimpleDataset(Dataset):
     def __init__(self, X, y):
         super().__init__()
-        self.X_tensor = torch.tensor(X, dtype=torch.float32)
-        self.y_tensor = torch.tensor(y, dtype=torch.float32)
+        self.X_tensor = torch.as_tensor(X, dtype=torch.float32)
+        self.y_tensor = torch.as_tensor(y, dtype=torch.float32)
 
     def __getitem__(self, idx):
         X = self.X_tensor[idx]

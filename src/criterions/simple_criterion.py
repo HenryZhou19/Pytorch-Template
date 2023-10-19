@@ -10,8 +10,8 @@ class SimpleCriterion(CriterionBase):
         self.mse_loss = nn.MSELoss()
         self.l1_loss = nn.L1Loss()
         
-    def forward(self, outputs, targets, mode):
-        super().forward(outputs, targets, mode)
+    def forward(self, outputs, targets, test_mode=False):
+        super().forward(outputs, targets, test_mode)
         
         pred_y = outputs['pred_y']
         gt_y = targets['gt_y']   
@@ -28,6 +28,12 @@ class SimpleCriterion(CriterionBase):
         gt_y = gt_y.detach()
         l1_loss = self.l1_loss(pred_y, gt_y.view_as(pred_y))
 
+        # if test_mode:
+        #     return None, {
+        #         'mse_loss': mse_loss,
+        #         'L1_loss': l1_loss,
+        #         }
+        
         return loss, {
             'mse_loss': mse_loss,
             'L1_loss': l1_loss,

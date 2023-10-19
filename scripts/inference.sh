@@ -32,6 +32,10 @@ while [[ $# -gt 0 ]]; do
       config_file_name="$2"
       shift 2
       ;;
+    -p|-cfg_path)
+      params+=("tester.train_cfg_path=$2")
+      shift 2
+      ;;
     *)
 if [[ $1 == config=* ]]; then
         value="${1#config=}"

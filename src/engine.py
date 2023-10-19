@@ -39,7 +39,7 @@ def train_one_epoch(cfg, trainer_status):
         targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             outputs = model(**inputs)
-            loss, metrics_dict = criterion(outputs, targets, mode='train')
+            loss, metrics_dict = criterion(outputs, targets)
         trainer_status['train_iters'] += 1
         
         logger.update(
@@ -81,7 +81,7 @@ def evaluate(cfg, trainer_status):
         targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
             outputs = model(**inputs)
-            loss, metrics_dict = criterion(outputs, targets, mode='eval')
+            loss, metrics_dict = criterion(outputs, targets)
 
         logger.update(
             loss=loss,
@@ -100,6 +100,7 @@ def test(cfg, tester_status):
     pbar: LoggerMisc.MultiTQDM = tester_status['test_pbar']
     
     model.eval()
+    criterion.eval()
 
     logger = MetricLogger(
         cfg=cfg,
@@ -111,7 +112,7 @@ def test(cfg, tester_status):
         targets: Dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
             outputs = model(**inputs)
-            _, metrics_dict = criterion(outputs, targets, mode='test')
+            _, metrics_dict = criterion(outputs, targets, test_mode=True)
             
         logger.update(**metrics_dict)
             

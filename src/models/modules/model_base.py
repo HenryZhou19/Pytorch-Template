@@ -1,3 +1,4 @@
+import torch.utils.checkpoint as checkpoint
 from torch import nn
 
 from src.utils.register import Register
@@ -8,6 +9,7 @@ class ModelBase(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
+        self.do_grad_checkpoint = cfg.trainer.grad_checkpoint
 
     def _freeze_layers(self, freeze_keyword_list, verbose=False):
         def match_keywords(param_name):
@@ -20,6 +22,12 @@ class ModelBase(nn.Module):
                 param.requires_grad = False
             if verbose:
                 print(f'param {name} is trainable: {param.requires_grad}, param_shape: {param.shape}')
+                    
+    def grad_checkpoint(self, func, *args, **kwargs):
+        if self.do_grad_checkpoint and self.training:
+            return checkpoint.checkpoint(func, *args, use_reentrant=False, **kwargs)
+        else:
+            return func(*args, **kwargs)
         
     def forward(self, **inputs):
         raise NotImplementedError
