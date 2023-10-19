@@ -6,7 +6,6 @@
 numpy
 wandb==0.15.9
 sacred==0.8.2
-# deepspeed
 hjson
 tqdm
 torchinfo

@@ -1,8 +1,5 @@
 config: TBD  # config file name, will be overwritten by sacred
 
-# deepspeed:
-#   ds_enable: True
-
 special:
   debug: False
   save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
@@ -53,7 +50,7 @@ env:
   seed_with_rank: True
   cuda_deterministic: False
   find_unused_params: True
-  amp: True
+  amp: False
   num_workers: 4
   pin_memory: True
 

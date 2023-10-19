@@ -1,5 +1,3 @@
-from typing import Dict
-
 import torch
 from torch.utils.data import DataLoader
 
@@ -35,8 +33,8 @@ def train_one_epoch(cfg, trainer_status):
         'epoch': SV(window_size=1, no_print=True, no_sync=True)
         }])
     for batch in logger.log_every(loader):
-        inputs: Dict = TensorMisc.to(batch['inputs'], device)
-        targets: Dict = TensorMisc.to(batch['targets'], device)
+        inputs: dict = TensorMisc.to(batch['inputs'], device)
+        targets: dict = TensorMisc.to(batch['targets'], device)
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             outputs = model(**inputs)
             loss, metrics_dict = criterion(outputs, targets)
@@ -77,8 +75,8 @@ def evaluate(cfg, trainer_status):
         )
     logger.add_meters([{'loss': SV(prior=True)}])
     for batch in logger.log_every(loader):
-        inputs: Dict = TensorMisc.to(batch['inputs'], device)
-        targets: Dict = TensorMisc.to(batch['targets'], device)
+        inputs: dict = TensorMisc.to(batch['inputs'], device)
+        targets: dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
             outputs = model(**inputs)
             loss, metrics_dict = criterion(outputs, targets)
@@ -108,8 +106,8 @@ def test(cfg, tester_status):
         header='Test',
         )
     for batch in logger.log_every(loader):
-        inputs: Dict = TensorMisc.to(batch['inputs'], device)
-        targets: Dict = TensorMisc.to(batch['targets'], device)
+        inputs: dict = TensorMisc.to(batch['inputs'], device)
+        targets: dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
             outputs = model(**inputs)
             _, metrics_dict = criterion(outputs, targets, test_mode=True)

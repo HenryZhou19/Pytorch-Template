@@ -1,8 +1,5 @@
 config: TBD  # config file name, will be overwritten by sacred
 
-# deepspeed:
-#   ds_enable: True
-
 special:
   debug: False
   save_current_project: False  # maybe always False in inference
