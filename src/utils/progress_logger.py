@@ -214,7 +214,7 @@ class MetricLogger(object):
             ])
 
         self.timer = TimeMisc.Timer()
-        for idx, obj in enumerate(iterable):
+        for idx, obj in enumerate(iterable, start=1):
             loader_time.update(self.timer.info['last'])
             yield obj
             iter_time.update(self.timer.info['last'])

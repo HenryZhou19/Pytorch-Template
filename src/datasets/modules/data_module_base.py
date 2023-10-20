@@ -46,6 +46,8 @@ class DataModuleBase:
                 batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
             elif isinstance(v, dict):
                 batch[k] = DataModuleBase.collate_fn(list(map(lambda d: d[k], data)))
+            else:
+                raise NotImplementedError
                 
         return batch  # batch: dataloader's output
     
@@ -73,22 +75,25 @@ class InfiniteDataLoaderX(DataLoaderX):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._DataLoader__initialized = False
-        self.batch_sampler = _RepeatBatchSampler(self.batch_sampler)
+        if self.batch_sampler is None:
+            self.sampler = _RepeatSampler(self.sampler)
+        else:
+            self.batch_sampler = _RepeatSampler(self.batch_sampler)
         self._DataLoader__initialized = True
         self.iterator = super().__iter__()
 
     def __len__(self):
-        return len(self.batch_sampler.raw_batch_sampler)
+        return len(self.sampler) if self.batch_sampler is None else len(self.batch_sampler.sampler)
 
     def __iter__(self):
-        for i in range(len(self)):
+        for _ in range(len(self)):
             yield next(self.iterator)
 
 
-class _RepeatBatchSampler(object):
-    def __init__(self, batch_sampler):
-        self.raw_batch_sampler = batch_sampler
+class _RepeatSampler:
+    def __init__(self, sampler):
+        self.sampler = sampler
 
     def __iter__(self):
         while True:
-            yield from iter(self.raw_batch_sampler)
+            yield from iter(self.sampler)
