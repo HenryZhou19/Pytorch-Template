@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 
-def load_video(filepath: str, gray_out=False) -> np.ndarray:
+def load_video(filepath: str, gray_out=False, dtype=np.uint8) -> np.ndarray:
     """
     RGB 24bits video only?
     if gray_out:
@@ -20,7 +20,7 @@ def load_video(filepath: str, gray_out=False) -> np.ndarray:
     frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
     C = 1 if gray_out else 3
-    video_array = np.zeros((frame_count, frame_height, frame_width, C), np.uint8)
+    video_array = np.zeros((frame_count, frame_height, frame_width, C), dtype=dtype)
 
     for count in range(frame_count):
         ret, frame = capture.read()

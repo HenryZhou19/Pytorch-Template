@@ -8,7 +8,7 @@ special:
 
 data:
   batch_size_per_rank: 1
-  infinite_dataloader: True
+  infinite_dataloader: False
 
 info:
   task_type: Infer  # Test, Infer, ...
