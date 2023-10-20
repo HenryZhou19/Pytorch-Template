@@ -7,7 +7,7 @@ from math import nan
 import torch
 import torch.distributed as dist
 
-from .misc import DistMisc, TesterMisc, TimeMisc
+from .misc import DistMisc, LoggerMisc, TesterMisc, TimeMisc
 
 
 class SmoothedValue(object):
@@ -124,7 +124,7 @@ class MetricLogger(object):
             self.debug = debug
             self.global_tqdm = global_tqdm
 
-        self.pbar = pbar
+        self.pbar: LoggerMisc.MultiTQDM = pbar
         self.delimiter = delimiter
         self.header = header
         self.epoch_str = epoch_str
@@ -198,7 +198,6 @@ class MetricLogger(object):
     def log_every(self, iterable):
         self.iter_len = len(iterable)
 
-        i = 0
         iter_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
         loader_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
         
@@ -214,29 +213,27 @@ class MetricLogger(object):
                 # 'iter_time: {iter_time}',
             ])
 
-        last_infos = '\n'
         self.timer = TimeMisc.Timer()
-        for obj in iterable:
-            i += 1
+        for idx, obj in enumerate(iterable):
             loader_time.update(self.timer.info['last'])
             yield obj
             iter_time.update(self.timer.info['last'])
             
             if self.pbar is not None:
-                if i % self.print_freq == 0 or i == self.iter_len:
+                if idx % self.print_freq == 0 or idx == self.iter_len:
                     
                     if self.global_tqdm:
-                        eta_second = iter_time.avg * (self.iter_len - i)
+                        eta_second = iter_time.avg * (self.iter_len - idx)
                         eta_string = str(datetime.timedelta(seconds=int(eta_second)))
-                        self.pbar.set_postfix_str(post_msg.format(i, self.iter_len, eta=eta_string), refresh=False)
+                        self.pbar.set_postfix_str(post_msg.format(idx, self.iter_len, eta=eta_string), refresh=False)
 
                     last_infos = postlines_msg.format(
                         meters=self.meters_str(), loader_time=loader_time.get_str(), 
                         # iter_time=iter_time.get_str(),
                     )
-
+                    
                     self.pbar.set_postlines_str([last_infos], refresh=False)  # len(list()) == self.pbar.postlines
-                    if i % self.print_freq == 0:
+                    if idx % self.print_freq == 0:
                         step = self.print_freq        
                     else:
                         step = self.iter_len % self.print_freq
@@ -244,7 +241,7 @@ class MetricLogger(object):
                     self.pbar.refresh()
 
             # DEBUG
-            if self.debug and i % self.print_freq == 0:
+            if self.debug and idx % self.print_freq == 0:
                 break
 
             self.timer.press()

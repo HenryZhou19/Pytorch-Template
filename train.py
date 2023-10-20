@@ -22,7 +22,7 @@ def train_run(cfg):
 
     # prepare for data
     data_manager = DataManager(cfg)
-    train_loader = data_manager.build_dataset(split='train', shuffle=True)
+    train_loader = data_manager.build_dataset(split='train')
     val_loader = data_manager.build_dataset(split='val')
 
     # prepare for optimizer

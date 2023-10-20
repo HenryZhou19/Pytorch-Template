@@ -67,3 +67,28 @@ class DataLoaderX(DataLoader):
     def sampler_set_epoch(self, epoch):
         if self.sampler is not None:
             self.sampler.set_epoch(epoch)
+            
+
+class InfiniteDataLoaderX(DataLoaderX):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._DataLoader__initialized = False
+        self.batch_sampler = _RepeatBatchSampler(self.batch_sampler)
+        self._DataLoader__initialized = True
+        self.iterator = super().__iter__()
+
+    def __len__(self):
+        return len(self.batch_sampler.raw_batch_sampler)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield next(self.iterator)
+
+
+class _RepeatBatchSampler(object):
+    def __init__(self, batch_sampler):
+        self.raw_batch_sampler = batch_sampler
+
+    def __iter__(self):
+        while True:
+            yield from iter(self.raw_batch_sampler)

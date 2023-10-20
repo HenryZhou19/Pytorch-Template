@@ -22,7 +22,7 @@ class SimpleModel(ModelBase):
 
     def forward(self, **inputs):
         x = inputs['x']
-        x = self.grad_checkpoint(self.backbone, x)
+        x = self._grad_checkpoint(self.backbone, x)
         x = self.head(x)
         return {
             'pred_y': x
