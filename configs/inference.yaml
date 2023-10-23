@@ -8,7 +8,6 @@ special:
 
 data:
   batch_size_per_rank: 1
-  infinite_dataloader: False
 
 info:
   task_type: Infer  # Test, Infer, ...
@@ -27,6 +26,8 @@ env:
   dist_backend: TBD
   world_size: TBD
   rank: TBD
+  num_workers: 4
+  infinite_dataloader: False
 
 tester:
   use_best: True

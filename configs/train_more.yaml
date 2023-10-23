@@ -20,7 +20,6 @@ data:
   batch_size_per_rank: 32
   batch_size_total: TBD
   split_rate: 0.8
-  infinite_dataloader: False
   
 info: # info & wandb
   start_time : TBD
@@ -53,6 +52,7 @@ env:
   find_unused_params: True
   amp: True
   num_workers: 4
+  infinite_dataloader: False
   pin_memory: True
 
 trainer:

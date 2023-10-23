@@ -11,7 +11,7 @@ class DataManager(object):
     def __init__(self, cfg) -> None:
         self.cfg = cfg
         self.data_module = self._get_data_module()
-        self.use_infinite_dataloader = self.cfg.data.infinite_dataloader
+        self.use_infinite_dataloader = self.cfg.env.infinite_dataloader
         
     def _get_data_module(self):  # DataModule provides methods for getting train/val/test datasets
         data_module: DataModuleBase = register.get(self.cfg.data.dataset)(self.cfg)
