@@ -21,6 +21,7 @@ class SimpleDataset(Dataset):
             },
             'targets': {
                 'gt_y': gt_y,
+                'index_string': str(idx),
             },
         }
 

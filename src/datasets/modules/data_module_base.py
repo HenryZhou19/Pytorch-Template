@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from src.utils.misc import DistMisc
+from src.utils.misc import DistMisc, TensorMisc
 from src.utils.register import Register
 
 register = Register('data_module')
@@ -29,25 +29,30 @@ class DataModuleBase:
         data: 
             list(
                 [0] dict{
-                    'a': Tensor,
-                    'b': Tensor,
+                    'a': AcceptableType,
+                    'b': AcceptableType,
                     'c': dict{
-                        'x': Tensor,
-                        'y': Tensor
+                        'x': AcceptableType,
+                        'y': dict{...},
                         }
                     }
                 [1] ...
                 ), len(data) = batch_size
+        AcceptableType:
+            torch.Tensor, str
         """
         batch = dict()
         for k, v in data[0].items():
             if isinstance(v, torch.Tensor):
-                # every d in data, get d[k] to form a list, then stack them as batched Tensor 
+                # every d in data, get d[k]: Tensor to form a list, then stack them as batched Tensor 
                 batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
+            elif isinstance(v, str):
+                # every d in data, get d[k]: str to form a list
+                batch[k] = TensorMisc.NoCudaList(map(lambda d: d[k], data))
             elif isinstance(v, dict):
                 batch[k] = DataModuleBase.collate_fn(list(map(lambda d: d[k], data)))
             else:
-                raise NotImplementedError
+                raise NotImplementedError(f'collate_fn not implemented for {type(v)}')
                 
         return batch  # batch: dataloader's output
     

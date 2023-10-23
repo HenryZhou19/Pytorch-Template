@@ -10,6 +10,7 @@ import sys
 import time
 import warnings
 from argparse import Namespace
+from collections import UserList
 from copy import deepcopy
 from glob import glob
 from math import inf
@@ -972,6 +973,8 @@ class TensorMisc:
     def to(data, device):
         if isinstance(data, torch.Tensor):
             return data.to(device)
+        elif getattr(data, 'not_to_cuda', False):
+            return data
         elif isinstance(data, tuple):
             return tuple(TensorMisc.to(d, device) for d in data)
         elif isinstance(data, list):
@@ -980,6 +983,12 @@ class TensorMisc:
             return {k: TensorMisc.to(v, device) for k, v in data.items()}
         else:
             raise TypeError(f'Unknown type: {type(data)}')
+        
+    class NoCudaList(UserList):
+        @property
+        def not_to_cuda(self):
+            return True
+        
         
 class ImportMisc:
     @staticmethod
