@@ -20,6 +20,18 @@ def one_hot_after_batch(x: torch.Tensor):
     return x
 
 
+def soft_mse_loss(outputs, targets, tolerance=0.1):
+    """
+    outputs: Tensor of shape (batch_size, ...) type: float, output scores
+    targets: Tensor of shape (batch_size, ...) type: float, ground truth or targets
+    """
+    if isinstance(targets, (int, float)):
+        targets = targets * torch.ones_like(outputs)
+    abs_diff = torch.abs(outputs - targets)
+    loss = torch.where(abs_diff <= tolerance, 0., abs_diff ** 2)
+    return loss.mean()
+
+
 class DiceLoss(nn.Module):
     """
     outputs: Tensor of shape (batch_size, ...) type: float, output score of foreground
