@@ -39,7 +39,7 @@ class CriterionBase(nn.Module):
         else:
             return compare_loss(metric, best_metric)
         
-    def forward(self, outputs, targets, test_mode=False):
+    def forward(self, outputs, targets, infer_mode=False):
         """
         outputs: dict
         targets: dict
@@ -54,8 +54,8 @@ class CriterionBase(nn.Module):
         Maybe differ in 
             1. self.training=True [train]
             2. self.training=False [eval]
-            3. self.training=False and test_mode=True [test]
+            3. self.training=False and infer_mode=True [test/infer]
         """
-        if test_mode:
-            assert self.training == False, f'CriterionModule {self.__class__} is in training mode while test_mode is True.'
+        if infer_mode:
+            assert self.training == False, f'CriterionModule {self.__class__} is in training mode while infer_mode is True.'
         

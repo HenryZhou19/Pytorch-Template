@@ -111,7 +111,7 @@ def test(cfg, tester_status):
         targets: dict = TensorMisc.to(batch['targets'], device)
         with torch.no_grad():
             outputs = model(**inputs)
-            _, metrics_dict = criterion(outputs, targets, test_mode=True)
+            _, metrics_dict = criterion(outputs, targets, infer_mode=True)
             
         logger.update(**metrics_dict)
             
