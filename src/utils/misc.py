@@ -99,7 +99,7 @@ class ConfigMisc:
     @staticmethod
     def nested_namespace_to_plain_namespace(namespace, ignore_name_list=[]):
         def setattr_safely(ns, n, v):
-            assert not hasattr(ns, n), f'Namespace conflict: {v}'
+            assert not hasattr(ns, n), f'Namespace conflict: {n}(={v})'
             setattr(ns, n, v)
         
         plain_namespace = Namespace()
@@ -758,7 +758,7 @@ class TrainerMisc:
                 save_files.update({
                     'optimizer': trainer_status['optimizer'].state_dict(),
                     'lr_scheduler': trainer_status['lr_scheduler'].state_dict(),
-                    'last_metric': trainer_status['metrics']
+                    'last_metrics': trainer_status['metrics']
                 })
                 if cfg.env.amp and cfg.env.device:
                     save_files.update({
@@ -854,12 +854,12 @@ class TesterMisc:
         tester_status['model_without_ddp'].load_state_dict(checkpoint['model'])
         # print(f'{config.mode} mode: Loading pth from', path)
         print('Loading pth from', cfg.tester.checkpoint_path)
-        print('best_trainer_metric', checkpoint.get('best_metric', {}))
+        print('best_trainer_metrics', checkpoint.get('best_metrics', {}))
         if DistMisc.is_main_process():
             if 'epoch' in checkpoint.keys():
                 print('Epoch:', checkpoint['epoch'])
                 cfg.info.wandb_run.tags = cfg.info.wandb_run.tags + (f"Epoch: {checkpoint['epoch']}",)
-        print('last_trainer_metric', checkpoint.get('last_metric', {}))
+        print('last_trainer_metrics', checkpoint.get('last_metrics', {}))
         
         return tester_status
 
