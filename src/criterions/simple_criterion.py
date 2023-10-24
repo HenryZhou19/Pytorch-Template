@@ -38,3 +38,13 @@ class SimpleCriterion(CriterionBase):
             'mse_loss': mse_loss,
             'L1_loss': l1_loss,
             }
+
+
+@register('simple_unet2d')
+class SimpleUnetCriterion(SimpleCriterion):
+    pass
+
+
+@register('simple_unet3d')
+class SimpleUnetCriterion(SimpleCriterion):
+    pass

@@ -7,7 +7,7 @@ from torch import nn
 class MLP(nn.Module):
     def __init__(self, in_channel: int, out_channels: list, activate_layer=nn.GELU, drop=0.0) -> None:
         super().__init__()
-        self.layers = nn.Sequential()
+        self.mlp = nn.Sequential()
         for idx, out_channel in enumerate(out_channels):
             self.layers.append(nn.Linear(in_channel, out_channel))
             if idx < len(out_channels) - 1:
@@ -17,8 +17,32 @@ class MLP(nn.Module):
         self.out_channel = out_channels[-1]
 
     def forward(self, x):
-        for layer in self.layers:
-            x = layer(x)
+        x = self.mlp(x)
+        return x
+    
+    
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, dimension, activate_layer=nn.ReLU, norm='batch'):
+        super().__init__()
+        assert dimension in [2, 3], "Unsupported dimension"
+        ConvXd = nn.Conv2d if dimension == 2 else nn.Conv3d
+        if norm == 'batch':
+            NormXd = nn.BatchNorm2d if dimension == 2 else nn.BatchNorm3d
+        elif norm == 'instance':
+            NormXd = nn.InstanceNorm2d if dimension == 2 else nn.InstanceNorm3d
+        else:
+            raise NotImplementedError("Unsupported norm type")
+        self.conv_block = nn.Sequential(
+            ConvXd(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True),
+            NormXd(out_channels),
+            activate_layer(inplace=True),
+            ConvXd(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True),
+            NormXd(out_channels),
+            activate_layer(inplace=True),
+            )
+
+    def forward(self, x):
+        x = self.conv_block(x)
         return x
 
 

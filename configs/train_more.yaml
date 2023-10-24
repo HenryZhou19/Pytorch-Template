@@ -7,7 +7,7 @@ special:
   wandb_config_ignore: [info, sweep, special]
 
 model:
-  architecture: simple
+  architecture: simple_unet3d
   backbone: default
 
 criterion:
@@ -17,7 +17,7 @@ criterion:
 
 data:
   dataset: simple
-  batch_size_per_rank: 32
+  batch_size_per_rank: 24
   batch_size_total: TBD
   split_rate: 0.8
   
