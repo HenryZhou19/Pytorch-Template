@@ -360,8 +360,12 @@ class PortalMisc:
     def interrupt_handler(cfg):
         """Handles SIGINT signal (Ctrl+C) by exiting the program gracefully."""
         def signal_handler(sig, frame):
-            print('Received SIGINT. Cleaning up...')
-            PortalMisc.end_everything(cfg, force=True)
+            # PortalMisc.end_everything(cfg, force=True)
+            if DistMisc.is_dist_avail_and_initialized():
+                print(f'Received SIGINT. Killing PID: {os.getpid()}', force=True)
+            else:
+                print(f'Received SIGINT. Killing PID: {os.getpid()}')
+            os.kill(os.getpid(), signal.SIGKILL)
 
         signal.signal(signal.SIGINT, signal_handler)
 
@@ -434,19 +438,17 @@ class DistMisc:
         return reduced_dict
 
     @staticmethod
-    def reduce_sum(tensor):
+    def reduce(tensor, op='mean'):
         world_size = DistMisc.get_world_size()
         if world_size < 2:
             return tensor
         tensor = tensor.clone()
         dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+        if op == 'mean':
+            tensor = tensor.float() / world_size
+        elif op == 'sum':
+            pass
         return tensor
-
-    @staticmethod
-    def reduce_mean(tensor):
-        world_size = DistMisc.get_world_size()
-        total = DistMisc.reduce_sum(tensor)
-        return total.float() / world_size
 
     @ staticmethod
     def is_dist_avail_and_initialized():
