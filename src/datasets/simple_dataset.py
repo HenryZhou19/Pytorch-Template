@@ -69,7 +69,7 @@ class SimpleDataModule(DataModuleBase):
         self.X_test = np.random.rand(self.test_len, 2)
         self.y_test = np.random.rand(self.test_len, 1)
         
-    def get_train_dataset(self):
+    def build_train_dataset(self):
         X = np.random.rand(self.train_val_len, 2)
         y = np.random.rand(self.train_val_len, 1)
         
@@ -79,7 +79,7 @@ class SimpleDataModule(DataModuleBase):
         
         return SimpleDataset(X_train, y_train, self.data_form)
         
-    def get_val_dataset(self):
+    def build_val_dataset(self):
         X = np.random.rand(self.train_val_len, 2)
         y = np.random.rand(self.train_val_len, 1)
         
@@ -89,7 +89,7 @@ class SimpleDataModule(DataModuleBase):
         
         return SimpleDataset(X_val, y_val, self.data_form)
         
-    def get_test_dataset(self):            
+    def build_test_dataset(self):            
         X = np.random.rand(self.test_len, 2)
         y = np.random.rand(self.test_len, 1)
         

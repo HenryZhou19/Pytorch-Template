@@ -20,7 +20,7 @@ def test_run(cfg):
 
     # prepare for data
     data_manager = DataManager(cfg)
-    test_loader = data_manager.build_dataset(split='test')
+    test_loader = data_manager.build_dataloader(split='test')
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)

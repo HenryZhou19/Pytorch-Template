@@ -22,8 +22,8 @@ def train_run(cfg):
 
     # prepare for data
     data_manager = DataManager(cfg)
-    train_loader = data_manager.build_dataset(split='train')
-    val_loader = data_manager.build_dataset(split='val')
+    train_loader = data_manager.build_dataloader(split='train')
+    val_loader = data_manager.build_dataloader(split='val')
 
     # prepare for optimizer
     optimizer = OptimizerMisc.get_optimizer(cfg, model_without_ddp)
