@@ -1,5 +1,3 @@
-from torch.utils.data import Dataset
-
 from src.utils.misc import ImportMisc
 
 from .modules.data_module_base import DataLoaderX, DataModuleBase, register
