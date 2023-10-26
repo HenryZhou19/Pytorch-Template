@@ -5,6 +5,7 @@ special:
   save_current_project: False  # maybe always False in inference
   print_save_config_ignore: [sweep]
   wandb_config_ignore: [info, sweep, special]
+  extra_name: null  # null for no extra name
 
 data:
   batch_size_per_rank: 1

@@ -9,3 +9,4 @@ sacred==0.8.2
 hjson
 tqdm
 torchinfo
+opencv-python

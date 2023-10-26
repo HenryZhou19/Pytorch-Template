@@ -35,6 +35,23 @@ class _AmpStepLR(_LRScheduler):  # remove the "call of `lr_scheduler.step()` bef
             optimizer._step_count == 1
 
 
+class WarmUpLR(_AmpStepLR):
+    def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, last_epoch=-1):
+        assert T_max > T_warmup, "T_max should be larger than T_warmup."
+        self.T_max = T_max
+        self.T_warmup = T_warmup
+        self.warmup_factor = warmup_factor
+        super().__init__(optimizer, scaler, do_grad_accumulation, last_epoch)
+
+    def get_lr(self):
+        if self.last_epoch < self.T_warmup:
+            alpha = float(self.last_epoch) / self.T_warmup
+            alpha = self.warmup_factor * (1 - alpha) + alpha
+            return [base_lr * alpha for base_lr in self.base_lrs]
+        else:
+            return [base_lr*1 for base_lr in self.base_lrs]
+
+
 class WarmUpCosineAnnealingLR(_AmpStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, lr_min, last_epoch=-1):
         assert T_max > T_warmup, "T_max should be larger than T_warmup."

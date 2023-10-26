@@ -151,7 +151,12 @@ class ConfigMisc:
                 return get_nested_attr(getattr(cfg, key), subkey)
             else:
                 return getattr(cfg, key)
-        return [str(get_nested_attr(cfg, extra)) for extra in cfg_keys]
+        specific_list = []
+        for cfg_key in cfg_keys:
+            result = get_nested_attr(cfg, cfg_key)
+            if result is not None:
+                specific_list.append(str(result))
+        return specific_list
 
     @staticmethod
     def output_dir_extras(cfg):

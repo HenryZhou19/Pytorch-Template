@@ -5,6 +5,7 @@ special:
   save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
   print_save_config_ignore: [sweep]
   wandb_config_ignore: [info, sweep, special]
+  extra_name: null  # null for no extra name
 
 model:
   architecture: simple
@@ -28,7 +29,7 @@ info: # info & wandb
   project_name: template
   task_type: Train  # Pretrain, Train, Pretrain_Re, Train_Re, ...
   batch_info: TBD
-  name_tags: [model.architecture, data.dataset, criterion.loss, data.batch_info]
+  name_tags: [special.extra_name, model.architecture, data.dataset, criterion.loss, data.batch_info]
   wandb_tags: [info.start_time]
   wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
   wandb_watch_model: False  # do not use

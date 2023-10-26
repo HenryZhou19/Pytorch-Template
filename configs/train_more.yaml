@@ -5,6 +5,7 @@ special:
   save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
   print_save_config_ignore: [sweep]
   wandb_config_ignore: [info, sweep, special]
+  extra_name: template  # null for no extra name
 
 model:
   architecture: simple_unet3d
