@@ -199,25 +199,27 @@ class MetricLogger(object):
         self.iter_len = len(iterable)
 
         iter_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
-        loader_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
+        data_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
+        model_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
         
         if self.pbar is not None:
             if self.global_tqdm:
-                post_msg = self.epoch_str + ' [{0}/{1}]' + ' eta: {eta}'
+                post_msg = self.epoch_str + ' [{0}/{1}] eta: {eta}  t_data: {data_time}  t_model: {model_time}'
             else:
                 self.pbar.set_description_str(self.header + ' ' + self.epoch_str, refresh=False)
             postlines_msg = self.delimiter.join([
                 # '\t{meters}',
                 '    {meters}',
-                'loader_time: {loader_time}',
+                # 'data_time: {data_time}',
                 # 'iter_time: {iter_time}',
             ])
 
         self.timer = TimeMisc.Timer()
         for idx, obj in enumerate(iterable, start=1):
-            loader_time.update(self.timer.info['last'])
+            data_time.update(self.timer.info['last'])
             yield obj
             iter_time.update(self.timer.info['last'])
+            model_time.update(iter_time.value_now - data_time.value_now)
             
             if self.pbar is not None:
                 if idx % self.print_freq == 0 or idx == self.iter_len:
@@ -225,10 +227,11 @@ class MetricLogger(object):
                     if self.global_tqdm:
                         eta_second = iter_time.avg * (self.iter_len - idx)
                         eta_string = str(datetime.timedelta(seconds=int(eta_second)))
-                        self.pbar.set_postfix_str(post_msg.format(idx, self.iter_len, eta=eta_string), refresh=False)
+                        self.pbar.set_postfix_str(post_msg.format(idx, self.iter_len, eta=eta_string, data_time=data_time.get_str(), model_time=model_time.get_str()), refresh=False)
 
                     last_infos = postlines_msg.format(
-                        meters=self.meters_str(), loader_time=loader_time.get_str(), 
+                        meters=self.meters_str(),
+                        # data_time=data_time.get_str(), 
                         # iter_time=iter_time.get_str(),
                     )
                     

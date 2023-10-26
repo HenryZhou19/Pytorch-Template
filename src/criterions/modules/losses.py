@@ -32,6 +32,34 @@ def soft_mse_loss(outputs, targets, tolerance=0.1):
     return loss.mean()
 
 
+def masked_mean_and_var(inputs: torch.Tensor, mask_keep: torch.Tensor, dim=None, unbiased_var=False):
+    """
+    inputs: Tensor of shape (*)
+    mask_keep: Tensor of shape (*) type: bool
+    """
+    assert inputs.shape == mask_keep.shape
+    if dim is None:
+        dim = tuple(range(mask_keep.dim()))
+        
+    count_nonzero = torch.count_nonzero(mask_keep, dim=dim)
+    mean = torch.sum(inputs * mask_keep, dim=dim) / count_nonzero
+    
+    restored_dim = list(inputs.shape)
+    if isinstance(dim, int):
+        restored_dim[dim] = 1
+    else:
+        assert isinstance(dim, tuple)
+        for d in dim:
+            restored_dim[d] = 1
+    restored_dim = tuple(restored_dim)
+    
+    if unbiased_var:
+        variance = torch.sum((inputs - mean.view(restored_dim)) ** 2 * mask_keep, dim=dim) / (count_nonzero - 1)
+    else:
+        variance = torch.sum((inputs - mean.view(restored_dim)) ** 2 * mask_keep, dim=dim) / count_nonzero
+    return mean, variance
+
+
 class DiceLoss(nn.Module):
     """
     outputs: Tensor of shape (batch_size, ...) type: float, output score of foreground
