@@ -112,7 +112,7 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
-    def __init__(self, cfg=None, log_file=sys.stdout, print_freq=1, debug=False, global_tqdm=False, pbar=None, delimiter='  ', header='', epoch_str=''):
+    def __init__(self, cfg=None, log_file=sys.stdout, print_freq=1, debug=None, global_tqdm=False, pbar=None, delimiter='  ', header='', epoch_str=''):
         if cfg is not None:
             self.log_file=cfg.info.log_file
             self.print_freq=cfg.info.cli_log_freq
@@ -244,7 +244,7 @@ class MetricLogger(object):
                     self.pbar.refresh()
 
             # DEBUG
-            if self.debug and idx % self.print_freq == 0:
+            if self.debug == 'one_iter' and idx % self.print_freq == 0:
                 break
 
             self.timer.press()

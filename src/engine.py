@@ -34,8 +34,9 @@ def train_one_epoch(cfg, trainer_status):
         'epoch': SV(window_size=1, no_print=True, no_sync=True)
         }])
     for batch in logger.log_every(loader):
-        inputs: dict = TensorMisc.to(batch['inputs'], device, non_blocking=cfg.env.pin_memory)
-        targets: dict = TensorMisc.to(batch['targets'], device, non_blocking=cfg.env.pin_memory)
+        batch: dict = TensorMisc.to(batch, device, non_blocking=cfg.env.pin_memory)
+        inputs: dict = batch['inputs']
+        targets: dict = batch['targets']
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             outputs = model(**inputs)
             loss, metrics_dict = criterion(outputs, targets)
@@ -76,8 +77,9 @@ def evaluate(cfg, trainer_status):
         )
     logger.add_meters([{'loss': SV(prior=True)}])
     for batch in logger.log_every(loader):
-        inputs: dict = TensorMisc.to(batch['inputs'], device, non_blocking=cfg.env.pin_memory)
-        targets: dict = TensorMisc.to(batch['targets'], device, non_blocking=cfg.env.pin_memory)
+        batch: dict = TensorMisc.to(batch, device, non_blocking=cfg.env.pin_memory)
+        inputs: dict = batch['inputs']
+        targets: dict = batch['targets']
         with torch.no_grad():
             outputs = model(**inputs)
             loss, metrics_dict = criterion(outputs, targets)
@@ -107,8 +109,9 @@ def test(cfg, tester_status):
         header='Test',
         )
     for batch in logger.log_every(loader):
-        inputs: dict = TensorMisc.to(batch['inputs'], device, non_blocking=cfg.env.pin_memory)
-        targets: dict = TensorMisc.to(batch['targets'], device, non_blocking=cfg.env.pin_memory)
+        batch: dict = TensorMisc.to(batch, device, non_blocking=cfg.env.pin_memory)
+        inputs: dict = batch['inputs']
+        targets: dict = batch['targets']
         with torch.no_grad():
             outputs = model(**inputs)
             _, metrics_dict = criterion(outputs, targets, infer_mode=True)

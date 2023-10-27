@@ -162,7 +162,7 @@ class ConfigMisc:
     @staticmethod
     def output_dir_extras(cfg):
         extras = '_'.join([cfg.info.start_time] + ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
-        if cfg.special.debug:
+        if cfg.special.debug is not None:
             extras = 'debug_' + extras
         return extras
 
@@ -266,7 +266,7 @@ class PortalMisc:
             
     @staticmethod
     def special_config_adjustment(cfg):
-        if cfg.special.debug:  # debug mode
+        if cfg.special.debug == 'one_iter':  # 'one_iter' debug mode
             cfg.env.num_workers = 0
         if cfg.trainer.grad_accumulation > 1:
             warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
@@ -354,7 +354,7 @@ class PortalMisc:
                     print('wandb closed.')
                     exit(0)  # 0 for shutting down bash master_port sweeper
                 else:
-                    if not cfg.special.debug:
+                    if cfg.special.debug is None:
                         for _ in tqdm(range(cfg.info.wandb_buffer_time), desc='Waiting for wandb to upload all files...'):
                             time.sleep(1)
                     wandb.finish()
