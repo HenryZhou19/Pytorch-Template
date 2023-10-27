@@ -68,7 +68,7 @@ class DataModuleBase:
                 batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
             elif isinstance(v, str):
                 # every d in data, get d[k]: str to form a list
-                batch[k] = TensorMisc.NoCudaList(map(lambda d: d[k], data))
+                batch[k] = TensorMisc.NotToCudaList(map(lambda d: d[k], data))
             elif isinstance(v, dict):
                 batch[k] = DataModuleBase.collate_fn(list(map(lambda d: d[k], data)))
             else:

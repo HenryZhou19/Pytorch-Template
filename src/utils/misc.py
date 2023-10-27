@@ -977,21 +977,21 @@ class SweepMisc:
 
 class TensorMisc:
     @staticmethod
-    def to(data, device):
+    def to(data, device, non_blocking=False):
         if isinstance(data, torch.Tensor):
-            return data.to(device)
+            return data.to(device, non_blocking=non_blocking)
         elif getattr(data, 'not_to_cuda', False):
             return data
         elif isinstance(data, tuple):
-            return tuple(TensorMisc.to(d, device) for d in data)
+            return tuple(TensorMisc.to(d, device, non_blocking) for d in data)
         elif isinstance(data, list):
-            return [TensorMisc.to(d, device) for d in data]
+            return [TensorMisc.to(d, device, non_blocking) for d in data]
         elif isinstance(data, dict):
-            return {k: TensorMisc.to(v, device) for k, v in data.items()}
+            return {k: TensorMisc.to(v, device, non_blocking) for k, v in data.items()}
         else:
             raise TypeError(f'Unknown type: {type(data)}')
         
-    class NoCudaList(UserList):
+    class NotToCudaList(UserList):
         @property
         def not_to_cuda(self):
             return True
