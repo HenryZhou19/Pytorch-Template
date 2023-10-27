@@ -16,6 +16,7 @@ from glob import glob
 from math import inf
 
 import numpy as np
+import psutil
 import sacred
 import torch
 import torch.distributed as dist
@@ -365,12 +366,15 @@ class PortalMisc:
     def interrupt_handler(cfg):
         """Handles SIGINT signal (Ctrl+C) by exiting the program gracefully."""
         def signal_handler(sig, frame):
-            # PortalMisc.end_everything(cfg, force=True)
-            if DistMisc.is_dist_avail_and_initialized():
-                print(f'Received SIGINT. Killing PID: {os.getpid()}', force=True)
-            else:
-                print(f'Received SIGINT. Killing PID: {os.getpid()}')
-            os.kill(os.getpid(), signal.SIGKILL)
+            p = psutil.Process()
+            if p.parent().name() == 'torchrun':
+                p_children = p.children(recursive=True)
+                all_processes = '\n'.join([f'\tPID: {p.pid}, Name: {p.name()}, Parent\'s PID: {p.parent().pid}' for p in [p] + p_children])
+                if DistMisc.is_dist_avail_and_initialized():
+                    print(LoggerMisc.block_wrapper(f'Caught SIGINT signal, all processes of rank {DistMisc.get_rank()}:\n{all_processes}', s='#'), force=True)
+                else:
+                    print(LoggerMisc.block_wrapper(f'Caught SIGINT signal, all processes of rank {DistMisc.get_rank()}:\n{all_processes}', s='#'))
+            sys.exit(0)
 
         signal.signal(signal.SIGINT, signal_handler)
 

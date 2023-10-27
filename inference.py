@@ -70,7 +70,7 @@ def infer_portal(infer_cfg):
     PortalMisc.init_loggers(cfg)
     
     # interrupt handler
-    # PortalMisc.interrupt_handler(cfg)
+    PortalMisc.interrupt_handler(cfg)
 
     # main tester
     test_run(cfg)

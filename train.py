@@ -108,7 +108,7 @@ def train_portal(cfg):
     PortalMisc.init_loggers(cfg)
 
     # interrupt handler
-    # PortalMisc.interrupt_handler(cfg)
+    PortalMisc.interrupt_handler(cfg)
     
     # main trainer
     train_run(cfg)
