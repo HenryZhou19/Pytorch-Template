@@ -11,19 +11,20 @@ from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, OptimizerMisc,
 
 def train_run(cfg):
 
+    # prepare for data
+    data_manager = DataManager(cfg)
+    train_loader = data_manager.build_dataloader(split='train')
+    val_loader = data_manager.build_dataloader(split='val')
+    
     # prepare for model, postprocessor
     model_manager = ModelManager(cfg)
+    ModelMisc.print_model_info_with_torchinfo(cfg, model_manager, train_loader)
     model_without_ddp = model_manager.build_model()
     # postprocessor = model_manager.build_postprocessor()
     
     # prepare for criterion
     criterion_manager = CriterionManager(cfg)
     criterion = criterion_manager.build_criterion()
-
-    # prepare for data
-    data_manager = DataManager(cfg)
-    train_loader = data_manager.build_dataloader(split='train')
-    val_loader = data_manager.build_dataloader(split='val')
 
     # prepare for optimizer
     optimizer = OptimizerMisc.get_optimizer(cfg, model_without_ddp)
@@ -33,10 +34,6 @@ def train_run(cfg):
 
     # prepare for lr_scheduler
     lr_scheduler = SchedulerMisc.get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader)
-    
-    # print model info
-    # ModelMisc.print_model_info(cfg, model_without_ddp, 'model_structure', 'torchinfo')
-    ModelMisc.print_model_info_with_torchinfo(cfg, model_without_ddp, train_loader, model_manager.device)
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)

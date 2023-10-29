@@ -9,6 +9,10 @@ from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, PortalMisc,
 
 def test_run(cfg):
 
+    # prepare for data
+    data_manager = DataManager(cfg)
+    test_loader = data_manager.build_dataloader(split='test')
+    
     # prepare for model, postprocessor
     model_manager = ModelManager(cfg)
     model_without_ddp = model_manager.build_model()
@@ -17,10 +21,6 @@ def test_run(cfg):
     # prepare for criterion
     criterion_manager = CriterionManager(cfg)
     criterion = criterion_manager.build_criterion()
-
-    # prepare for data
-    data_manager = DataManager(cfg)
-    test_loader = data_manager.build_dataloader(split='test')
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)

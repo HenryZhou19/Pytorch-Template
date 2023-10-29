@@ -11,12 +11,14 @@ class ModelManager(object):
         self.cfg = cfg
         self.device = torch.device(cfg.env.device)
 
-    def build_model(self): 
+    def build_model(self, verbose=True): 
         model: ModelBase = register.get(self.cfg.model.architecture)(self.cfg).to(self.device)
-        print('model built successfully.')
+        
+        if verbose:
+            print('model built successfully.')
 
-        if hasattr(self.cfg.info, 'wandb_run'):
-            if self.cfg.info.wandb_watch_model:
-                self.cfg.info.wandb_run.watch(model, log='all', log_freq=self.cfg.info.wandb_watch_freq, log_graph=True)
+            if hasattr(self.cfg.info, 'wandb_run'):
+                if self.cfg.info.wandb_watch_model:
+                    self.cfg.info.wandb_run.watch(model, log='all', log_freq=self.cfg.info.wandb_watch_freq, log_graph=True)
 
         return model

@@ -540,7 +540,7 @@ class ModelMisc:
                 cfg.info.log_file.flush()
             
     @staticmethod
-    def print_model_info_with_torchinfo(cfg, model, train_loader, device, info_columns=None):
+    def print_model_info_with_torchinfo(cfg, model_manager, train_loader, info_columns=None):
         if DistMisc.is_main_process():
             import torchinfo
             info_columns = info_columns if info_columns is not None else [
@@ -553,9 +553,9 @@ class ModelMisc:
                 'trainable',
                 ]
             input_data = train_loader.dataset.__getitem__(0)['inputs']
-            input_data = TensorMisc.to({k: v.unsqueeze(0).expand(cfg.data.batch_size_per_rank, *v.shape) for k, v in input_data.items()}, device)
+            input_data = TensorMisc.to({k: v.unsqueeze(0).expand(cfg.data.batch_size_per_rank, *v.shape) for k, v in input_data.items()}, model_manager.device)
             assert cfg.data.batch_size_per_rank == train_loader.batch_size
-            print_str = torchinfo.summary(model, input_data=input_data, col_names=info_columns, depth=9, verbose=0)
+            print_str = torchinfo.summary(model_manager.build_model(verbose=False), input_data=input_data, col_names=info_columns, depth=9, verbose=0)
             # Check model info in OUTPUT_PATH/logs.txt
             del torchinfo, input_data, info_columns
             torch.cuda.empty_cache()
