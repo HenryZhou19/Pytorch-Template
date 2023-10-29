@@ -3,6 +3,8 @@ import os
 import cv2
 import numpy as np
 
+cv2.setNumThreads(0)
+cv2.ocl.setUseOpenCL(False)
 
 def load_video(filepath: str, gray_out=False, dtype=np.uint8) -> np.ndarray:
     """
