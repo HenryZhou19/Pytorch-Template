@@ -206,6 +206,7 @@ class MetricLogger(object):
             if self.global_tqdm:
                 post_msg = self.epoch_str + ' [{0}/{1}] eta: {eta}  t_data: {data_time}  t_model: {model_time}'
             else:
+                post_msg = ' t_data: {data_time}  t_model: {model_time}'
                 self.pbar.set_description_str(self.header + ' ' + self.epoch_str, refresh=False)
             postlines_msg = self.delimiter.join([
                 # '\t{meters}',
@@ -228,7 +229,9 @@ class MetricLogger(object):
                         eta_second = iter_time.avg * (self.iter_len - idx)
                         eta_string = str(datetime.timedelta(seconds=int(eta_second)))
                         self.pbar.set_postfix_str(post_msg.format(idx, self.iter_len, eta=eta_string, data_time=data_time.get_str(), model_time=model_time.get_str()), refresh=False)
-
+                    else:
+                        self.pbar.set_postfix_str(post_msg.format(data_time=data_time.get_str(), model_time=model_time.get_str()), refresh=False)
+                        
                     last_infos = postlines_msg.format(
                         meters=self.meters_str(),
                         # data_time=data_time.get_str(), 

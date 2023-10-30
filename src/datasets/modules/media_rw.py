@@ -22,7 +22,7 @@ def load_video(filepath: str, gray_out=False, dtype=np.uint8) -> np.ndarray:
     frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
     C = 1 if gray_out else 3
-    video_array = np.zeros((frame_count, frame_height, frame_width, C), dtype=dtype)
+    video_array = np.zeros((frame_count, frame_height, frame_width, C), dtype=dtype)  # [frame_length, H, W, C]
 
     for count in range(frame_count):
         ret, frame = capture.read()
@@ -38,6 +38,33 @@ def load_video(filepath: str, gray_out=False, dtype=np.uint8) -> np.ndarray:
     video_array = video_array.transpose((3, 0, 1, 2))
 
     return video_array
+
+
+def save_video(video_array: np.ndarray, filepath: str, fps):
+    """
+    RGB 24bits video only?
+    video_array: np.ndarray [C(gray, RGB)=1 or 3, frame_length, H, W] uint8
+    """
+    video_array = video_array.transpose((1, 2, 3, 0))
+    
+    gray_in = video_array.shape[-1] == 1
+    container_format = filepath.split('.')[-1]
+    
+    if container_format == 'avi':
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    elif container_format == 'mp4':
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    else:
+        raise ValueError(f'Unsupported file format: {container_format}')
+    
+    out = cv2.VideoWriter(filepath, fourcc, fps, tuple(video_array.shape[1:3]))
+    for frame_array in video_array:  # [frame_length, H, W, C]
+        if gray_in:
+            frame_array = cv2.cvtColor(frame_array, cv2.COLOR_GRAY2BGR)
+        else:
+            frame_array = cv2.cvtColor(frame_array, cv2.COLOR_RGB2BGR)
+        out.write(frame_array)
+    out.release()
 
 
 def _convert_cv2_image_array(image_array, gray_out) -> np.ndarray:
