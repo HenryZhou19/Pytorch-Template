@@ -25,9 +25,6 @@ import yaml
 from tqdm import tqdm
 from tqdm.utils import disp_trim
 
-from .scheduler.warmup_scheduler import (WarmUpCosineAnnealingLR,
-                                         WarmupLinearLR, WarmupMultiStepLR)
-
 
 class ConfigMisc:
     @staticmethod
@@ -40,10 +37,10 @@ class ConfigMisc:
         args = sys.argv
         config_name = default_config_name
         for arg in args:
-            if arg.startswith("config="):
-                config_name = arg.split("=")[1]
+            if arg.startswith('config='):
+                config_name = arg.split('=')[1]
                 break
-        return os.path.join(config_dir, config_name + ".yaml")
+        return os.path.join(config_dir, config_name + '.yaml')
     
     @staticmethod
     def _get_configs_from_sacred(config_path):
@@ -59,11 +56,11 @@ class ConfigMisc:
 
         @ex.main
         def print_init_config(_config, _run):
-            if "RANK" in os.environ:
-                rank = int(os.environ["RANK"])
+            if 'RANK' in os.environ:
+                rank = int(os.environ['RANK'])
                 if rank != 0:
                     return
-            print(f"\nInitial configs read by sacred for ALL Ranks:")
+            print(f'\nInitial configs read by sacred for ALL Ranks:')
             print_sacred_configs(_run)
 
         config = ex.run_commandline().config
@@ -172,9 +169,9 @@ class PortalMisc:
     def _find_available_new_path(path, suffix=''):
         if os.path.exists(path):
             counter = 1
-            new_path = f"{path}_{suffix}{counter}"
+            new_path = f'{path}_{suffix}{counter}'
             while os.path.exists(new_path):
-                new_path = f"{path}_{suffix}{counter}"
+                new_path = f'{path}_{suffix}{counter}'
                 counter += 1
             return new_path
         else:
@@ -199,7 +196,7 @@ class PortalMisc:
                 elif os.path.isfile(source_path):
                     shutil.copy(source_path, destination_dir)
                 else:
-                    print(f"Skipping {source_path} as it is neither a file nor a directory.")
+                    print(f'Skipping {source_path} as it is neither a file nor a directory.')
             print(LoggerMisc.block_wrapper('Files and folders of currect project are copied successfully.'))
     
     @staticmethod
@@ -227,7 +224,7 @@ class PortalMisc:
     @staticmethod 
     def resume_or_new_train_dir(cfg):  # only for train
         assert hasattr(cfg.env, 'distributed')
-        if cfg.trainer.resume is not None:  # read "work_dir", "start_time" from the .yaml file
+        if cfg.trainer.resume is not None:  # read 'work_dir', 'start_time' from the .yaml file
             print('Resuming from: ', cfg.trainer.resume, ', reading configs from .yaml file...')
             cfg_old = ConfigMisc.read(cfg.trainer.resume)
             # TODO: assert critial params are the same, but others can be changed(e.g. info...)
@@ -306,7 +303,7 @@ class PortalMisc:
                     msg_in += f'{m_indent:40}{v}\n'
             return msg_in
 
-        msg = f"Rank {DistMisc.get_rank()} --- Parameters:\n"
+        msg = f'Rank {DistMisc.get_rank()} --- Parameters:\n'
         msg = LoggerMisc.block_wrapper(write_msg_lines(msg, cfg), s='=', block_width=80)
 
         DistMisc.avoid_print_mess()
@@ -403,11 +400,11 @@ class DistMisc:
         # serialized to a Tensor
         buffer = pickle.dumps(data)
         storage = torch.ByteStorage.from_buffer(buffer)
-        tensor = torch.ByteTensor(storage).to("cuda")
+        tensor = torch.ByteTensor(storage).to('cuda')
 
         # obtain Tensor size of each rank
-        local_size = torch.as_tensor([tensor.numel()], device="cuda")
-        size_list = [torch.as_tensor([0], device="cuda") for _ in range(world_size)]
+        local_size = torch.as_tensor([tensor.numel()], device='cuda')
+        size_list = [torch.as_tensor([0], device='cuda') for _ in range(world_size)]
         dist.all_gather(size_list, local_size)
         size_list = [int(size.item()) for size in size_list]
         max_size = max(size_list)
@@ -418,9 +415,9 @@ class DistMisc:
         tensor_list = [None] * world_size
         # tensor_list = []
         # for _ in size_list:
-        #     tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device="cuda"))
+        #     tensor_list.append(torch.empty((max_size,), dtype=torch.uint8, device='cuda'))
         if local_size != max_size:
-            padding = torch.empty(size=(max_size - local_size,), dtype=torch.uint8, device="cuda")
+            padding = torch.empty(size=(max_size - local_size,), dtype=torch.uint8, device='cuda')
             tensor = torch.cat((tensor, padding), dim=0)
         dist.all_gather(tensor_list, tensor)
 
@@ -482,7 +479,7 @@ class DistMisc:
         builtin_print = __builtin__.print
 
         def dist_print(*args, **kwargs):
-            force = kwargs.pop("force", False)
+            force = kwargs.pop('force', False)
             if is_master or force:
                 builtin_print(*args, **kwargs)
 
@@ -490,17 +487,17 @@ class DistMisc:
 
     @staticmethod
     def init_distributed_mode(cfg):
-        if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
-            cfg.env.rank = int(os.environ["RANK"])
-            cfg.env.world_size = int(os.environ["WORLD_SIZE"])
-            cfg.env.gpu = int(os.environ["LOCAL_RANK"])
-        elif "SLURM_PROCID" in os.environ and 'SLURM_PTY_PORT' not in os.environ:
-            cfg.env.rank = int(os.environ["SLURM_PROCID"])
+        if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+            cfg.env.rank = int(os.environ['RANK'])
+            cfg.env.world_size = int(os.environ['WORLD_SIZE'])
+            cfg.env.gpu = int(os.environ['LOCAL_RANK'])
+        elif 'SLURM_PROCID' in os.environ and 'SLURM_PTY_PORT' not in os.environ:
+            cfg.env.rank = int(os.environ['SLURM_PROCID'])
             cfg.env.gpu = cfg.env.rank % torch.cuda.device_count()
         else:
-            raise NotImplementedError("Must use distributed mode")
+            raise NotImplementedError('Must use distributed mode')
             
-            # print("Not using distributed mode")
+            # print('Not using distributed mode')
             # cfg.env.distributed = False
             # cfg.env.distributed = 1
             # return
@@ -515,7 +512,7 @@ class DistMisc:
             backend=cfg.env.dist_backend, init_method=cfg.env.dist_url, world_size=cfg.env.world_size, rank=cfg.env.rank
         )       
         # DistMisc.avoid_print_mess()
-        # print(f"INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}")
+        # print(f'INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}')
         # DistMisc.avoid_print_mess()
         DistMisc.setup_for_distributed(cfg.env.rank == 0)
 
@@ -586,18 +583,18 @@ class OptimizerMisc:
         if not hasattr(cfg.trainer.optimizer, 'lr'):
             assert hasattr(cfg.trainer.optimizer, 'lr_groups')
             param_dicts_with_lr = [
-                {"params": [p for n, p in model_without_ddp.named_parameters()
+                {'params': [p for n, p in model_without_ddp.named_parameters()
                             if not match_name_keywords(n, 'backbone') and p.requires_grad],
-                "lr": cfg.trainer.optimizer.lr_groups.main,},
-                {"params": [p for n, p in model_without_ddp.named_parameters()
+                'lr': cfg.trainer.optimizer.lr_groups.main,},
+                {'params': [p for n, p in model_without_ddp.named_parameters()
                             if match_name_keywords(n, 'backbone') and p.requires_grad],
-                "lr": cfg.trainer.optimizer.lr_groups.backbone},
+                'lr': cfg.trainer.optimizer.lr_groups.backbone},
                 ]
         else:  # if cfg.trainer.lr exists, then all params use cfg.trainer.lr
             param_dicts_with_lr = [
-                {"params": [p for n, p in model_without_ddp.named_parameters()
+                {'params': [p for n, p in model_without_ddp.named_parameters()
                             if p.requires_grad],
-                "lr": cfg.trainer.optimizer.lr},
+                'lr': cfg.trainer.optimizer.lr},
                 ]
         
         return param_dicts_with_lr
@@ -614,6 +611,9 @@ class OptimizerMisc:
 class SchedulerMisc:   
     @staticmethod
     def get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader):
+        from .scheduler.warmup_scheduler import (WarmUpCosineAnnealingLR,
+                                         WarmupLinearLR, WarmUpLR, WarmupMultiStepLR)
+        
         len_train_loader = len(train_loader)
         if cfg.trainer.scheduler.warmup_steps >= 0:
             warmup_iters = cfg.trainer.scheduler.warmup_steps
@@ -623,16 +623,18 @@ class SchedulerMisc:
             warmup_iters = 0
             
         kwargs = {
-            "optimizer": optimizer,
-            "scaler": scaler,
-            "do_grad_accumulation": cfg.trainer.grad_accumulation > 1,
-            "T_max": cfg.trainer.epochs * len_train_loader,
-            "T_warmup": warmup_iters,
-            "warmup_factor": cfg.trainer.scheduler.warmup_factor,
-            "lr_min": cfg.trainer.scheduler.lr_min,
+            'optimizer': optimizer,
+            'scaler': scaler,
+            'do_grad_accumulation': cfg.trainer.grad_accumulation > 1,
+            'T_max': cfg.trainer.epochs * len_train_loader,
+            'T_warmup': warmup_iters,
+            'warmup_factor': cfg.trainer.scheduler.warmup_factor,
+            'lr_min': cfg.trainer.scheduler.lr_min,
         }
-            
-        if cfg.trainer.scheduler.scheduler_choice == 'cosine':
+        if cfg.trainer.scheduler.scheduler_choice == 'vanilla':
+            kwargs.pop('lr_min')
+            return WarmUpLR(**kwargs) 
+        elif cfg.trainer.scheduler.scheduler_choice == 'cosine':
             return WarmUpCosineAnnealingLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'linear':
             return WarmupLinearLR(**kwargs)
@@ -644,9 +646,9 @@ class SchedulerMisc:
             else:
                 raise ValueError('lr_milestones_steps and lr_milestones_epochs cannot be both None.')
             kwargs.update({
-                "step_milestones": step_milestones,
-                "gamma": cfg.trainer.scheduler.lr_decay_gamma,
-            })    
+                'step_milestones': step_milestones,
+                'gamma': cfg.trainer.scheduler.lr_decay_gamma,
+            })
             return WarmupMultiStepLR(**kwargs)
         else:
             raise ValueError(f'Unknown scheduler choice: {cfg.trainer.scheduler.scheduler_choice}')
@@ -699,10 +701,10 @@ class TrainerMisc:
             trainer_status['start_epoch'] = checkpoint['epoch'] + 1
             trainer_status['best_metrics'] = checkpoint.get('best_metrics', {})
             trainer_status['metrics'] = checkpoint.get('last_metrics', {})
-            trainer_status['train_iters'] = checkpoint['epoch']*len(trainer_status['train_loader'])
+            trainer_status['train_iters'] = checkpoint['epoch'] * len(trainer_status['train_loader'])
         else:
             print('New trainer.')
-        print(f"Start from epoch: {trainer_status['start_epoch']}")
+        print(f'Start from epoch: {trainer_status["start_epoch"]}')
         
         return trainer_status
     
@@ -869,7 +871,7 @@ class TesterMisc:
         if DistMisc.is_main_process():
             if 'epoch' in checkpoint.keys():
                 print('Epoch:', checkpoint['epoch'])
-                cfg.info.wandb_run.tags = cfg.info.wandb_run.tags + (f"Epoch: {checkpoint['epoch']}",)
+                cfg.info.wandb_run.tags = cfg.info.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
         print('last_trainer_metrics', checkpoint.get('last_metrics', {}))
         
         return tester_status
@@ -896,7 +898,7 @@ class LoggerMisc:
                 dynamic_ncols=True,
                 position=i + 1,
                 maxinterval=inf,
-                bar_format="{desc}" 
+                bar_format='{desc}' 
             ) for i in range(postlines)]
 
         def unpause(self):
@@ -949,7 +951,7 @@ class LoggerMisc:
                 else:
                     wandb.log({f'{group}/{k}': v}, step=step)
                 # wandb.log({'output_image': [wandb.Image(trainer_status['output_image'])]})
-                # wandb.log({"output_video": wandb.Video(trainer_status['output_video'], fps=30, format="mp4")})
+                # wandb.log({'output_video': wandb.Video(trainer_status['output_video'], fps=30, format='mp4')})
 
 
 class SweepMisc:
@@ -1008,9 +1010,10 @@ class ImportMisc:
         current_file_name = os.path.basename(current_file)
         files = os.listdir(current_directory)
         for file in files:
-            if file.endswith(".py") and file != current_file_name:
+            if file.endswith('.py') and file != current_file_name:
                 module_name = os.path.splitext(file)[0]
-                importlib.import_module(f"{current_module_name}.{module_name}")      
+                importlib.import_module(f'{current_module_name}.{module_name}')      
+
 
 class TimeMisc:
     @staticmethod
@@ -1053,4 +1056,4 @@ class TimeMisc:
                         warnings.warn(f'Block name "{self.block_name}" with indent is too long (>40) to display, please check.')
                     if len(m_indent) < 38:
                             m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
-                    print(f"{m_indent:40s}elapsed time: {self.timer.info['all']:.4f}")
+                    print(f'{m_indent:40s}elapsed time: {self.timer.info["all"]:.4f}')

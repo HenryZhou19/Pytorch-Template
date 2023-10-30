@@ -28,7 +28,7 @@ def load_video(filepath: str, gray_out=False, dtype=np.uint8) -> np.ndarray:
         ret, frame = capture.read()
         if not ret:
             capture.release()
-            raise ValueError("Failed to load frame #{} of {}.".format(count, filepath))
+            raise ValueError(f'Failed to load frame #{count} of {filepath}.')
         if gray_out:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)[..., None]
         else:

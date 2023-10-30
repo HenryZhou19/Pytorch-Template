@@ -24,14 +24,14 @@ class MLP(nn.Module):
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, dimension, activate_layer=nn.ReLU, norm='batch'):
         super().__init__()
-        assert dimension in [2, 3], "Unsupported dimension"
+        assert dimension in [2, 3], 'Unsupported dimension'
         ConvXd = nn.Conv2d if dimension == 2 else nn.Conv3d
         if norm == 'batch':
             NormXd = nn.BatchNorm2d if dimension == 2 else nn.BatchNorm3d
         elif norm == 'instance':
             NormXd = nn.InstanceNorm2d if dimension == 2 else nn.InstanceNorm3d
         else:
-            raise NotImplementedError("Unsupported norm type")
+            raise NotImplementedError('Unsupported norm type')
         self.conv_block = nn.Sequential(
             ConvXd(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True),
             NormXd(out_channels),

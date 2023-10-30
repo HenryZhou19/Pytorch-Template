@@ -7,7 +7,7 @@ from typing import List
 from torch.optim.lr_scheduler import _LRScheduler
 
 
-class _AmpStepLR(_LRScheduler):  # remove the "call of `lr_scheduler.step()` before `optimizer.step()`"" warning when use amp or grad_accumulation
+class _AmpStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` before `optimizer.step()`' warning when use amp or grad_accumulation
     @staticmethod
     def with_counter(method, is_scaler_step=False):
         instance_ref = weakref.ref(method.__self__)
@@ -37,7 +37,7 @@ class _AmpStepLR(_LRScheduler):  # remove the "call of `lr_scheduler.step()` bef
 
 class WarmUpLR(_AmpStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, last_epoch=-1):
-        assert T_max > T_warmup, "T_max should be larger than T_warmup."
+        assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
         self.T_warmup = T_warmup
         self.warmup_factor = warmup_factor
@@ -54,7 +54,7 @@ class WarmUpLR(_AmpStepLR):
 
 class WarmUpCosineAnnealingLR(_AmpStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, lr_min, last_epoch=-1):
-        assert T_max > T_warmup, "T_max should be larger than T_warmup."
+        assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
         self.T_warmup = T_warmup
         self.warmup_factor = warmup_factor
@@ -74,7 +74,7 @@ class WarmUpCosineAnnealingLR(_AmpStepLR):
 
 class WarmupLinearLR(_AmpStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, lr_min, last_epoch=-1):
-        assert T_max > T_warmup, "T_max should be larger than T_warmup."
+        assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
         self.T_warmup = T_warmup
         self.warmup_factor = warmup_factor
@@ -94,9 +94,9 @@ class WarmupLinearLR(_AmpStepLR):
 
 class WarmupMultiStepLR(_AmpStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, step_milestones: List[int], gamma, T_max, T_warmup, warmup_factor, lr_min, last_epoch=-1):
-        assert list(step_milestones) == sorted(step_milestones), "MultiStepLR milestones should be a list of increasing integers."
-        assert T_max > step_milestones[-1], "T_max should be larger than the last milestone."
-        assert T_warmup < step_milestones[0], "T_warmup should be smaller than the first milestone."
+        assert list(step_milestones) == sorted(step_milestones), 'MultiStepLR milestones should be a list of increasing integers.'
+        assert T_max > step_milestones[-1], 'T_max should be larger than the last milestone.'
+        assert T_warmup < step_milestones[0], 'T_warmup should be smaller than the first milestone.'
         self.milestones = step_milestones
         self.gamma = gamma
         self.T_max = T_max

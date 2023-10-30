@@ -26,7 +26,7 @@ def train_one_epoch(cfg, trainer_status):
         cfg=cfg,
         pbar=pbar,  
         header='Train',
-        epoch_str='epoch: [{}/{}]'.format(epoch, cfg.trainer.epochs),
+        epoch_str=f'epoch: [{epoch}/{cfg.trainer.epochs}]',
         )
     logger.add_meters([{
         'loss': SV(prior=True),
@@ -73,7 +73,7 @@ def evaluate(cfg, trainer_status):
         cfg=cfg,
         pbar=pbar,  
         header='Eval ',
-        epoch_str='epoch: [{}/{}]'.format(epoch, cfg.trainer.epochs),
+        epoch_str=f'epoch: [{epoch}/{cfg.trainer.epochs}]',
         )
     logger.add_meters([{'loss': SV(prior=True)}])
     for batch in logger.log_every(loader):

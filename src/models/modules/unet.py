@@ -7,7 +7,7 @@ from .basic_layers import ConvBlock
 class DownSampling(nn.Module):
     def __init__(self, in_channels, out_channels, dimension):
         super().__init__()
-        assert dimension in [2, 3], "Unsupported dimension"
+        assert dimension in [2, 3], 'Unsupported dimension'
         MaxPoolXd = nn.MaxPool2d if dimension == 2 else nn.MaxPool3d
         
         self.unet_down = nn.Sequential(
@@ -22,7 +22,7 @@ class DownSampling(nn.Module):
 class UpSampling(nn.Module):
     def __init__(self, in_channels, cat_channels, out_channels, dimension, use_conv_transpose):
         super().__init__()
-        assert dimension in [2, 3], "Unsupported dimension"
+        assert dimension in [2, 3], 'Unsupported dimension'
         ConvTransposeXd = nn.ConvTranspose2d if dimension == 2 else nn.ConvTranspose3d
         
         if use_conv_transpose:
@@ -40,7 +40,7 @@ class UpSampling(nn.Module):
 class LastConv(nn.Module):
     def __init__(self, in_channels, out_channels, dimension):
         super().__init__()
-        assert dimension in [2, 3], "Unsupported dimension"
+        assert dimension in [2, 3], 'Unsupported dimension'
         ConvXd = nn.Conv2d if dimension == 2 else nn.Conv3d
         self.conv = ConvXd(in_channels, out_channels, kernel_size=1)
 
@@ -51,7 +51,7 @@ class LastConv(nn.Module):
 class UNetXd(nn.Module):
     def __init__(self, in_channels, layer_out_channels=[64, 128, 256, 512], final_out_channels=None, dimension=2, use_conv_transpose=False):
         super().__init__()
-        assert dimension in [2, 3], "Unsupported dimension"
+        assert dimension in [2, 3], 'Unsupported dimension'
         if final_out_channels is None:
             final_out_channels = in_channels
 
