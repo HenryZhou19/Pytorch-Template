@@ -381,6 +381,13 @@ class PortalMisc:
             else:
                 log_file_path = os.path.join(cfg.info.work_dir, f'logs_resume_{cfg.info.resume_start_time}.txt')       
             loggers.log_file = open(log_file_path, 'a')
+            
+            p = psutil.Process()
+            assert p.parent().name() == 'torchrun'
+            p = p.parent()
+            p_children = p.children(recursive=True)
+            all_processes = '\n'.join([f'\tPID: {p.pid}, Name: {p.name()}' for p in [p] + p_children])
+            print(LoggerMisc.block_wrapper(f'All sub-processes of torchrun:\n{all_processes}', s='#'), file=loggers.log_file)
         else:
             loggers.log_file = sys.stdout
         return loggers
