@@ -1,5 +1,4 @@
 #!/bin/bash
-
 cuda_devices="6,7"
 omp_num_threads=6
 config_file_name="train"
@@ -16,7 +15,9 @@ run_cmd() {
     train.py --loglevel=ERROR with ${params[@]}
 }
 
-
+args=("$@")
+echo -e "\033[?25l"  # hide cursor
+trap 'echo -e "\033[?25h"' INT  # show cursor when Ctrl-C
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -76,3 +77,5 @@ while [ $master_port -le $end_port ]; do
         break
     fi
 done
+echo -e "\n\"train.sh ${args[@]}\" ends."
+echo -e "\033[0m\033[?25h" # change color back and show cursor

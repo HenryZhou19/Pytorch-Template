@@ -9,7 +9,7 @@ from torch.utils.data import (DataLoader, Dataset, RandomSampler, Sampler,
 from src.utils.misc import DistMisc, TensorMisc
 from src.utils.register import Register
 
-register = Register('data_module')
+data_module_register = Register('data_module')
 
 class DataModuleBase:
     def __init__(self, cfg):
@@ -98,11 +98,11 @@ class DataModuleBase:
         )
     
     def get_worker_init_fn(self):
-        def _seed_worker(worker_id, rank_seed):    
+        def _worker_init_fn(worker_id, rank_seed):
             worker_seed = rank_seed + worker_id
             random.seed(worker_seed)
             np.random.seed(worker_seed)
-        return partial(_seed_worker, rank_seed=self.cfg.env.seed_base + self.cfg.env.num_workers * DistMisc.get_rank())
+        return partial(_worker_init_fn, rank_seed=self.cfg.seed_base + self.cfg.env.num_workers * DistMisc.get_rank())
     
     def get_sampler(self, dataset: Dataset, is_training: bool, use_dist_sampler: bool) -> Sampler:
         if self.cfg.env.distributed and use_dist_sampler:

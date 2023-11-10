@@ -32,34 +32,6 @@ def soft_mse_loss(outputs, targets, tolerance=0.1):
     return loss.mean()
 
 
-def masked_mean_and_var(inputs: torch.Tensor, mask_keep: torch.Tensor, dim=None, unbiased_var=False):
-    """
-    inputs: Tensor of shape (*)
-    mask_keep: Tensor of shape (*) type: bool
-    """
-    assert inputs.shape == mask_keep.shape
-    if dim is None:
-        dim = tuple(range(mask_keep.dim()))
-        
-    count_nonzero = torch.count_nonzero(mask_keep, dim=dim)
-    mean = torch.sum(inputs * mask_keep, dim=dim) / count_nonzero
-    
-    restored_dim = list(inputs.shape)
-    if isinstance(dim, int):
-        restored_dim[dim] = 1
-    else:
-        assert isinstance(dim, tuple)
-        for d in dim:
-            restored_dim[d] = 1
-    restored_dim = tuple(restored_dim)
-    
-    if unbiased_var:
-        variance = torch.sum((inputs - mean.view(restored_dim)) ** 2 * mask_keep, dim=dim) / (count_nonzero - 1)
-    else:
-        variance = torch.sum((inputs - mean.view(restored_dim)) ** 2 * mask_keep, dim=dim) / count_nonzero
-    return mean, variance
-
-
 class DiceLoss(nn.Module):
     """
     outputs: Tensor of shape (batch_size, ...) type: float, output score of foreground
@@ -74,8 +46,8 @@ class DiceLoss(nn.Module):
     def forward(self, outputs, targets):
         batch_size = targets.size(0)
 
-        outputs = outputs.view(batch_size, -1)
-        targets = targets.view(batch_size, -1)
+        outputs = outputs.reshape(batch_size, -1)
+        targets = targets.reshape(batch_size, -1)
 
         intersection = (outputs * targets).sum(1)
         union = outputs.sum(1) + targets.sum(1)
@@ -130,7 +102,7 @@ class FocalLoss(nn.Module):
         p_t = torch.exp(log_p_t)
         alpha_t = self.alpha * targets + (1 - self.alpha) * (1 - targets)
         loss = -alpha_t * (1 - p_t) ** self.gamma * log_p_t
-        loss = loss.view(batch_size, -1).mean(1)
+        loss = loss.reshape(batch_size, -1).mean(1)
 
         return reduce_loss(loss, self.reduction)
 
@@ -165,6 +137,6 @@ class MulticlassFocalLoss(nn.Module):
         p_t = torch.exp(log_p_t)
         loss = -alpha * (1 - p_t) ** self.gamma * log_p_t
 
-        loss = loss.view(batch_size, -1).mean(1)
+        loss = loss.reshape(batch_size, -1).mean(1)
         return reduce_loss(loss, self.reduction), log_p_t
     

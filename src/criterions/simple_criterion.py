@@ -1,9 +1,9 @@
 from torch import nn
 
-from .modules.criterion_base import CriterionBase, register
+from .modules.criterion_base import CriterionBase, criterion_register
 
 
-@register('simple')
+@criterion_register('simple')
 class SimpleCriterion(CriterionBase):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -18,7 +18,7 @@ class SimpleCriterion(CriterionBase):
 
         # metrics (loss) used for backprop
         if self.loss_config == 'mse':
-            mse_loss = self.mse_loss(pred_y, gt_y.view_as(pred_y))
+            mse_loss = self.mse_loss(pred_y, gt_y.reshape_as(pred_y))
             loss = 1 * mse_loss
         else:
             raise NotImplementedError(f'loss "{self.loss_config}" has not been implemented yet.')
@@ -26,7 +26,7 @@ class SimpleCriterion(CriterionBase):
         # metrics not used for backprop
         pred_y = pred_y.detach()
         gt_y = gt_y.detach()
-        l1_loss = self.l1_loss(pred_y, gt_y.view_as(pred_y))
+        l1_loss = self.l1_loss(pred_y, gt_y.reshape_as(pred_y))
 
         # if infer_mode:
         #     return None, {
@@ -40,11 +40,11 @@ class SimpleCriterion(CriterionBase):
             }
 
 
-@register('simple_unet2d')
+@criterion_register('simple_unet2d')
 class SimpleUnetCriterion(SimpleCriterion):
     pass
 
 
-@register('simple_unet3d')
+@criterion_register('simple_unet3d')
 class SimpleUnetCriterion(SimpleCriterion):
     pass

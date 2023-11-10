@@ -1,6 +1,5 @@
 import importlib
 import logging
-import math
 import os
 import pickle
 import random
@@ -20,11 +19,23 @@ import psutil
 import sacred
 import torch
 import torch.distributed as dist
-import wandb
 import yaml
 from tqdm import tqdm
 from tqdm.utils import disp_trim
 
+__all__ = [
+    'ConfigMisc',
+    'PortalMisc',
+    'DistMisc',
+    'ModelMisc',
+    'OptimizerMisc',
+    'SchedulerMisc',
+    'LoggerMisc',
+    'SweepMisc',
+    'TensorMisc',
+    'ImportMisc',
+    'TimeMisc'
+    ]
 
 class ConfigMisc:
     @staticmethod
@@ -43,31 +54,34 @@ class ConfigMisc:
         return os.path.join(config_dir, config_name + '.yaml')
     
     @staticmethod
-    def _get_configs_from_sacred(config_path):
+    def _get_configs_from_sacred(config_path, do_print=False):
         ex = sacred.Experiment('Config Collector', save_git_info=False)
         ex.add_config(config_path)
         
-        def print_sacred_configs(_run):
+        def trim_sacred_configs(_run):
             final_config = _run.config
-            final_config.pop('seed', None)
+            final_config.pop('seed', None)  # seed given by sacred is useless
             config_mods = _run.config_modifications
-            config_mods.pop('seed', None)
-            print(sacred.commands._format_config(final_config, config_mods))
+            if do_print:
+                if 'RANK' in os.environ:
+                    rank = int(os.environ['RANK'])
+                    if rank != 0:
+                        return vars(config_mods)
+                print(f'\nInitial configs read by sacred for ALL Ranks:')
+                print(sacred.commands._format_config(final_config, config_mods))
+            return vars(config_mods)
 
         @ex.main
-        def print_init_config(_config, _run):
-            if 'RANK' in os.environ:
-                rank = int(os.environ['RANK'])
-                if rank != 0:
-                    return
-            print(f'\nInitial configs read by sacred for ALL Ranks:')
-            print_sacred_configs(_run)
+        def get_init_configs(_config, _run):
+            modified_configs = trim_sacred_configs(_run)
+            return modified_configs
 
-        config = ex.run_commandline().config
-        cfg = ConfigMisc.nested_dict_to_nested_namespace(config)
-        if hasattr(cfg, 'seed'):
-            delattr(cfg, 'seed')  # seed given by sacred is useless
-        
+        ex_run = ex.run_commandline()
+        cfg = ConfigMisc.nested_dict_to_nested_namespace(ex_run.config)
+        cfg.modified_cfg_dict = ex_run.result
+        for k, v in cfg.modified_cfg_dict.items():
+            cfg.modified_cfg_dict[k] = [cfg_name.split('.')[-1] for cfg_name in v]
+
         return cfg
 
     @staticmethod 
@@ -131,13 +145,13 @@ class ConfigMisc:
         setattr(namespace_now, name_list[-1], value)
 
     @staticmethod
-    def read(path):
+    def read_from_yaml(path):
         with open(path, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f.read())
         return ConfigMisc.nested_dict_to_nested_namespace(config)
 
     @staticmethod
-    def write(path, config, ignore_name_list):
+    def write_to_yaml(path, config, ignore_name_list):
         with open(path, 'w', encoding='utf-8') as f:
             yaml.safe_dump(ConfigMisc.nested_namespace_to_nested_dict(config, ignore_name_list), f)
 
@@ -162,6 +176,10 @@ class ConfigMisc:
         if cfg.special.debug is not None:
             extras = 'debug_' + extras
         return extras
+    
+    @staticmethod
+    def is_inference(cfg):
+        return hasattr(cfg, 'tester')
 
 
 class PortalMisc:
@@ -187,7 +205,8 @@ class PortalMisc:
                 './configs',
             ] + main_py_files
             destination_dir = os.path.join(cfg.info.work_dir, 'current_project')
-            destination_dir = PortalMisc._find_available_new_path(destination_dir, suffix='resume_')
+            if cfg.trainer.resume is not None:
+                destination_dir += f'_resume_{cfg.info.resume_start_time}.yaml'  
             
             for source_path in source_paths:
                 if os.path.isdir(source_path):
@@ -201,11 +220,11 @@ class PortalMisc:
     
     @staticmethod
     def combine_train_infer_configs(infer_cfg, use_train_seed=True):
-        cfg = ConfigMisc.read(infer_cfg.tester.train_cfg_path)  # config in training
-        train_seed_base = cfg.env.seed_base
+        cfg = ConfigMisc.read_from_yaml(infer_cfg.tester.train_cfg_path)  # config in training
+        train_seed_base = cfg.seed_base
         ConfigMisc.update_nested_namespace(cfg, infer_cfg)
         if use_train_seed:
-            cfg.env.seed_base = train_seed_base
+            cfg.seed_base = train_seed_base
 
         cfg.info.train_work_dir = cfg.info.work_dir
         cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + cfg.info.infer_start_time
@@ -225,8 +244,8 @@ class PortalMisc:
     def resume_or_new_train_dir(cfg):  # only for train
         assert hasattr(cfg.env, 'distributed')
         if cfg.trainer.resume is not None:  # read 'work_dir', 'start_time' from the .yaml file
-            print('Resuming from: ', cfg.trainer.resume, ', reading configs from .yaml file...')
-            cfg_old = ConfigMisc.read(cfg.trainer.resume)
+            print(LoggerMisc.block_wrapper(f'Resuming from: {cfg.trainer.resume}, reading existing configs...', '>'))
+            cfg_old = ConfigMisc.read_from_yaml(cfg.trainer.resume)
             # TODO: assert critial params are the same, but others can be changed(e.g. info...)
             work_dir = cfg_old.info.work_dir
             setattr(cfg.info, 'resume_start_time', cfg.info.start_time)
@@ -234,7 +253,7 @@ class PortalMisc:
         else:
             work_dir = os.path.join(cfg.info.output_dir, ConfigMisc.output_dir_extras(cfg))
             if DistMisc.is_main_process():
-                print('New start at: ', work_dir)
+                print(LoggerMisc.block_wrapper(f'New start at: {work_dir}', '>'))
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir)
         cfg.info.work_dir = work_dir
@@ -243,9 +262,9 @@ class PortalMisc:
     def seed_everything(cfg):
         assert hasattr(cfg.env, 'distributed')
         if cfg.env.seed_with_rank:
-            seed_rank = cfg.env.seed_base + DistMisc.get_rank()
+            seed_rank = cfg.seed_base + DistMisc.get_rank()
         else:
-            seed_rank = cfg.env.seed_base
+            seed_rank = cfg.seed_base
         
         os.environ['PYTHONHASHSEED'] = str(seed_rank)
 
@@ -268,7 +287,7 @@ class PortalMisc:
         if cfg.trainer.grad_accumulation > 1:
             warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
         cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
-        cfg.data.batch_info = f'{cfg.data.batch_size_total}={cfg.data.batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
+        cfg.info.batch_info = f'{cfg.data.batch_size_total}={cfg.data.batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
 
     @staticmethod
     def save_configs(cfg):
@@ -280,17 +299,19 @@ class PortalMisc:
             else:
                 cfg_file_name = f'cfg_resume_{cfg.info.resume_start_time}.yaml'  
             
-            ConfigMisc.write(os.path.join(cfg.info.work_dir, cfg_file_name), cfg, ignore_name_list=cfg.special.print_save_config_ignore)
+            ConfigMisc.write_to_yaml(os.path.join(cfg.info.work_dir, cfg_file_name), cfg, ignore_name_list=cfg.special.print_save_config_ignore + ['modified_cfg_dict'])
             
         if cfg.special.save_current_project:
             PortalMisc._save_currect_project(cfg)
 
     @staticmethod
-    def print_config(cfg, force_all_rank=False):  
+    def print_config(cfg, force_all_rank=False):
+        modified_cfg_dict = cfg.modified_cfg_dict
+        
         def write_msg_lines(msg_in, cfg_in, indent=1):
             for name in sorted(vars(cfg_in).keys()):
-                if name in cfg.special.print_save_config_ignore:
-                    continue
+                if name in cfg.special.print_save_config_ignore + ['modified_cfg_dict']:
+                    continue   
                 m_indent = ' ' * (4 * (indent - 1)) + ' ├─ ' + name
                 v = getattr(cfg_in, name)
                 if isinstance(v, Namespace):
@@ -300,10 +321,19 @@ class PortalMisc:
                         warnings.warn(f'Config key "{name}" with indent is too long (>40) to display, please check.')
                     if len(m_indent) < 38:
                         m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
-                    msg_in += f'{m_indent:40}{v}\n'
+                    color_flag = ''
+                    if name in modified_cfg_dict['modified']:
+                        color_flag = '\033[34m'
+                    elif name in modified_cfg_dict['added']:
+                        color_flag = '\033[32m'
+                    elif name in modified_cfg_dict['typechanged']:
+                        color_flag = '\033[31m'
+                    elif name in modified_cfg_dict['docs']:
+                        color_flag = '\033[30m'
+                    msg_in += f'{color_flag}{m_indent:40}{v}\033[0m\n'
             return msg_in
 
-        msg = f'Rank {DistMisc.get_rank()} --- Parameters:\n'
+        msg = f'Rank {DistMisc.get_rank()} --- Parameters: (\033[34mmodified, \033[32madded, \033[31mtypechanged, \033[30mdoc)\033[0m\n'
         msg = LoggerMisc.block_wrapper(write_msg_lines(msg, cfg), s='=', block_width=80)
 
         DistMisc.avoid_print_mess()
@@ -315,49 +345,75 @@ class PortalMisc:
 
     @staticmethod 
     def init_loggers(cfg):
+        loggers = Namespace()
         if DistMisc.is_main_process():
-            wandb_name = '_'.join(ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
-            wandb_name = f'[{cfg.info.task_type}] ' + wandb_name
-            wandb_tags = ConfigMisc.get_specific_list(cfg, cfg.info.wandb_tags)
-            if TesterMisc.is_inference(cfg):
-                wandb_tags.append(f'Infer: {cfg.info.infer_start_time}')
-            if cfg.trainer.resume != None:
-                wandb_tags.append(f'Re: {cfg.info.resume_start_time}')
-                if cfg.info.wandb_resume_enabled:
-                    resumed_wandb_id = glob(cfg.info.work_dir + '/wandb/latest-run/*.wandb')[0].split('-')[-1].split('.')[0]
-            cfg.info.wandb_run = wandb.init(
-                project=cfg.info.project_name,
-                name=wandb_name,
-                tags=wandb_tags,
-                dir=cfg.info.work_dir,
-                config=ConfigMisc.nested_namespace_to_plain_namespace(cfg, cfg.special.wandb_config_ignore),
-                resume='allow' if cfg.trainer.resume and cfg.info.wandb_resume_enabled else None,
-                id=resumed_wandb_id if cfg.trainer.resume and cfg.info.wandb_resume_enabled else None,
-                )
-            cfg.info.log_file = open(os.path.join(cfg.info.work_dir, 'logs.txt'), 'a' if cfg.trainer.resume is None else 'a+')
+            cfg_dict = ConfigMisc.nested_namespace_to_plain_namespace(cfg, cfg.special.logger_config_ignore + ['modified_cfg_dict'])
+            if cfg.info.wandb.wandb_enabled:
+                import wandb
+                wandb_name = '_'.join(ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
+                wandb_name = f'[{cfg.info.task_type}] ' + wandb_name
+                wandb_tags = ConfigMisc.get_specific_list(cfg, cfg.info.wandb.wandb_tags)
+                if ConfigMisc.is_inference(cfg):
+                    wandb_tags.append(f'Infer: {cfg.info.infer_start_time}')
+                if cfg.trainer.resume != None:
+                    wandb_tags.append(f'Re: {cfg.info.resume_start_time}')
+                    if cfg.info.wandb.wandb_resume_enabled:
+                        resumed_wandb_id = glob(cfg.info.work_dir + '/wandb/latest-run/*.wandb')[0].split('-')[-1].split('.')[0]
+                loggers.wandb_run = wandb.init(
+                    project=cfg.info.project_name,
+                    name=wandb_name,
+                    tags=wandb_tags,
+                    dir=cfg.info.work_dir,
+                    config=cfg_dict,
+                    resume='allow' if cfg.trainer.resume and cfg.info.wandb.wandb_resume_enabled else None,
+                    id=resumed_wandb_id if cfg.trainer.resume and cfg.info.wandb.wandb_resume_enabled else None,
+                    )
+            if cfg.info.tensorboard.tensorboard_enabled:
+                from torch.utils.tensorboard import SummaryWriter
+                loggers.tensorboard_run = SummaryWriter(log_dir=os.path.join(cfg.info.work_dir, 'tensorboard'))
+                # loggers.tensorboard_run.add_hparams(
+                #     hparam_dict=ConfigMisc.nested_namespace_to_nested_dict(cfg_dict),
+                #     metric_dict={},
+                #     )  # tensorboard's hparams logging strategy is not very useful in this case.
+            
+            if cfg.trainer.resume is None:
+                log_file_path = os.path.join(cfg.info.work_dir, 'logs.txt')
+            else:
+                log_file_path = os.path.join(cfg.info.work_dir, f'logs_resume_{cfg.info.resume_start_time}.txt')       
+            loggers.log_file = open(log_file_path, 'a')
         else:
-            cfg.info.log_file = sys.stdout
+            loggers.log_file = sys.stdout
+        return loggers
 
     @staticmethod 
-    def end_everything(cfg, end_with_printed_cfg=False, force=False):
+    def end_everything(cfg, loggers, end_with_printed_cfg=False, force=False):
         if end_with_printed_cfg:
             PortalMisc.print_config(cfg)
         if DistMisc.is_main_process():
-            cfg.info.log_file.close()
+            loggers.log_file.close()
             print('log_file closed.')
             try:
+                if hasattr(loggers, 'tensorboard_run'):
+                    loggers.tensorboard_run.close()
+                    print('tensorboard closed.')
                 if force:
-                    wandb.finish(exit_code=-1)
-                    print('wandb closed.')
+                    if hasattr(loggers, 'wandb_run'):
+                        loggers.wandb_run.finish(exit_code=-1)
+                        print('wandb closed.')
                     exit(0)  # 0 for shutting down bash master_port sweeper
                 else:
-                    if cfg.special.debug is None:
-                        for _ in tqdm(range(cfg.info.wandb_buffer_time), desc='Waiting for wandb to upload all files...'):
-                            time.sleep(1)
-                    wandb.finish()
-                    print('wandb closed.')
+                    if hasattr(loggers, 'wandb_run'):
+                        if cfg.special.debug is None:
+                            for _ in tqdm(range(cfg.info.wandb.wandb_buffer_time), desc='Waiting for wandb to upload all files...'):
+                                time.sleep(1)
+                        loggers.wandb_run.finish()
+                        print('wandb closed.')
             finally:
                 pass
+        else:
+            if cfg.special.debug is None and cfg.info.wandb.wandb_enabled:
+                for _ in range(cfg.info.wandb.wandb_buffer_time):
+                    time.sleep(1)
 
     @staticmethod 
     def interrupt_handler(cfg):
@@ -519,26 +575,26 @@ class DistMisc:
 
 class ModelMisc:
     @staticmethod
-    def print_model_info(cfg, model, *args):
+    def print_model_info(cfg, trainer, *args):
         if DistMisc.is_main_process():
             args = set(args)
             if len(args) > 0:
                 print_str = ''
                 if 'model_structure' in args:
-                    print_str += str(model) + '\n'
+                    print_str += str(trainer.model_without_ddp) + '\n'
                 if 'trainable_params' in args:
-                    print_str += f'Trainable parameters: {sum(map(lambda p: p.numel() if p.requires_grad else 0, model.parameters()))}\n'
+                    print_str += f'Trainable parameters: {sum(map(lambda p: p.numel() if p.requires_grad else 0, trainer.model_without_ddp.parameters()))}\n'
                 if 'total_params' in args:
-                    print_str += f'Total parameters: {sum(map(lambda p: p.numel(), model.parameters()))}\n'
+                    print_str += f'Total parameters: {sum(map(lambda p: p.numel(), trainer.model_without_ddp.parameters()))}\n'
                 
                 print_str = LoggerMisc.block_wrapper(print_str, s='-', block_width=80)
                 print(print_str)
-                print(print_str, file=cfg.info.log_file)
-                cfg.info.log_file.flush()
-            
+                print(print_str, file=trainer.loggers.log_file)
+                trainer.loggers.log_file.flush()
+    
     @staticmethod
-    def print_model_info_with_torchinfo(cfg, model_manager, train_loader, info_columns=None):
-        if DistMisc.is_main_process():
+    def print_model_info_with_torchinfo(cfg, trainer, info_columns=None, print_param_names=True):
+        if DistMisc.is_main_process() and cfg.info.torchinfo:
             import torchinfo
             info_columns = info_columns if info_columns is not None else [
                 'input_size',
@@ -549,15 +605,24 @@ class ModelMisc:
                 'mult_adds',
                 'trainable',
                 ]
-            input_data = train_loader.dataset.__getitem__(0)['inputs']
-            input_data = TensorMisc.to({k: v.unsqueeze(0).expand(cfg.data.batch_size_per_rank, *v.shape) for k, v in input_data.items()}, model_manager.device)
-            assert cfg.data.batch_size_per_rank == train_loader.batch_size
-            print_str = torchinfo.summary(model_manager.build_model(verbose=False), input_data=input_data, col_names=info_columns, depth=9, verbose=0)
+            input_data = trainer.train_loader.dataset.__getitem__(0)['inputs']
+            input_data = TensorMisc.to({k: v.unsqueeze(0).expand(cfg.data.batch_size_per_rank, *v.shape) for k, v in input_data.items()}, trainer.device)
+            assert cfg.data.batch_size_per_rank == trainer.train_loader.batch_size
+            temp_model = deepcopy(trainer.model_without_ddp)
+            print_str = torchinfo.summary(temp_model, input_data=input_data, col_names=info_columns, depth=9, verbose=0)
             # Check model info in OUTPUT_PATH/logs.txt
-            del torchinfo, input_data, info_columns
+            print(print_str, file=trainer.loggers.log_file)
+            if print_param_names:
+                print('\nAll Params:', file=trainer.loggers.log_file)
+                for k, _ in temp_model.named_parameters():
+                    print(f'\t{k}', file=trainer.loggers.log_file)
+                print('\n', file=trainer.loggers.log_file)
+            trainer.loggers.log_file.flush()
+            
+            del torchinfo, temp_model, input_data, info_columns
             torch.cuda.empty_cache()
-            print(print_str, file=cfg.info.log_file)
-            cfg.info.log_file.flush()
+            
+            print(LoggerMisc.block_wrapper(f'torchinfo: Model structure and summary have been saved.'))
     
     @staticmethod
     def ddp_wrapper(cfg, model_without_ddp):
@@ -574,45 +639,63 @@ class ModelMisc:
 class OptimizerMisc:
     @staticmethod
     def _get_param_dicts_with_specific_lr(cfg, model_without_ddp: torch.nn.Module):
-        def match_name_keywords(name, name_keywords):
-            for keyword in name_keywords:
-                if keyword in name:
-                    return True
-            return False
+        def match_lr_groups(param_name, lr_group_names):
+            flag = False
+            param_group_name = 'others'
+            for lr_group_name in lr_group_names:
+                if lr_group_name in param_name:
+                    assert not flag, f'Name {param_name} matches multiple lr_group names in {lr_group_names}.'
+                    flag = True
+                    param_group_name = lr_group_name
+            return param_group_name
 
         if not hasattr(cfg.trainer.optimizer, 'lr'):
             assert hasattr(cfg.trainer.optimizer, 'lr_groups')
-            param_dicts_with_lr = [
-                {'params': [p for n, p in model_without_ddp.named_parameters()
-                            if not match_name_keywords(n, 'backbone') and p.requires_grad],
-                'lr': cfg.trainer.optimizer.lr_groups.main,},
-                {'params': [p for n, p in model_without_ddp.named_parameters()
-                            if match_name_keywords(n, 'backbone') and p.requires_grad],
-                'lr': cfg.trainer.optimizer.lr_groups.backbone},
-                ]
+            assert hasattr(cfg.trainer.optimizer.lr_groups, 'lr_others')
+            lr_mark = 'lr_'
+            param_groups = {}
+            for k, v in vars(cfg.trainer.optimizer.lr_groups).items():
+                assert k.startswith(lr_mark)
+                param_groups[k[len(lr_mark):]] = {'params': [], 'lr': v}
+            for n, p in model_without_ddp.named_parameters():
+                if p.requires_grad:
+                    param_groups[match_lr_groups(n, param_groups.keys())]['params'].append(p)
+
+            param_dicts_with_lr = []
+            for k, v in param_groups.items():
+                param_dicts_with_lr.append({
+                    **v,
+                    'group_name': lr_mark + k
+                    })
         else:  # if cfg.trainer.lr exists, then all params use cfg.trainer.lr
-            param_dicts_with_lr = [
-                {'params': [p for n, p in model_without_ddp.named_parameters()
+            param_dicts_with_lr = [{
+                'params': [p for _, p in model_without_ddp.named_parameters()
                             if p.requires_grad],
-                'lr': cfg.trainer.optimizer.lr},
-                ]
+                'lr': cfg.trainer.optimizer.lr,
+                'group_name': 'lr'
+                }]
         
         return param_dicts_with_lr
     
     @staticmethod
-    def get_optimizer(cfg, model_without_ddp):
+    def get_optimizer(cfg, model_without_ddp) -> tuple[torch.optim.Optimizer, torch.cuda.amp.GradScaler]:
         param_dicts_with_lr = OptimizerMisc._get_param_dicts_with_specific_lr(cfg, model_without_ddp)
         if cfg.trainer.optimizer.optimizer_choice == 'adamw':
-            return torch.optim.AdamW(param_dicts_with_lr, weight_decay=cfg.trainer.optimizer.weight_decay)
+            optimizer = torch.optim.AdamW(param_dicts_with_lr, weight_decay=cfg.trainer.optimizer.weight_decay)
         else:
             raise ValueError(f'Unknown optimizer choice: {cfg.trainer.optimizer.optimizer_choice}')
+        
+        scaler = torch.cuda.amp.GradScaler() if cfg.env.amp and cfg.env.device=='cuda' else None
+        
+        return optimizer, scaler
 
 
 class SchedulerMisc:   
     @staticmethod
-    def get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader):
+    def get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader) -> torch.optim.lr_scheduler._LRScheduler:
         from .scheduler.warmup_scheduler import (WarmUpCosineAnnealingLR,
-                                         WarmupLinearLR, WarmUpLR, WarmupMultiStepLR)
+                                                 WarmupLinearLR, WarmUpLR,
+                                                 WarmupMultiStepLR)
         
         len_train_loader = len(train_loader)
         if cfg.trainer.scheduler.warmup_steps >= 0:
@@ -652,240 +735,6 @@ class SchedulerMisc:
             return WarmupMultiStepLR(**kwargs)
         else:
             raise ValueError(f'Unknown scheduler choice: {cfg.trainer.scheduler.scheduler_choice}')
-    
-
-class TrainerMisc:
-    @staticmethod
-    def get_pbar(cfg, trainer_status):
-        if DistMisc.is_main_process():
-            len_train_loader = len(trainer_status['train_loader'])
-            len_val_loader = len(trainer_status['val_loader'])
-            epoch_finished = trainer_status['start_epoch'] - 1
-            train_pbar = LoggerMisc.MultiTQDM(
-                total=cfg.trainer.epochs * len_train_loader if cfg.info.global_tqdm else len_train_loader,
-                dynamic_ncols=True,
-                colour='green',
-                position=0,
-                maxinterval=inf,
-                initial=epoch_finished * len_train_loader,
-            )
-            train_pbar.set_description_str('Train')
-            print('')
-            val_pbar = LoggerMisc.MultiTQDM(
-                total=cfg.trainer.epochs * len_val_loader if cfg.info.global_tqdm else len_val_loader,
-                dynamic_ncols=True,
-                colour='green',
-                position=0,
-                maxinterval=inf,
-                initial=epoch_finished * len_val_loader,
-            )
-            val_pbar.set_description_str('Eval ')
-            print('')
-            trainer_status['train_pbar'] = train_pbar
-            trainer_status['val_pbar'] = val_pbar
-            
-        return trainer_status
-    
-    @staticmethod
-    def resume_training(cfg, trainer_status):
-        if cfg.trainer.resume:
-            print('Resuming from ', cfg.trainer.resume, ', loading the checkpoint...')
-            checkpoint_path = glob(os.path.join(cfg.info.work_dir, 'checkpoint_last_epoch_*.pth'))
-            assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
-            checkpoint = torch.load(checkpoint_path[0], map_location='cpu')
-            trainer_status['model_without_ddp'].load_state_dict(checkpoint['model'])
-            trainer_status['optimizer'].load_state_dict(checkpoint['optimizer'])
-            trainer_status['lr_scheduler'].load_state_dict(checkpoint['lr_scheduler'])
-            if cfg.env.amp:
-                trainer_status['scaler'].load_state_dict(checkpoint['scaler'])
-            trainer_status['start_epoch'] = checkpoint['epoch'] + 1
-            trainer_status['best_metrics'] = checkpoint.get('best_metrics', {})
-            trainer_status['metrics'] = checkpoint.get('last_metrics', {})
-            trainer_status['train_iters'] = checkpoint['epoch'] * len(trainer_status['train_loader'])
-        else:
-            print('New trainer.')
-        print(f'Start from epoch: {trainer_status["start_epoch"]}')
-        
-        return trainer_status
-    
-    @staticmethod
-    def before_one_epoch(cfg, trainer_status, **kwargs):
-        assert 'epoch' in kwargs.keys()
-        trainer_status['epoch'] = kwargs['epoch']
-        if cfg.env.distributed:
-            # shuffle data for each epoch (here needs epoch start from 0)
-            trainer_status['train_loader'].sampler_set_epoch(trainer_status['epoch'] - 1)  
-        
-        dist.barrier()
-        if DistMisc.is_main_process():
-            if cfg.info.global_tqdm:
-                trainer_status['train_pbar'].unpause()
-            else :
-                trainer_status['train_pbar'].reset()
-                trainer_status['val_pbar'].reset()
-
-    @staticmethod
-    def after_training_before_validation(cfg, trainer_status, **kwargs):
-        LoggerMisc.wandb_log(cfg, 'train_epoch', trainer_status['train_outputs'], trainer_status['train_iters'])
-
-        if DistMisc.is_main_process():
-            trainer_status['val_pbar'].unpause()
-
-    @staticmethod
-    def after_validation(cfg, trainer_status, **kwargs):
-        LoggerMisc.wandb_log(cfg, 'val_epoch', trainer_status['metrics'], trainer_status['train_iters'])
-        
-        TrainerMisc.save_checkpoint(cfg, trainer_status)
-    
-    @staticmethod
-    def after_all_epochs(cfg, trainer_status, **kwargs):
-        if DistMisc.is_main_process():
-            trainer_status['train_pbar'].close()
-            trainer_status['val_pbar'].close()
-            
-    @staticmethod
-    def save_checkpoint(cfg, trainer_status):
-        if DistMisc.is_main_process():
-            epoch_finished = trainer_status['epoch']
-            trainer_status['best_metrics'], save_flag = trainer_status['criterion'].choose_best(
-                trainer_status['metrics'], trainer_status['best_metrics']
-            )
-
-
-            save_files = {
-                'model': trainer_status['model_without_ddp'].state_dict(),
-                'best_metrics': trainer_status['best_metrics'],
-                'epoch': epoch_finished,
-            }
-
-            if save_flag:
-                best = glob(os.path.join(cfg.info.work_dir, 'checkpoint_best_epoch_*.pth'))
-                assert len(best) <= 1
-                if len(best) == 1:
-                    torch.save(save_files, best[0])
-                    os.rename(best[0], os.path.join(cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
-                else:
-                    torch.save(save_files, os.path.join(cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
-
-            if (trainer_status['epoch'] + 1) % cfg.trainer.save_interval == 0:
-                save_files.update({
-                    'optimizer': trainer_status['optimizer'].state_dict(),
-                    'lr_scheduler': trainer_status['lr_scheduler'].state_dict(),
-                    'last_metrics': trainer_status['metrics']
-                })
-                if cfg.env.amp and cfg.env.device:
-                    save_files.update({
-                        'scaler': trainer_status['scaler'].state_dict()
-                    })
-                last = glob(os.path.join(cfg.info.work_dir, 'checkpoint_last_epoch_*.pth'))
-                assert len(last) <= 1
-                if len(last) == 1:
-                    torch.save(save_files, last[0])
-                    os.rename(last[0], os.path.join(cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
-                else:
-                    torch.save(save_files, os.path.join(cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
-    
-    class BackwardAndStep:
-        def __init__(self, cfg, trainer_status):
-            self.trainer_status = trainer_status
-            assert cfg.trainer.grad_accumulation > 0 and isinstance(cfg.trainer.grad_accumulation, int), 'grad_accumulation should be a positive integer.'
-            self.gradient_accumulation_steps = cfg.trainer.grad_accumulation
-            self.do_gradient_accumulation = self.gradient_accumulation_steps > 1
-            self.max_grad_norm = cfg.trainer.max_grad_norm
-            self.model: torch.nn.Module = trainer_status['model']
-            self.optimizer: torch.optim.Optimizer = trainer_status['optimizer']
-            self.lr_scheduler: torch.optim.lr_scheduler._LRScheduler = trainer_status['lr_scheduler']
-            self.scaler: torch.cuda.amp.GradScaler = trainer_status['scaler']
-            self.iter_len = len(trainer_status['train_loader'])
-            self.step_count = 0
-            
-            self.optimizer.zero_grad()
-            
-        def _backward(self, loss: torch.Tensor):
-            if self.scaler is not None:
-                self.scaler.scale(loss).backward()
-            else:
-                loss.backward()
-            
-        def _optimize(self):
-            if self.scaler is not None:
-                if self.max_grad_norm > 0:
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                if self.max_grad_norm > 0:
-                    torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
-                self.optimizer.step()
-            self.optimizer.zero_grad()
-            
-        def __call__(self, loss):
-            if not math.isfinite(loss):
-                raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss}, stopping training')
-            
-            if self.do_gradient_accumulation:
-                loss /= self.gradient_accumulation_steps  # Assume that all losses are mean-reduction. (Otherwise meaningless)
-                self.step_count += 1
-            
-            self._backward(loss)
-            
-            if self.do_gradient_accumulation and (self.trainer_status['train_iters'] % self.iter_len != 0):
-                if self.step_count % self.gradient_accumulation_steps == 0:
-                    self._optimize()
-                    self.step_count = 0
-            else:
-                self._optimize()
-            
-            self.lr_scheduler.step()  # update special lr_scheduler after each iter
-
-
-class TesterMisc:
-    @staticmethod
-    def get_pbar(cfg, tester_status):
-        if DistMisc.is_main_process():
-            test_pbar = LoggerMisc.MultiTQDM(
-                total=len(tester_status['test_loader']),
-                dynamic_ncols=True,
-                colour='green',
-                position=0,
-                maxinterval=inf,
-            )
-            test_pbar.set_description_str('Test ')
-            print('')
-            tester_status['test_pbar'] = test_pbar
-        
-        return tester_status
-    
-    @staticmethod
-    def is_inference(cfg):
-        return hasattr(cfg, 'tester')
-    
-    @staticmethod
-    def load_model(cfg, tester_status):
-        checkpoint = torch.load(cfg.tester.checkpoint_path, map_location=tester_status['device'])
-        tester_status['model_without_ddp'].load_state_dict(checkpoint['model'])
-        # print(f'{config.mode} mode: Loading pth from', path)
-        print('Loading pth from', cfg.tester.checkpoint_path)
-        print('best_trainer_metrics', checkpoint.get('best_metrics', {}))
-        if DistMisc.is_main_process():
-            if 'epoch' in checkpoint.keys():
-                print('Epoch:', checkpoint['epoch'])
-                cfg.info.wandb_run.tags = cfg.info.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
-        print('last_trainer_metrics', checkpoint.get('last_metrics', {}))
-        
-        return tester_status
-
-    @staticmethod
-    def before_inference(cfg, tester_status, **kwargs):
-        pass
-
-    @staticmethod
-    def after_inference(cfg, tester_status, **kwargs):
-        LoggerMisc.wandb_log(cfg,  'infer', tester_status['metrics'], None)
-        
-        if DistMisc.is_main_process():          
-            tester_status['test_pbar'].close()
 
 
 class LoggerMisc:
@@ -943,15 +792,24 @@ class LoggerMisc:
         return '\n' + s * block_width + '\n' + str_input + s * block_width + '\n'
     
     @staticmethod
-    def wandb_log(cfg, group, output_dict, step):
+    def logging(loggers, group, output_dict, step):
         if DistMisc.is_main_process():
-            for k, v in output_dict.items():
-                if k == 'epoch':
-                    wandb.log({f'{k}': v}, step=step)  # log epoch without group
-                else:
-                    wandb.log({f'{group}/{k}': v}, step=step)
-                # wandb.log({'output_image': [wandb.Image(trainer_status['output_image'])]})
-                # wandb.log({'output_video': wandb.Video(trainer_status['output_video'], fps=30, format='mp4')})
+            if hasattr(loggers, 'wandb_run'):
+                for k, v in output_dict.items():
+                    if k == 'epoch':
+                        loggers.wandb_run.log({k: v}, step=step)  # log epoch without group
+                    else:
+                        loggers.wandb_run.log({f'{group}/{k}': v}, step=step)
+                    # loggers.wandb_run.log({'output_image': [wandb.Image(output_dict['output_image'])]}, step=step)
+                    # loggers.wandb_run.log({'output_video': wandb.Video(output_dict['output_video'], fps=30, format='mp4')}, step=step)
+            if hasattr(loggers, 'tensorboard_run'):
+                for k, v in output_dict.items():
+                    if k == 'epoch':
+                        loggers.tensorboard_run.add_scalar(k, v, global_step=step)  # log epoch without group
+                    else:
+                        loggers.tensorboard_run.add_scalar(f'{group}/{k}', v, global_step=step)
+                    # loggers.tensorboard_run.add_image("output_image", output_dict['output_image'], global_step=step)
+                    # loggers.tensorboard_run.add_image("output_video", output_dict['output_video'], global_step=step)
 
 
 class SweepMisc:

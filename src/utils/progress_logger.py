@@ -1,23 +1,22 @@
 import datetime
 import statistics
-import sys
 from collections import defaultdict, deque
 from math import nan
 
 import torch
 import torch.distributed as dist
 
-from .misc import DistMisc, LoggerMisc, TesterMisc, TimeMisc
+from .misc import ConfigMisc, DistMisc, LoggerMisc, TimeMisc
 
 
 class SmoothedValue(object):
-    def __init__(self, window_size=None, fmt=None, final_fmt=None, final_fmt_no_sync=None, prior=False, no_print=False, no_sync=False):
-        if fmt is None:
-            fmt = '{value:.4f} ({avg:.4f})'
-        if final_fmt is None:
-            final_fmt = '({global_avg:.4f} ± {global_std:.4f}) [{global_min:.4f}, {global_max:.4f}]'
-        if final_fmt_no_sync is None:
-            final_fmt_no_sync = '({avg:.4f} ± {std:.4f}) [{min:.4f}, {max:.4f}]'
+    def __init__(self, window_size=None, format=None, final_format=None, final_format_no_sync=None, prior=False, no_print=False, no_sync=False):
+        if format is None:
+            format = '{value:.4f} ({avg:.4f})'
+        if final_format is None:
+            final_format = '({global_avg:.4f} ± {global_std:.4f}) [{global_min:.4f}, {global_max:.4f}]'
+        if final_format_no_sync is None:
+            final_format_no_sync = '({avg:.4f} ± {std:.4f}) [{min:.4f}, {max:.4f}]'
         self.value_now = 0.0
         self.deque = deque(maxlen=window_size)
         self.synced_deque = deque()
@@ -25,9 +24,9 @@ class SmoothedValue(object):
         self.synced_count = 0
         self.total = 0.0
         self.synced_total = 0.0
-        self.fmt = fmt
-        self.final_fmt = final_fmt
-        self.final_fmt_no_sync = final_fmt_no_sync
+        self.format = format
+        self.final_format = final_format
+        self.final_format_no_sync = final_format_no_sync
         self.prior = prior
         self.no_print = no_print
         self.require_sync = not no_sync
@@ -93,11 +92,11 @@ class SmoothedValue(object):
     def get_str(self, final=False, synced=True):
         if final:
             if synced:
-                f = self.final_fmt
+                f = self.final_format
             else:
-                f = self.final_fmt_no_sync
+                f = self.final_format_no_sync
         else:
-            f = self.fmt
+            f = self.format
         return f.format(
             value=self.value,
             avg=self.avg,
@@ -112,18 +111,13 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
-    def __init__(self, cfg=None, log_file=sys.stdout, print_freq=1, debug=None, global_tqdm=False, pbar=None, delimiter='  ', header='', epoch_str=''):
-        if cfg is not None:
-            self.log_file=cfg.info.log_file
-            self.print_freq=cfg.info.cli_log_freq
-            self.debug=cfg.special.debug
-            self.global_tqdm=cfg.info.global_tqdm if not TesterMisc.is_inference(cfg) else False
-        else:
-            self.log_file = log_file
-            self.print_freq = print_freq
-            self.debug = debug
-            self.global_tqdm = global_tqdm
-
+    def __init__(self, cfg, loggers, pbar=None, delimiter='  ', header='', epoch_str=''):
+        self.print_freq=cfg.info.cli_log_freq
+        self.debug=cfg.special.debug
+        self.global_tqdm=cfg.info.global_tqdm if not ConfigMisc.is_inference(cfg) else False
+        
+        self.log_file=loggers.log_file
+        
         self.pbar: LoggerMisc.MultiTQDM = pbar
         self.delimiter = delimiter
         self.header = header
@@ -154,11 +148,11 @@ class MetricLogger(object):
                 continue
             if meter.prior:
                 prior_meter_s.append(
-                    '{}: {}'.format(name, meter.get_str(final, synced))
+                    f'{name}: {meter.get_str(final, synced)}'
                 )
             else:
                 meters_s.append(
-                    '{}: {}'.format(name, meter.get_str(final, synced))
+                    f'{name}: {meter.get_str(final, synced)}'
                 )
         return self.delimiter.join(prior_meter_s + meters_s)
     
@@ -197,19 +191,21 @@ class MetricLogger(object):
     def log_every(self, iterable):
         self.iter_len = len(iterable)
 
-        iter_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
-        data_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
-        model_time = SmoothedValue(fmt='{value:.4f} ({avg:.4f})')
+        iter_time = SmoothedValue(format='{value:.4f} ({avg:.4f})')
+        data_time = SmoothedValue(format='{value:.4f} ({avg:.4f})')
+        model_time = SmoothedValue(format='{value:.4f} ({avg:.4f})')
         
         if self.pbar is not None:
             if self.global_tqdm:
-                post_msg = self.epoch_str + ' [{0}/{1}] eta: {eta}  t_data: {data_time}  t_model: {model_time}'
+                post_msg = '\033[33m' + self.epoch_str \
+                    + '\033[32m' + ' [{0}/{1}] eta: {eta} ' \
+                    + '\033[30m' + ' t_data: {data_time}  t_model: {model_time}\033[0m'
             else:
-                post_msg = ' t_data: {data_time}  t_model: {model_time}'
+                post_msg = '\033[30m' + ' t_data: {data_time}  t_model: {model_time}\033[0m'
                 self.pbar.set_description_str(self.header + ' ' + self.epoch_str, refresh=False)
             postlines_msg = self.delimiter.join([
                 # '\t{meters}',
-                '    {meters}',
+                '    \033[30m{meters}\033[0m',
                 # 'data_time: {data_time}',
                 # 'iter_time: {iter_time}',
             ])
@@ -289,5 +285,5 @@ class MetricLogger(object):
         self.log_file.flush()
         if self.pbar is not None:
             print(
-                '\n' * (self.pbar.postlines + 1) + final_msg, '\n'
+                '\n' * (self.pbar.postlines + 1) + '\033[34m' + final_msg, '\033[0m\n'
             )

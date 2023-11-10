@@ -5,7 +5,7 @@ from torch import nn
 
 from src.utils.register import Register
 
-register = Register('model')
+model_register = Register('model')
 
 class ModelBase(nn.Module):
     def __init__(self, cfg):
@@ -19,7 +19,7 @@ class ModelBase(nn.Module):
                 if keyword in param_name:
                     return True
             return False
-        for (name, param) in self.named_parameters():
+        for name, param in self.named_parameters():
             if match_keywords(name):
                 param.requires_grad = False
             if verbose:

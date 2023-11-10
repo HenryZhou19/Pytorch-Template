@@ -1,11 +1,11 @@
 from torch import nn
 
-from .modules.model_base import ModelBase, register
+from .modules.model_base import ModelBase, model_register
 from .modules.simple_net import SimpleNet
 from .modules.unet import UNetXd
 
 
-@register('simple')
+@model_register('simple')
 class SimpleModel(ModelBase):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -30,7 +30,7 @@ class SimpleModel(ModelBase):
         }
 
 
-@register('simple_unet2d')
+@model_register('simple_unet2d')
 class SimpleUNet2DModel(ModelBase):
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -49,7 +49,7 @@ class SimpleUNet2DModel(ModelBase):
         }
  
  
-@register('simple_unet3d')
+@model_register('simple_unet3d')
 class SimpleUNet3DModel(ModelBase):
     def __init__(self, cfg):
         super().__init__(cfg)

@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .modules.data_module_base import DataModuleBase, register
+from .modules.data_module_base import DataModuleBase, data_module_register
 
 
 class SimpleDataset(Dataset):
@@ -51,15 +51,15 @@ class SimpleDataset(Dataset):
         return len(self.y_tensor)
 
 
-@register('simple')
+@data_module_register('simple')
 class SimpleDataModule(DataModuleBase):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.train_val_len = 10000
         self.test_len = 1000
-        if cfg.model.architecture == 'simple_unet2d':
+        if cfg.architecture == 'simple_unet2d':
             self.data_form = '2d'
-        elif cfg.model.architecture == 'simple_unet3d':
+        elif cfg.architecture == 'simple_unet3d':
             self.data_form = '3d'
         else:
             self.data_form = 'default'

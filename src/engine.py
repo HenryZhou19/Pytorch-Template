@@ -1,121 +1,85 @@
-import torch
-from torch.utils.data import DataLoader
-
-from src.criterions.simple_criterion import CriterionBase
-from src.models.modules.model_base import ModelBase
-from src.utils.misc import LoggerMisc, TensorMisc, TrainerMisc
+from src.gears import TesterBase, TrainerBase
+from src.utils.misc import LoggerMisc
 from src.utils.progress_logger import MetricLogger
 from src.utils.progress_logger import SmoothedValue as SV
 
 
-def train_one_epoch(cfg, trainer_status):
-    model: ModelBase = trainer_status['model']
-    criterion: CriterionBase = trainer_status['criterion']
-    loader: DataLoader = trainer_status['train_loader']
-    epoch: int = trainer_status['epoch']  # start from 1
-    device: torch.device = trainer_status['device']
-    optimizer: torch.optim.Optimizer = trainer_status['optimizer']
-    scaler: torch.cuda.amp.GradScaler = trainer_status['scaler']
-    pbar: LoggerMisc.MultiTQDM = trainer_status['train_pbar']
+def train_one_epoch(trainer: TrainerBase):
+    cfg = trainer.cfg
+    loggers = trainer.loggers
 
-    model.train()
-    criterion.train()
-    backward_and_step = TrainerMisc.BackwardAndStep(cfg, trainer_status)
+    trainer.train_mode()
     
     logger = MetricLogger(
         cfg=cfg,
-        pbar=pbar,  
+        loggers=loggers,
+        pbar=trainer.train_pbar,  
         header='Train',
-        epoch_str=f'epoch: [{epoch}/{cfg.trainer.epochs}]',
+        epoch_str=f'epoch: [{trainer.epoch}/{cfg.trainer.epochs}]',
         )
     logger.add_meters([{
         'loss': SV(prior=True),
-        'lr': SV(fmt='{value:.2e}', final_fmt='[{min:.2e}, {max:.2e}]', no_sync=True),
+        **{lr_group: SV(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', no_sync=True) for lr_group in trainer.lr_groups.keys()},
         'epoch': SV(window_size=1, no_print=True, no_sync=True)
         }])
-    for batch in logger.log_every(loader):
-        batch: dict = TensorMisc.to(batch, device, non_blocking=cfg.env.pin_memory)
-        inputs: dict = batch['inputs']
-        targets: dict = batch['targets']
-        with torch.cuda.amp.autocast(enabled=scaler is not None):
-            outputs = model(**inputs)
-            loss, metrics_dict = criterion(outputs, targets)
-        trainer_status['train_iters'] += 1
+    for batch in logger.log_every(trainer.train_loader):
+        
+        _, loss, metrics_dict = trainer.forward(batch)
         
         logger.update(
-            lr=optimizer.param_groups[0]['lr'],  # Assume only one group. TODO: multiple groups lr logging
-            epoch=trainer_status['train_iters'] / logger.iter_len,
+            **trainer.lr_groups,
+            epoch=trainer.train_iters / trainer.train_len,
             loss=loss,
             **metrics_dict,
         )
         
-        if cfg.info.wandb_log_freq > 0:
-            if trainer_status['train_iters'] % cfg.info.wandb_log_freq == 0:
-                LoggerMisc.wandb_log(cfg,  'train_iter', logger.output_dict(no_avg_list=['all']), trainer_status['train_iters'])
+        if cfg.info.iter_log_freq > 0:
+            if trainer.train_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
+                LoggerMisc.logging(loggers, 'train_iter', logger.output_dict(no_avg_list=['all']), int(trainer.train_iters / cfg.trainer.grad_accumulation))
 
-        backward_and_step(loss)
+        trainer.backward_and_step(loss)
+        
+    trainer.train_outputs = logger.output_dict(no_avg_list=['lr', 'epoch'], sync=True, final_print=True)
 
-    return logger.output_dict(no_avg_list=['lr', 'epoch'], sync=True, final_print=True)
 
-
-def evaluate(cfg, trainer_status):
-    model: ModelBase = trainer_status['model']
-    criterion: CriterionBase = trainer_status['criterion']
-    loader: DataLoader = trainer_status['val_loader']
-    epoch: int = trainer_status['epoch']
-    device: torch.device = trainer_status['device']
-    pbar: LoggerMisc.MultiTQDM = trainer_status['val_pbar']
-
-    model.eval()
-    criterion.eval()
+def evaluate(trainer: TrainerBase):
+    cfg = trainer.cfg
+    
+    trainer.eval_mode()
     
     logger = MetricLogger(
         cfg=cfg,
-        pbar=pbar,  
+        loggers=trainer.loggers,
+        pbar=trainer.val_pbar,  
         header='Eval ',
-        epoch_str=f'epoch: [{epoch}/{cfg.trainer.epochs}]',
+        epoch_str=f'epoch: [{trainer.epoch}/{cfg.trainer.epochs}]',
         )
     logger.add_meters([{'loss': SV(prior=True)}])
-    for batch in logger.log_every(loader):
-        batch: dict = TensorMisc.to(batch, device, non_blocking=cfg.env.pin_memory)
-        inputs: dict = batch['inputs']
-        targets: dict = batch['targets']
-        with torch.no_grad():
-            outputs = model(**inputs)
-            loss, metrics_dict = criterion(outputs, targets)
+    for batch in logger.log_every(trainer.val_loader):
+        
+        _, loss, metrics_dict = trainer.forward(batch)
 
         logger.update(
             loss=loss,
             **metrics_dict,
         )      
         
-    sync = cfg.trainer.dist_eval
-    return logger.output_dict(sync=sync, final_print=True)
+    trainer.metrics = logger.output_dict(sync=cfg.trainer.dist_eval, final_print=True)
 
 
-def test(cfg, tester_status):
-    model: ModelBase = tester_status['model']
-    criterion: CriterionBase = tester_status['criterion']
-    loader: DataLoader = tester_status['test_loader']
-    device: torch.device = tester_status['device']
-    pbar: LoggerMisc.MultiTQDM = tester_status['test_pbar']
-    
-    model.eval()
-    criterion.eval()
+def test(tester: TesterBase):
+    cfg = tester.cfg
 
     logger = MetricLogger(
         cfg=cfg,
-        pbar=pbar,  
+        loggers=tester.loggers,
+        pbar=tester.test_pbar,  
         header='Test',
         )
-    for batch in logger.log_every(loader):
-        batch: dict = TensorMisc.to(batch, device, non_blocking=cfg.env.pin_memory)
-        inputs: dict = batch['inputs']
-        targets: dict = batch['targets']
-        with torch.no_grad():
-            outputs = model(**inputs)
-            _, metrics_dict = criterion(outputs, targets, infer_mode=True)
+    for batch in logger.log_every(tester.test_loader):
+        
+        outputs, _, metrics_dict = tester.forward(batch)
             
         logger.update(**metrics_dict)
-            
-    return logger.output_dict(sync=True, final_print=True)
+        
+    tester.metrics = logger.output_dict(sync=True, final_print=True)
