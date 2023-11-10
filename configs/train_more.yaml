@@ -1,0 +1,96 @@
+config: TBD  # config file name, will be overwritten by sacred
+
+special:
+  debug: null  # 'one_iter', 'one_epoch', null for no debug
+  save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
+  print_save_config_ignore: [sweep]
+  logger_config_ignore: [env, info, sweep, special]
+  extra_name: template  # null for no extra name
+
+seed_base: 42
+
+data:
+  dataset: simple
+  batch_size_per_rank: 32
+  batch_size_total: TBD
+  split_rate: 0.8
+
+architecture: simple
+
+model:
+  backbone: default
+
+criterion:
+  loss: mse
+  primary_criterion: null  # null (None) to use loss as primary_criterion
+  primary_criterion_higher_better: False  # XXX: important for choosing best model
+
+trainer:
+  trainer_choice: default
+  dist_eval: True
+  resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
+  epochs: 100
+  optimizer:
+    optimizer_choice: adamw  # adamw only for now
+    # lr: 4.0e-4
+    lr_groups:
+      lr_backbone: 4.0e-4
+      lr_others: 1.0e-4
+    weight_decay: 4.0e-5
+  scheduler:
+    scheduler_choice: linear  # multistep, cosine, linear
+    lr_min: 0.0
+    lr_milestones_epochs: null  # only for scheduler_choice == 'multistep' [50, 100]
+    lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
+    lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
+    warmup_epochs: 10
+    warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
+    warmup_factor: 0.0  # [0., 1.] start warmup from: warmup_factor * lr
+  max_grad_norm: 1.0  # <= 0 means no gradient clipping
+  grad_accumulation: 1  # positive integer (keep it '1' in most cases)
+  grad_checkpoint: False
+  save_interval: 1
+
+info: # info & wandb
+  start_time : TBD
+  output_dir: ./outputs/
+  work_dir: TBD
+  project_name: template
+  task_type: Train  # Pretrain, Train, Pretrain_Re, Train_Re, ...
+  batch_info: TBD
+  name_tags: [special.extra_name, architecture, model.backbone, criterion.loss, info.batch_info]
+  wandb:
+    wandb_enabled: True
+    wandb_tags: [info.start_time]
+    wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
+    wandb_watch_model: False  # do not use
+    wandb_watch_freq: 100
+    wandb_buffer_time: 300  # seconds
+  tensorboard:
+    tensorboard_enabled: True
+  iter_log_freq: 10  # <= 0 means only log when an epoch ends
+  cli_log_freq: 1
+  global_tqdm: True
+  torchinfo: True  # print model info to log.txt
+
+env:
+  device: cuda
+  gpu: TBD
+  distributed: TBD
+  dist_url: env://
+  dist_backend: TBD
+  world_size: TBD
+  rank: TBD
+  seed_with_rank: True
+  cuda_deterministic: False
+  find_unused_params: True
+  amp: True
+  num_workers: 4
+  infinite_dataloader: False
+  pin_memory: True
+
+sweep:
+  sweep_enabled: False
+  sweep_params:  # use '-' as connect symbols for sub-params 
+    trainer-optimizer-lr: [2.0e-4, 4.0e-4]
+    trainer-scheduler-scheduler_choice: [linear, cosine]
