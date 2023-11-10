@@ -39,7 +39,7 @@ def train_one_epoch(trainer: TrainerBase):
 
         trainer.backward_and_step(loss)
         
-    trainer.train_outputs = logger.output_dict(no_avg_list=['lr', 'epoch'], sync=True, final_print=True)
+    trainer.train_outputs = logger.output_dict(no_avg_list=[*trainer.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
 
 
 def evaluate(trainer: TrainerBase):
