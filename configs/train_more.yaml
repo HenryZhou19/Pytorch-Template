@@ -31,12 +31,14 @@ trainer:
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
   epochs: 100
   optimizer:
-    optimizer_choice: adamw  # adamw only for now
-    # lr: 4.0e-4
-    lr_groups:
+    optimizer_choice: adamw  # adamw, sgd
+    lr_default: 4.0e-4
+    wd_default: 1.0e-2
+    param_groups:
       lr_backbone: 4.0e-4
-      lr_others: 1.0e-4
-    weight_decay: 4.0e-5
+      wd_backbone: 1.0e-2
+      lr_head: 1.0e-4
+      wd_head: 1.0e-4
   scheduler:
     scheduler_choice: linear  # multistep, cosine, linear
     lr_min: 0.0
