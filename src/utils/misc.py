@@ -383,11 +383,11 @@ class PortalMisc:
             loggers.log_file = open(log_file_path, 'a')
             
             p = psutil.Process()
-            assert p.parent().name() == 'torchrun'
-            p = p.parent()
-            p_children = p.children(recursive=True)
-            all_processes = '\n'.join([f'\tPID: {p.pid}, Name: {p.name()}' for p in [p] + p_children])
-            print(LoggerMisc.block_wrapper(f'All sub-processes of torchrun:\n{all_processes}', s='#'), file=loggers.log_file)
+            if p.parent().name() == 'torchrun':
+                p = p.parent()
+                p_children = p.children(recursive=True)
+                all_processes = '\n'.join([f'\tPID: {p.pid}, Name: {p.name()}' for p in [p] + p_children])
+                print(LoggerMisc.block_wrapper(f'All sub-processes of torchrun:\n{all_processes}', s='#'), file=loggers.log_file)
         else:
             loggers.log_file = sys.stdout
         return loggers
@@ -600,36 +600,56 @@ class ModelMisc:
                 trainer.loggers.log_file.flush()
     
     @staticmethod
-    def print_model_info_with_torchinfo(cfg, trainer, info_columns=None, print_param_names=True):
-        if DistMisc.is_main_process() and cfg.info.torchinfo:
-            import torchinfo
-            info_columns = info_columns if info_columns is not None else [
-                'input_size',
-                'output_size',
-                'num_params',
-                'params_percent',
-                'kernel_size',
-                'mult_adds',
-                'trainable',
-                ]
+    def show_model_info(cfg, trainer, torchinfo_columns=None):
+        if DistMisc.is_main_process():
             input_data = trainer.train_loader.dataset.__getitem__(0)['inputs']
-            input_data = TensorMisc.to({k: v.unsqueeze(0).expand(cfg.data.batch_size_per_rank, *v.shape) for k, v in input_data.items()}, trainer.device)
-            assert cfg.data.batch_size_per_rank == trainer.train_loader.batch_size
+            input_data = TensorMisc.to({k: v.unsqueeze(0) for k, v in input_data.items()}, trainer.device)
             temp_model = deepcopy(trainer.model_without_ddp)
-            print_str = torchinfo.summary(temp_model, input_data=input_data, col_names=info_columns, depth=9, verbose=0)
-            # Check model info in OUTPUT_PATH/logs.txt
-            print(print_str, file=trainer.loggers.log_file)
-            if print_param_names:
+            
+            if hasattr(trainer.loggers, 'tensorboard_run'):
+                if cfg.info.tensorboard.tensorboard_graph:
+                    from torch import nn
+                    class WriterWrapperModel(nn.Module):
+                        def __init__(self, model):
+                            super().__init__()
+                            self.model = model
+                            
+                        def forward(self, inputs):
+                            output_dict = self.model(**inputs)
+                            output_tensor_list = []
+                            for v in output_dict.values():
+                                if isinstance(v, torch.Tensor):
+                                    output_tensor_list.append(v)
+                            return tuple(output_tensor_list)
+                    trainer.loggers.tensorboard_run.add_graph(WriterWrapperModel(temp_model), input_data)
+            
+            if cfg.info.torchinfo:
+                import torchinfo
+                torchinfo_columns = torchinfo_columns if torchinfo_columns is not None else [
+                    'input_size',
+                    'output_size',
+                    'num_params',
+                    'params_percent',
+                    'kernel_size',
+                    'mult_adds',
+                    'trainable',
+                    ]
+                input_data = {k: v.expand(cfg.data.batch_size_per_rank, *v.shape[1:]) for k, v in input_data.items()}
+                assert cfg.data.batch_size_per_rank == trainer.train_loader.batch_size
+                print_str = torchinfo.summary(temp_model, input_data=input_data, col_names=torchinfo_columns, depth=9, verbose=0)
+                # Check model info in OUTPUT_PATH/logs.txt
+                print(print_str, file=trainer.loggers.log_file)    
+                print(LoggerMisc.block_wrapper(f'torchinfo: Model structure and summary have been saved.'))
+            
+            if cfg.info.print_param_names:
                 print('\nAll Params:', file=trainer.loggers.log_file)
                 for k, _ in temp_model.named_parameters():
                     print(f'\t{k}', file=trainer.loggers.log_file)
                 print('\n', file=trainer.loggers.log_file)
-            trainer.loggers.log_file.flush()
-            
-            del torchinfo, temp_model, input_data, info_columns
-            torch.cuda.empty_cache()
-            
-            print(LoggerMisc.block_wrapper(f'torchinfo: Model structure and summary have been saved.'))
+                
+        trainer.loggers.log_file.flush()
+        del temp_model, input_data
+        torch.cuda.empty_cache()
     
     @staticmethod
     def ddp_wrapper(cfg, model_without_ddp):
@@ -869,8 +889,9 @@ class TensorMisc:
         
     class GradCollector:
         def __init__(self, x: torch.Tensor):
-            x.register_hook(self.hook())
             self.grad = None
+            if x.requires_grad:
+                x.register_hook(self.hook())  
 
         def hook(self):
             def _hook(grad):

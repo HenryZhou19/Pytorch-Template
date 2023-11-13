@@ -68,10 +68,12 @@ info: # info & wandb
     wandb_buffer_time: 300  # seconds
   tensorboard:
     tensorboard_enabled: True
+    tensorboard_graph: True
   iter_log_freq: 10  # <= 0 means only log when an epoch ends
   cli_log_freq: 1
   global_tqdm: True
   torchinfo: True  # print model info to log.txt
+  print_param_names: True
 
 env:
   device: cuda

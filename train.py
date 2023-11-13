@@ -44,9 +44,8 @@ def train_run(cfg, loggers):
         device=model_manager.device,
         )
 
-    # prepare for 1. resumed training if needed; 2. progress bar
+    # prepare for 1. resumed training if needed; 2. show model information; 3. progress bar;
     trainer.before_all_epochs()
-    ModelMisc.print_model_info_with_torchinfo(cfg, trainer)
     
     for _ in trainer.epoch_loop:
         trainer.before_one_epoch()
