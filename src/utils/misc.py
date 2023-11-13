@@ -721,7 +721,7 @@ class OptimizerMisc:
         if cfg.trainer.optimizer.optimizer_choice == 'adamw':
             optimizer = torch.optim.AdamW(param_dicts_with_lr_wd)
         elif cfg.trainer.optimizer.optimizer_choice == 'sgd':
-            optimizer = torch.optim.SGD(param_dicts_with_lr_wd)
+            optimizer = torch.optim.SGD(param_dicts_with_lr_wd, momentum=cfg.trainer.optimizer.sgd_momentum)
         else:
             raise ValueError(f'Unknown optimizer choice: {cfg.trainer.optimizer.optimizer_choice}')
         
