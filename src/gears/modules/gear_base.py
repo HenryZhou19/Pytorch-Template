@@ -193,9 +193,10 @@ class TrainerBase:
                     torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
             self.optimizer.zero_grad()
-            
-        if not math.isfinite(loss):
-            raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss}, stopping training')
+        
+        if self.scaler is None:
+            if not math.isfinite(loss):
+                raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss} without scaler, stopping training.')
         
         if self.do_gradient_accumulation:
             loss /= self.gradient_accumulation_steps  # Assume that all losses are mean-reduction. (Otherwise meaningless)
