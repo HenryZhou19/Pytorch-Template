@@ -223,6 +223,7 @@ class TrainerBase:
     
     def before_all_epochs(self, **kwargs):
         self._resume_training()
+        ModelMisc.show_model_info(self.cfg, self)
         self._get_pbar()
     
     def before_one_epoch(self, **kwargs):

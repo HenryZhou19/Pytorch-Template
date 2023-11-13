@@ -22,14 +22,17 @@ info:
   wandb:
     wandb_enabled: True
     wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
+    wandb_watch_model: False  # do not use
     wandb_watch_freq: 100
     wandb_buffer_time: 300  # seconds
   tensorboard:
     tensorboard_enabled: True
-  iter_log_freq: 10  # NO NEED. only one epoch when inference
+    # tensorboard_graph: True  # NO NEED
+  # iter_log_freq: 10  # NO NEED. only one epoch when inference
   cli_log_freq: 1
   # global_tqdm: True  # NO NEED. only one epoch
-  torchinfo: True  # print model info to log.txt
+  # torchinfo: True  # NO NEED. print model info to log.txt
+  # print_param_names: True  # NO NEED.
 
 env:
   device: cuda
