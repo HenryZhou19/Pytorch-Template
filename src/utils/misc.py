@@ -870,7 +870,7 @@ class TensorMisc:
     class GradCollector:
         def __init__(self, x: torch.Tensor):
             x.register_hook(self.hook())
-            self.grad = {}
+            self.grad = None
 
         def hook(self):
             def _hook(grad):
