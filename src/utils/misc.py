@@ -867,6 +867,16 @@ class TensorMisc:
         def not_to_cuda(self):
             return True
         
+    class GradCollector:
+        def __init__(self, x: torch.Tensor):
+            x.register_hook(self.hook())
+            self.grad = {}
+
+        def hook(self):
+            def _hook(grad):
+                self.grad = grad
+            return _hook
+        
         
 class ImportMisc:
     @staticmethod
