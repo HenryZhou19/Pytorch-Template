@@ -647,9 +647,9 @@ class ModelMisc:
                     print(f'\t{k}', file=trainer.loggers.log_file)
                 print('\n', file=trainer.loggers.log_file)
                 
-        trainer.loggers.log_file.flush()
-        del temp_model, input_data
-        torch.cuda.empty_cache()
+            trainer.loggers.log_file.flush()
+            del temp_model, input_data
+            torch.cuda.empty_cache()
     
     @staticmethod
     def ddp_wrapper(cfg, model_without_ddp):
