@@ -62,7 +62,7 @@ def evaluate(trainer: TrainerBase):
         logger.update(
             loss=loss,
             **metrics_dict,
-        )      
+        )
         
     trainer.metrics = logger.output_dict(sync=cfg.trainer.dist_eval, final_print=True)
 
