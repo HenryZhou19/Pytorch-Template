@@ -219,7 +219,11 @@ class TrainerBase:
     
     @property
     def lr_groups(self):
-        return {param_group['group_name']: param_group['lr'] for param_group in self.optimizer.param_groups}
+        return {'lr_' + param_group['group_name']: param_group['lr'] for param_group in self.optimizer.param_groups}
+    
+    @property
+    def wd_groups(self):
+        return {'wd_' + param_group['group_name']: param_group['weight_decay'] for param_group in self.optimizer.param_groups}
     
     def before_all_epochs(self, **kwargs):
         self._resume_training()
