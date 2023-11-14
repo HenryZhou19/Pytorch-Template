@@ -25,9 +25,9 @@ def plot_curve_with_std_min_max(y_mean, y_std, y_min, y_max, x=None, metric_name
         y_max = np.array(y_max)
 
     _, ax = plt.subplots(figsize=(10, 6), dpi=300)
-    ax.plot(x, y_mean, label='Mean', color='blue')
-    ax.fill_between(x, y_mean - y_std, y_mean + y_std, color='blue', alpha=0.2, label='± Std')
-    ax.fill_between(x, y_min, y_max, color='gray', alpha=0.2, label='Min/Max')
+    ax.plot(x, y_mean, label='Mean of all samples', color='blue')
+    ax.fill_between(x, y_mean - y_std, y_mean + y_std, color='blue', alpha=0.2, label='± Std of batch_metric_mean')
+    ax.fill_between(x, y_min, y_max, color='gray', alpha=0.2, label='Min/Max of batch_metric_mean')  # TODO: "min" and "max" are "min & max of batch_metric_mean" now, not "min & max of every_sample_metric"!
 
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Values')
