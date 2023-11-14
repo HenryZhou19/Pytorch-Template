@@ -49,9 +49,9 @@ A simple template for Pytorch projects.
 * some things in src/utils/misc.py may be handy
     * "DistMisc.is_main_process()" returns True if rank 0
     * "DistMisc.avoid_print_mess()" makes sure that all ranks print things in order
-    * "LoggerMisc.block_wrapper(input)" print the input with decorations
-    * "TensorMisc.GradCollector(x)" to collect the grad of Tensor x
-    * "with TimeMisc.TimerContext(block_name):..." to shows the time it takes to execute a particular block of code
+    * "LoggerMisc.block_wrapper(input)" prints the input with decorations
+    * "TensorMisc.GradCollector(x)" collects the grad of Tensor x
+    * "with TimeMisc.TimerContext(block_name):..." shows the time it takes to execute a particular block of code
     * ……
 #### engine.py
 * implement the main loop of the dataloader in train_one_epoch / evaluate / test
