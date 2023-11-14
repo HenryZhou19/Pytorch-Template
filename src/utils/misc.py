@@ -381,13 +381,7 @@ class PortalMisc:
             else:
                 log_file_path = os.path.join(cfg.info.work_dir, f'logs_resume_{cfg.info.resume_start_time}.txt')       
             loggers.log_file = open(log_file_path, 'a')
-            
-            p = psutil.Process()
-            if p.parent().name() == 'torchrun':
-                p = p.parent()
-                p_children = p.children(recursive=True)
-                all_processes = '\n'.join([f'\tPID: {p.pid}, Name: {p.name()}' for p in [p] + p_children])
-                print(LoggerMisc.block_wrapper(f'All sub-processes of torchrun:\n{all_processes}', s='#'), file=loggers.log_file)
+            LoggerMisc.print_all_pid(file=loggers.log_file)
         else:
             loggers.log_file = sys.stdout
         return loggers
@@ -426,14 +420,10 @@ class PortalMisc:
     def interrupt_handler(cfg):
         """Handles SIGINT signal (Ctrl+C) by exiting the program gracefully."""
         def signal_handler(sig, frame):
-            p = psutil.Process()
-            if p.parent().name() == 'torchrun':
-                p_children = p.children(recursive=True)
-                all_processes = '\n'.join([f'\tPID: {p.pid}, Name: {p.name()}, Parent\'s PID: {p.parent().pid}' for p in [p] + p_children])
-                if DistMisc.is_dist_avail_and_initialized():
-                    print(LoggerMisc.block_wrapper(f'Caught SIGINT signal, all processes of rank {DistMisc.get_rank()}:\n{all_processes}', s='#'), force=True)
-                else:
-                    print(LoggerMisc.block_wrapper(f'Caught SIGINT signal, all processes of rank {DistMisc.get_rank()}:\n{all_processes}', s='#'))
+            if DistMisc.is_main_process():
+                print('Caught SIGINT signal, exiting gracefully...')
+                LoggerMisc.print_all_pid()
+                LoggerMisc.get_wandb_pid(kill_all=True)
             sys.exit(0)
 
         signal.signal(signal.SIGINT, signal_handler)
@@ -850,6 +840,36 @@ class LoggerMisc:
                         loggers.tensorboard_run.add_scalar(f'{group}/{k}', v, global_step=step)
                     # loggers.tensorboard_run.add_image("output_image", output_dict['output_image'], global_step=step)
                     # loggers.tensorboard_run.add_image("output_video", output_dict['output_video'], global_step=step)
+                    
+    @staticmethod
+    def print_all_pid(get_parent=True, specific_parent='torchrun', file=sys.stdout):
+        p = psutil.Process()
+        if get_parent:
+            if specific_parent is not None and p.parent().name() != specific_parent:
+                return
+            p = p.parent()
+        p_children = p.children(recursive=True)
+        all_processes = '\n'.join([f'    PID: {str(p.pid):9s}Name: {p.name():34s}Parent\'s PID: {p.parent().pid}' for p in [p] + p_children])
+        print(LoggerMisc.block_wrapper(f'All sub-processes of {p.name()}:\n{all_processes}', s='#'), file=file)
+    
+    @staticmethod
+    def get_wandb_pid(get_parent=True, specific_parent='torchrun', kill_all=False, kill_wait_time=60):
+        p = psutil.Process()
+        if get_parent:
+            if specific_parent is not None and p.parent().name() != specific_parent:
+                return
+            p = p.parent()
+        p_children = p.children(recursive=True)
+        wandb_pid_list = []
+        for p in p_children:
+            if 'wandb' in p.name():
+                wandb_pid_list.append(p.pid)
+                if kill_all:
+                    import subprocess
+                    bash_command = f'sleep {kill_wait_time} && pid_to_kill={p.pid} && [ -n "$(ps -p $pid_to_kill -o pid=)" ] && kill -9 $pid_to_kill'
+                    subprocess.Popen(bash_command, shell=True)
+                    print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) will be killed in {kill_wait_time} seconds.', s='#'))
+        return wandb_pid_list
 
 
 class SweepMisc:

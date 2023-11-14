@@ -272,12 +272,12 @@ class MetricLogger(object):
     def _final_print(self, print_time=False, synced=True):       
         final_msg = self.delimiter.join([
             self.header + ' ' + self.epoch_str + ' finished. Summary of All Ranks:'
-            '\n\t{meters}',
+            '\n    {meters}',
         ]).format(meters=self.meters_str(final=True, synced=synced))
         if print_time:
             total_time = self.timer.info['all']
             total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-            final_msg += f'\n\tElapsed time: {total_time_str} ({total_time / self.iter_len:.4f} sec / batch)\n'
+            final_msg += f'\n    Elapsed time: {total_time_str} ({total_time / self.iter_len:.4f} sec / batch)\n'
         print(
             final_msg, '\n',
             file=self.log_file
