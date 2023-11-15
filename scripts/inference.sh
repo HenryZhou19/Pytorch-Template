@@ -58,7 +58,7 @@ formatted_new_time=$(date -d "@$new_time" "+%Y-%m-%d %H:%M:%S")
 
 echo "now: $(date "+%Y-%m-%d %H:%M:%S")"
 echo "waiting for ${seconds_to_wait} seconds..."
-echo "start at: ${formatted_new_time}"
+echo -e "start at: ${formatted_new_time}\n"
 sleep $seconds_to_wait
 
 IFS=',' read -ra devices <<< $cuda_devices
