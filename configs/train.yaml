@@ -26,6 +26,7 @@ criterion:
   primary_criterion_higher_better: False  # XXX: important for choosing best model
 
 trainer:
+  breath_time: 0.0
   trainer_choice: default
   dist_eval: True
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
