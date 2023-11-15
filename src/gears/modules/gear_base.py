@@ -324,7 +324,8 @@ class TesterBase:
         if DistMisc.is_main_process():
             if 'epoch' in checkpoint.keys():
                 print('Epoch:', checkpoint['epoch'])
-                self.loggers.wandb_run.tags = self.loggers.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
+                if hasattr(self.loggers, 'wandb_run'):
+                    self.loggers.wandb_run.tags = self.loggers.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
         
     def forward(self, batch: dict):
         time.sleep(self.breath_time)
