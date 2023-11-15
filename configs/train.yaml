@@ -98,5 +98,5 @@ env:
 sweep:
   sweep_enabled: True
   sweep_params:  # use '-' as connect symbols for sub-params 
-    trainer-optimizer-lr: [2.0e-4, 4.0e-4]
+    trainer-optimizer-lr_default: [2.0e-4, 4.0e-4]
     trainer-scheduler-scheduler_choice: [linear, cosine]
