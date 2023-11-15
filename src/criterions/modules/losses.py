@@ -119,7 +119,7 @@ class MulticlassFocalLoss(nn.Module):
             assert len(alpha) == classes
         else:
             alpha = [alpha] * classes
-        self.alpha = torch.as_tensor(self.alpha, device=device)
+        self.alpha = torch.as_tensor(alpha, device=device)
         self.gamma = gamma
         self.weight = weight
         self.ignore_index = ignore_index
