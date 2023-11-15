@@ -150,12 +150,12 @@ class TrainerBase:
                 else:
                     torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
                     
-    def train_mode(self):
+    def _train_mode(self):
         for nn_module in self.nn_module_list:
             nn_module.train()
         self.is_train = True
             
-    def eval_mode(self):
+    def _eval_mode(self):
         for nn_module in self.nn_module_list:
             nn_module.eval()
         self.is_train = False
@@ -252,6 +252,7 @@ class TrainerBase:
           
         self.step_count = 0
         self.optimizer.zero_grad()
+        self._train_mode()
 
     def after_training_before_validation(self, **kwargs):
         LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.train_iters)
@@ -260,6 +261,8 @@ class TrainerBase:
 
         if DistMisc.is_main_process():
             self.val_pbar.unpause()
+            
+        self._eval_mode()
 
     def after_validation(self, **kwargs):
         LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.train_iters)
@@ -298,8 +301,7 @@ class TesterBase:
         self.test_len = len(self.test_loader)
         
         self.nn_module_list = [self.model, self.criterion]
-        for nn_module in self.nn_module_list:
-            nn_module.eval()
+        self._eval_mode()
             
         self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
 
@@ -326,6 +328,11 @@ class TesterBase:
                 print('Epoch:', checkpoint['epoch'])
                 if hasattr(self.loggers, 'wandb_run'):
                     self.loggers.wandb_run.tags = self.loggers.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
+    
+    def _eval_mode(self):
+        for nn_module in self.nn_module_list:
+            nn_module.eval()
+        # self.is_train = False
         
     def forward(self, batch: dict):
         time.sleep(self.breath_time)

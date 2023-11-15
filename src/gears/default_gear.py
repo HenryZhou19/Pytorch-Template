@@ -4,11 +4,11 @@ from .modules.gear_base import (TesterBase, TrainerBase, tester_register,
 
 @trainer_register('default')
 class Trainer(TrainerBase):
-    def train_mode(self):
-        super().train_mode()
+    def _train_mode(self):
+        super()._train_mode()
         
-    def eval_mode(self):
-        super().eval_mode()
+    def _eval_mode(self):
+        super()._eval_mode()
     
     def before_all_epochs(self, **kwargs):
         super().before_all_epochs(**kwargs)
@@ -28,6 +28,9 @@ class Trainer(TrainerBase):
 
 @tester_register('default')
 class Tester(TesterBase):
+    def _eval_mode(self):
+        super()._eval_mode()
+    
     def before_inference(self, **kwargs):
         super().before_inference(**kwargs)
 
