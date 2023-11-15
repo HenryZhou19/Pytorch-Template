@@ -61,7 +61,7 @@ class TrainerBase:
         self.nn_module_list = [self.model, self.criterion]
         self.is_train = True
         
-        self.breath_time = self.cfg.trainer.breath_time  # XXX: avoid cpu being too busy
+        self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
     
     def _get_pbar(self):
         if DistMisc.is_main_process():
@@ -301,7 +301,7 @@ class TesterBase:
         for nn_module in self.nn_module_list:
             nn_module.eval()
             
-        self.breath_time = self.cfg.tester.breath_time  # XXX: avoid cpu being too busy
+        self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
 
     def _get_pbar(self):
         if DistMisc.is_main_process():
