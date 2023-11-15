@@ -4,6 +4,8 @@ omp_num_threads=6
 config_file_name="train"
 params=()
 
+seconds_to_wait=0
+
 run_cmd() {
     CUDA_VISIBLE_DEVICES=$cuda_devices \
     OMP_NUM_THREADS=$omp_num_threads \
@@ -33,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       config_file_name="$2"
       shift 2
       ;;
+    -w|-wait)
+      seconds_to_wait="$2"
+      shift 2
+      ;;
     *)
       if [[ $1 == config=* ]]; then
         value="${1#config=}"
@@ -45,6 +51,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 params="config=$config_file_name $params"
+
+current_time=$(date +%s)
+new_time=$((current_time + seconds_to_wait))
+formatted_new_time=$(date -d "@$new_time" "+%Y-%m-%d %H:%M:%S")
+
+echo "now: $(date "+%Y-%m-%d %H:%M:%S")"
+echo "waiting for ${seconds_to_wait} seconds..."
+echo "start at: ${formatted_new_time}"
+sleep $seconds_to_wait
 
 IFS=',' read -ra devices <<< $cuda_devices
 num_devices=${#devices[@]}
