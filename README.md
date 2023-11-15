@@ -1,3 +1,5 @@
+![GitHub Logo](https://socialify.git.ci/HenryZhou19/Pytorch-Template/image?description=1&font=Source%20Code%20Pro&forks=1&language=1&name=1&owner=1&pattern=Charlie%20Brown&stargazers=1&theme=Light)
+
 # Pytorch Template
 A simple template for Pytorch projects.
 
