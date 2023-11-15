@@ -1,5 +1,6 @@
 import math
 import os
+import time
 from argparse import Namespace
 from glob import glob
 
@@ -59,6 +60,8 @@ class TrainerBase:
           
         self.nn_module_list = [self.model, self.criterion]
         self.is_train = True
+        
+        self.breath_time = self.cfg.trainer.breath_time  # XXX: avoid cpu being too busy
     
     def _get_pbar(self):
         if DistMisc.is_main_process():
@@ -158,6 +161,8 @@ class TrainerBase:
         self.is_train = False
                     
     def forward(self, batch: dict):
+        time.sleep(self.breath_time)
+        
         batch: dict = TensorMisc.to(batch, self.device, non_blocking=self.cfg.env.pin_memory)
         inputs: dict = batch['inputs']
         targets: dict = batch['targets']
@@ -295,6 +300,8 @@ class TesterBase:
         self.nn_module_list = [self.model, self.criterion]
         for nn_module in self.nn_module_list:
             nn_module.eval()
+            
+        self.breath_time = self.cfg.tester.breath_time  # XXX: avoid cpu being too busy
 
     def _get_pbar(self):
         if DistMisc.is_main_process():
@@ -320,6 +327,8 @@ class TesterBase:
                 self.loggers.wandb_run.tags = self.loggers.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
         
     def forward(self, batch: dict):
+        time.sleep(self.breath_time)
+        
         batch: dict = TensorMisc.to(batch, self.device, non_blocking=self.cfg.env.pin_memory)
         inputs: dict = batch['inputs']
         targets: dict = batch['targets']
