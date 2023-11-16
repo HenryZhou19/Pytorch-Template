@@ -57,7 +57,7 @@ def save_video(video_array: np.ndarray, filepath: str, fps):
     else:
         raise ValueError(f'Unsupported file format: {container_format}')
     
-    out = cv2.VideoWriter(filepath, fourcc, fps, tuple(video_array.shape[1:3]))
+    out = cv2.VideoWriter(filepath, fourcc, fps, (video_array.shape[2], video_array.shape[1]))
     for frame_array in video_array:  # [frame_length, H, W, C]
         if gray_in:
             frame_array = cv2.cvtColor(frame_array, cv2.COLOR_GRAY2BGR)
