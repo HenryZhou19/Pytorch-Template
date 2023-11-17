@@ -60,8 +60,10 @@ class UpSampling(nn.Module):
                 no_up_dim = (no_up_dim, )
             for d in no_up_dim:
                 kernel_size[d - 2] = 1
+        kernel_size = tuple(kernel_size)  
+        stride = kernel_size
         if use_conv_transpose:
-            self.up = ConvTransposeXd(in_channels, in_channels, kernel_size=kernel_size, stride=kernel_size)
+            self.up = ConvTransposeXd(in_channels, in_channels, kernel_size=kernel_size, stride=stride)
         else:
             self.up = nn.Upsample(scale_factor=kernel_size, mode='bilinear' if dimension == 2 else 'trilinear', align_corners=True)
         self.conv = ConvBlock(in_channels + cat_channels, out_channels, dimension, padding_mode=padding_mode)
