@@ -626,7 +626,8 @@ class ModelMisc:
                     ]
                 input_data = {k: v.expand(cfg.data.batch_size_per_rank, *v.shape[1:]) for k, v in input_data.items()}
                 assert cfg.data.batch_size_per_rank == trainer.train_loader.batch_size
-                print_str = torchinfo.summary(temp_model, input_data=input_data, col_names=torchinfo_columns, depth=9, verbose=0)
+                with torch.cuda.amp.autocast(enabled=trainer.scaler is not None):
+                    print_str = torchinfo.summary(temp_model, input_data=input_data, col_names=torchinfo_columns, depth=9, verbose=0)
                 # Check model info in OUTPUT_PATH/logs.txt
                 print(print_str, file=trainer.loggers.log_file)    
                 print(LoggerMisc.block_wrapper(f'torchinfo: Model structure and summary have been saved.'))
