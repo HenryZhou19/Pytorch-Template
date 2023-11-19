@@ -11,15 +11,17 @@ class DifferentiableBinarization(Function):
         x: [N, *] 0. ~ 1.
         y: [N, *] bool
     """
-    def forward(self, x, threshold=None):
+    @staticmethod
+    def forward(ctx, x, threshold=None):
         if threshold is None:
             threshold = torch.mean(x, dim=tuple(range(1, x.dim())), keepdim=True)
-        self.save_for_backward(x)
+        ctx.save_for_backward(x)
         y = torch.greater_equal(x, threshold)
         return y
     
-    def backward(self, y_grad):
-        x, = self.saved_tensors
+    @staticmethod
+    def backward(ctx, y_grad):
+        x, = ctx.saved_tensors
         x_grad = y_grad * torch.where(torch.bitwise_and(x > 0., x < 1.), 1., 0.)
         # TODO: x_grad = y_grad  # Is the operation above necessary? Can it be replaced by this line?
         return x_grad

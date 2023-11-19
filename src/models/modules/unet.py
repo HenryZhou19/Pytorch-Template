@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, dimension, activate_layer=nn.ReLU, norm='batch', padding_mode='zeros'):
+    def __init__(self, in_channels, out_channels, dimension, activate_layer=nn.ReLU, norm='batch', padding_mode='zeros', res_in_block=True):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         ConvXd = nn.Conv2d if dimension == 2 else nn.Conv3d
@@ -19,16 +19,22 @@ class ConvBlock(nn.Module):
             activate_layer(inplace=True),
             ConvXd(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True, padding_mode=padding_mode),
             NormXd(out_channels),
-            activate_layer(inplace=True),
             )
+        self.conv_final_activate = activate_layer(inplace=True)
+        self.res_in_block = res_in_block
+        if self.res_in_block:
+            self.conv_res = nn.Sequential(
+                ConvXd(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=True),
+                NormXd(out_channels),
+                )
 
     def forward(self, x):
-        x = self.conv_block(x)
+        x = self.conv_final_activate(self.conv_res(x) + self.conv_block(x)) if self.res_in_block else self.conv_final_activate(self.conv_block(x))
         return x
 
 
 class DownSampling(nn.Module):
-    def __init__(self, in_channels, out_channels, dimension, padding_mode, no_down_dim=None):
+    def __init__(self, in_channels, out_channels, dimension, padding_mode, no_down_dim=None, res_in_block=True):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         MaxPoolXd = nn.MaxPool2d if dimension == 2 else nn.MaxPool3d
@@ -42,7 +48,7 @@ class DownSampling(nn.Module):
         stride = kernel_size
         self.unet_down = nn.Sequential(
             MaxPoolXd(kernel_size=kernel_size, stride=stride),
-            ConvBlock(in_channels, out_channels, dimension, padding_mode=padding_mode)
+            ConvBlock(in_channels, out_channels, dimension, padding_mode=padding_mode, res_in_block=res_in_block)
         )
 
     def forward(self, x):
@@ -50,7 +56,7 @@ class DownSampling(nn.Module):
 
 
 class UpSampling(nn.Module):
-    def __init__(self, in_channels, cat_channels, out_channels, dimension, use_conv_transpose, padding_mode, no_up_dim=None):
+    def __init__(self, in_channels, cat_channels, out_channels, dimension, use_conv_transpose, padding_mode, no_up_dim=None, res_in_block=True):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         ConvTransposeXd = nn.ConvTranspose2d if dimension == 2 else nn.ConvTranspose3d
@@ -66,7 +72,7 @@ class UpSampling(nn.Module):
             self.up = ConvTransposeXd(in_channels, in_channels, kernel_size=kernel_size, stride=stride)
         else:
             self.up = nn.Upsample(scale_factor=kernel_size, mode='bilinear' if dimension == 2 else 'trilinear', align_corners=True)
-        self.conv = ConvBlock(in_channels + cat_channels, out_channels, dimension, padding_mode=padding_mode)
+        self.conv = ConvBlock(in_channels + cat_channels, out_channels, dimension, padding_mode=padding_mode, res_in_block=res_in_block)
 
     def forward(self, x, cat_features):
         x = self.up(x)
@@ -86,13 +92,13 @@ class LastConv(nn.Module):
 
 
 class UNetXd(nn.Module):
-    def __init__(self, in_channels, layer_out_channels=[64, 128, 256, 512], final_out_channels=None, dimension=2, use_conv_transpose=False, padding_mode='zeros'):
+    def __init__(self, in_channels, layer_out_channels=[64, 128, 256, 512], final_out_channels=None, dimension=2, use_conv_transpose=False, padding_mode='zeros', res_in_block=True):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         if final_out_channels is None:
             final_out_channels = in_channels
 
-        self.in_conv = ConvBlock(in_channels, layer_out_channels[0], dimension, padding_mode=padding_mode)
+        self.in_conv = ConvBlock(in_channels, layer_out_channels[0], dimension, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
             DownSampling(layer_out_channels[i], layer_out_channels[i + 1], dimension, padding_mode) for i in range(len(layer_out_channels) - 1)
         ])
@@ -118,7 +124,7 @@ class UNetXd(nn.Module):
 
 
 class TimeUpscaleUNet3d(nn.Module):
-    def __init__(self, in_channels, up_scale=4, layer_out_channels=[64, 128, 256], final_out_channels=None, use_conv_transpose=False, padding_mode='replicate'):
+    def __init__(self, in_channels, up_scale=4, layer_out_channels=[64, 128, 256], final_out_channels=None, use_conv_transpose=False, padding_mode='replicate', res_in_block=True):
         super().__init__()
         assert 2 ** (len(layer_out_channels) - 1) == up_scale, 'up_scale must be 2 ** (len(layer_out_channels) - 1)'
         kernel_size = (2, 1, 1)
@@ -127,7 +133,7 @@ class TimeUpscaleUNet3d(nn.Module):
         if final_out_channels is None:
             final_out_channels = in_channels
 
-        self.in_conv = ConvBlock(in_channels, layer_out_channels[0], 3, padding_mode=padding_mode)
+        self.in_conv = ConvBlock(in_channels, layer_out_channels[0], 3, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
             DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode, no_down_dim=2) for i in range(len(layer_out_channels) - 1)
         ])
@@ -162,7 +168,7 @@ class TimeUpscaleUNet3d(nn.Module):
     
 
 class TimeDownscaleUNet3d(nn.Module):
-    def __init__(self, in_channels, down_scale=4, layer_out_channels=[64, 128, 256], final_out_channels=None, use_conv_transpose=False, padding_mode='replicate'):
+    def __init__(self, in_channels, down_scale=4, layer_out_channels=[64, 128, 256], final_out_channels=None, use_conv_transpose=False, padding_mode='replicate', res_in_block=True):
         super().__init__()
         assert 2 ** (len(layer_out_channels) - 1) == down_scale, 'down_scale must be 2 ** (len(layer_out_channels) - 1)'
         kernel_size = (2, 1, 1)
@@ -171,7 +177,7 @@ class TimeDownscaleUNet3d(nn.Module):
         if final_out_channels is None:
             final_out_channels = in_channels
 
-        self.in_conv = ConvBlock(in_channels, layer_out_channels[0], 3, padding_mode=padding_mode)
+        self.in_conv = ConvBlock(in_channels, layer_out_channels[0], 3, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
             DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode) for i in range(len(layer_out_channels) - 1)
         ])
@@ -185,7 +191,7 @@ class TimeDownscaleUNet3d(nn.Module):
         ])
         self.out_conv = LastConv(layer_out_channels[0], final_out_channels, 3)
 
-    def forward(self, x):  # [N, 3, L_fused, h, w] -> [N, 3, L_all, h ,w]
+    def forward(self, x):  # [N, 3, L_all, h, w] -> [N, 3, L_fused, h ,w]
         # down
         cat_list = []
         x = self.in_conv(x)  # [N, c1, L_fused, h, w]
