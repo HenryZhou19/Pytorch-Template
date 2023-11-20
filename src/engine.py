@@ -24,7 +24,7 @@ def train_one_epoch(trainer: TrainerBase):
         
         _, loss, metrics_dict = trainer.forward(batch)
         
-        mlogger.update(
+        mlogger.update_meters(
             **trainer.lr_groups,
             epoch=trainer.train_iters / trainer.train_len,
             loss=loss,
@@ -37,8 +37,8 @@ def train_one_epoch(trainer: TrainerBase):
 
         trainer.backward_and_step(loss)
     
+    mlogger.add_epoch_meters(**trainer.criterion.get_epoch_metrics())
     trainer.train_outputs = mlogger.output_dict(no_avg_list=[*trainer.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
-    trainer.train_outputs.update(trainer.criterion.get_epoch_metrics())
 
 
 def evaluate(trainer: TrainerBase):
@@ -56,13 +56,13 @@ def evaluate(trainer: TrainerBase):
         
         _, loss, metrics_dict = trainer.forward(batch)
 
-        mlogger.update(
+        mlogger.update_meters(
             loss=loss,
             **metrics_dict,
         )
-        
+    
+    mlogger.add_epoch_meters(**trainer.criterion.get_epoch_metrics())
     trainer.metrics = mlogger.output_dict(sync=cfg.trainer.dist_eval, final_print=True)
-    trainer.metrics.update(trainer.criterion.get_epoch_metrics())
 
 
 def test(tester: TesterBase):
@@ -78,7 +78,7 @@ def test(tester: TesterBase):
         
         outputs, _, metrics_dict = tester.forward(batch)
             
-        mlogger.update(**metrics_dict)
+        mlogger.update_meters(**metrics_dict)
         
+    mlogger.add_epoch_meters(**tester.criterion.get_epoch_metrics())
     tester.metrics = mlogger.output_dict(sync=True, final_print=True)
-    tester.metrics.update(tester.criterion.get_epoch_metrics())
