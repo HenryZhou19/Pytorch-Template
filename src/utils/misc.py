@@ -592,8 +592,7 @@ class ModelMisc:
     @staticmethod
     def show_model_info(cfg, trainer, torchinfo_columns=None):
         if DistMisc.is_main_process():
-            input_data = trainer.train_loader.dataset.__getitem__(0)['inputs']
-            input_data = TensorMisc.to({k: v.unsqueeze(0) for k, v in input_data.items()}, trainer.device)
+            input_data = TensorMisc.to(next(iter(trainer.train_loader))['inputs'], trainer.device)
             temp_model = deepcopy(trainer.model_without_ddp)
             
             if hasattr(trainer.loggers, 'tensorboard_run'):
@@ -624,7 +623,6 @@ class ModelMisc:
                     'mult_adds',
                     'trainable',
                     ]
-                input_data = {k: v.expand(cfg.data.batch_size_per_rank, *v.shape[1:]) for k, v in input_data.items()}
                 assert cfg.data.batch_size_per_rank == trainer.train_loader.batch_size
                 with torch.cuda.amp.autocast(enabled=trainer.scaler is not None):
                     print_str = torchinfo.summary(temp_model, input_data=input_data, col_names=torchinfo_columns, depth=9, verbose=0)

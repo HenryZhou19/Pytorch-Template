@@ -46,6 +46,7 @@ class DataModuleBase:
     @staticmethod
     def collate_fn(data):
         """
+        AcceptableType: torch.Tensor, str, dict, int, float, bool, np.ndarray
         data: 
             list(
                 [0] dict{
@@ -71,6 +72,10 @@ class DataModuleBase:
                 batch[k] = TensorMisc.NotToCudaList(map(lambda d: d[k], data))
             elif isinstance(v, dict):
                 batch[k] = DataModuleBase.collate_fn(list(map(lambda d: d[k], data)))
+            elif isinstance(v, (int, float, bool)):
+                batch[k] = torch.as_tensor(list(map(lambda d: d[k], data)))
+            elif isinstance(v, np.ndarray):
+                batch[k] = torch.stack(list(map(lambda d: torch.as_tensor(d[k]), data)), dim=0)
             else:
                 raise NotImplementedError(f'collate_fn not implemented for {type(v)}')
                 
