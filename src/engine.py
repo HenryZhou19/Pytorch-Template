@@ -36,8 +36,9 @@ def train_one_epoch(trainer: TrainerBase):
                 LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), int(trainer.train_iters / cfg.trainer.grad_accumulation))
 
         trainer.backward_and_step(loss)
-        
+    
     trainer.train_outputs = mlogger.output_dict(no_avg_list=[*trainer.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
+    trainer.train_outputs.update(trainer.criterion.get_epoch_metrics())
 
 
 def evaluate(trainer: TrainerBase):
@@ -61,6 +62,7 @@ def evaluate(trainer: TrainerBase):
         )
         
     trainer.metrics = mlogger.output_dict(sync=cfg.trainer.dist_eval, final_print=True)
+    trainer.metrics.update(trainer.criterion.get_epoch_metrics())
 
 
 def test(tester: TesterBase):
@@ -79,3 +81,4 @@ def test(tester: TesterBase):
         mlogger.update(**metrics_dict)
         
     tester.metrics = mlogger.output_dict(sync=True, final_print=True)
+    tester.metrics.update(tester.criterion.get_epoch_metrics())

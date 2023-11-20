@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 
 from .modules.criterion_base import CriterionBase, criterion_register
@@ -55,6 +56,8 @@ class MnistCriterion(CriterionBase):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.ce_loss = nn.CrossEntropyLoss()
+        self.epoch_sample_count = 0
+        self.epoch_correct_count = 0
         
     def forward(self, outputs, targets, infer_mode=False):
         super().forward(outputs, targets, infer_mode)
@@ -68,7 +71,29 @@ class MnistCriterion(CriterionBase):
             loss = 1 * ce_loss
         else:
             raise NotImplementedError(f'loss "{self.loss_config}" has not been implemented yet.')
-
+        
+        
+        _, predicted = torch.max(pred_scores.data, 1)
+        self.epoch_sample_count += gt_y.shape[0]
+        self.epoch_correct_count += (predicted == gt_y).sum().item()
+            
         return loss, {
             'ce_loss': ce_loss,
+            }
+
+    def get_epoch_metrics(self):
+        import torch.distributed as dist
+
+        from src.utils.misc import DistMisc
+
+        if DistMisc.is_dist_avail_and_initialized():
+            self.epoch_sample_count = torch.tensor(self.epoch_sample_count).cuda()
+            self.epoch_correct_count = torch.tensor(self.epoch_correct_count).cuda()
+            dist.all_reduce(self.epoch_sample_count, op=dist.ReduceOp.SUM)
+            dist.all_reduce(self.epoch_correct_count, op=dist.ReduceOp.SUM)
+        accuracy = self.epoch_correct_count / self.epoch_sample_count
+        self.epoch_correct_count = 0
+        self.epoch_sample_count = 0
+        return {
+            'accuracy': accuracy,
             }
