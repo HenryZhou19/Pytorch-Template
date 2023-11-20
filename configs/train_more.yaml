@@ -10,18 +10,18 @@ special:
 seed_base: 42
 
 data:
-  dataset: simple
-  batch_size_per_rank: 32
+  dataset: mnist
+  batch_size_per_rank: 64
   batch_size_total: TBD
   split_rate: 0.8
 
-architecture: simple
+architecture: mnist_lenet
 
 model:
   backbone: default
 
 criterion:
-  loss: mse
+  loss: ce
   primary_criterion: null  # null (None) to use loss as primary_criterion
   primary_criterion_higher_better: False  # XXX: important for choosing best model
 
@@ -30,21 +30,21 @@ trainer:
   trainer_choice: default
   dist_eval: True
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
-  epochs: 100
+  epochs: 20
   optimizer:
     optimizer_choice: sgd  # adamw, sgd
     sgd_momentum: 0.9
-    lr_default: 4.0e-4
+    lr_default: 1.0e-2
     wd_default: 1.0e-2
-    param_groups:
-      lr_backbone: 4.0e-4
-      wd_backbone: 1.0e-2
-      lr_head: 1.0e-4
-      wd_head: 1.0e-4
+    # param_groups:
+    #   lr_backbone: 4.0e-4
+    #   wd_backbone: 1.0e-2
+    #   lr_head: 1.0e-4
+    #   wd_head: 1.0e-4
   scheduler:
-    scheduler_choice: linear  # multistep, cosine, linear
+    scheduler_choice: multistep  # multistep, cosine, linear
     lr_min: 0.0
-    lr_milestones_epochs: null  # only for scheduler_choice == 'multistep' [50, 100]
+    lr_milestones_epochs: [5, 10, 15]  # only for scheduler_choice == 'multistep' [50, 100]
     lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
     lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
     warmup_epochs: 10

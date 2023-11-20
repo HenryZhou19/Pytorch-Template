@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from torchvision.datasets import MNIST
 
 from .modules.data_module_base import DataModuleBase, data_module_register
 
@@ -94,3 +95,37 @@ class SimpleDataModule(DataModuleBase):
         y = np.random.rand(self.test_len, 1)
         
         return SimpleDataset(X, y, self.data_form)
+    
+    
+class MNISTX(MNIST):
+    def __getitem__(self, index: int):
+        img, target = super().__getitem__(index)
+        return {
+            'inputs': {
+                'x': img.numpy(),
+            },
+            'targets': {
+                'gt_y': target,
+            },
+        }
+    
+
+@data_module_register('mnist')
+class MnistDataModule(DataModuleBase):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        import torchvision.transforms as transforms
+
+        self.transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+        self.MINST = MNISTX
+        
+    def build_train_dataset(self):
+        return self.MINST(root='./data', train=True, transform=self.transform, download=True)
+        
+    def build_val_dataset(self):
+        return self.MINST(root='./data', train=False, transform=self.transform)
+        
+    def build_test_dataset(self):
+        print('Test dataset is just the same as val dataset!')
+        return self.MINST(root='./data', train=False, transform=self.transform)
+

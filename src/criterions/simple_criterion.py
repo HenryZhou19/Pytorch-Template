@@ -48,3 +48,27 @@ class SimpleUnetCriterion(SimpleCriterion):
 @criterion_register('simple_unet3d')
 class SimpleUnetCriterion(SimpleCriterion):
     pass
+
+
+@criterion_register('mnist_lenet')
+class MnistCriterion(CriterionBase):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        self.ce_loss = nn.CrossEntropyLoss()
+        
+    def forward(self, outputs, targets, infer_mode=False):
+        super().forward(outputs, targets, infer_mode)
+        
+        pred_scores = outputs['pred_scores']
+        gt_y = targets['gt_y']   
+
+        # metrics (loss) used for backprop
+        if self.loss_config == 'ce':
+            ce_loss = self.ce_loss(pred_scores, gt_y)
+            loss = 1 * ce_loss
+        else:
+            raise NotImplementedError(f'loss "{self.loss_config}" has not been implemented yet.')
+
+        return loss, {
+            'ce_loss': ce_loss,
+            }
