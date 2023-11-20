@@ -597,8 +597,8 @@ class ModelMisc:
             
             if hasattr(trainer.loggers, 'tensorboard_run'):
                 if cfg.info.tensorboard.tensorboard_graph:
-                    from torch import nn
-                    class WriterWrapperModel(nn.Module):
+                    
+                    class WriterWrapperModel(torch.nn.Module):
                         def __init__(self, model):
                             super().__init__()
                             self.model = model
@@ -610,7 +610,11 @@ class ModelMisc:
                                 if isinstance(v, torch.Tensor):
                                     output_tensor_list.append(v)
                             return tuple(output_tensor_list)
-                    trainer.loggers.tensorboard_run.add_graph(WriterWrapperModel(temp_model), input_data)
+                        
+                    trainer.loggers.tensorboard_run.add_graph(
+                        WriterWrapperModel(temp_model),
+                        TensorMisc.get_one_sample_from_batch(input_data)
+                        )
             
             if cfg.info.torchinfo:
                 import torchinfo
@@ -929,6 +933,18 @@ class TensorMisc:
             def _hook(grad):
                 self.grad = grad
             return _hook
+    
+    @staticmethod
+    def get_one_sample_from_batch(data, index=0, keep_batch_dim=True):
+        if isinstance(data, (torch.Tensor, tuple, list)) or getattr(data, 'not_to_cuda', False):
+            if keep_batch_dim:
+                return data[index:index+1]
+            else:
+                return data[index]
+        elif isinstance(data, dict):
+            return {k: TensorMisc.get_one_sample_from_batch(v, index) for k, v in data.items()}
+        else:
+            raise TypeError(f'Unknown type: {type(data)}')
         
         
 class ImportMisc:
