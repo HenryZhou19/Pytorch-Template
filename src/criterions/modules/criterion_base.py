@@ -59,3 +59,8 @@ class CriterionBase(nn.Module):
         if infer_mode:
             assert self.training == False, f'CriterionModule {self.__class__} is in training mode while infer_mode is True.'
         
+    def get_epoch_metrics(self):
+        """
+        metrics which should be calculated after a whole epoch
+        """
+        return {}
