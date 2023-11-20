@@ -10,35 +10,31 @@ from .misc import ConfigMisc, DistMisc, LoggerMisc, TimeMisc
 
 
 class SmoothedValue(object):
-    def __init__(self, window_size=None, format=None, final_format=None, final_format_no_sync=None, prior=False, no_print=False, no_sync=False):
-        if format is None:
+    def __init__(self, window_size=None, format=None, final_format=None, prior=False, no_print=False, no_sync=False):
+        if format is None:  # show current value and average when running
             format = '{value:.4f} ({avg:.4f})'
-        if final_format is None:
-            final_format = '({global_avg:.4f} ± {global_std:.4f}) [{global_min:.4f}, {global_max:.4f}]'
-        if final_format_no_sync is None:
-            final_format_no_sync = '({avg:.4f} ± {std:.4f}) [{min:.4f}, {max:.4f}]'
+        if final_format is None:  # show average, min, max, std when one epoch finished
+            final_format = '({avg:.4f} ± {std:.4f}) [{min:.4f}, {max:.4f}]'
         self.value_now = 0.0
         self.deque = deque(maxlen=window_size)
-        self.synced_deque = deque()
         self.count = 0
-        self.synced_count = 0
         self.total = 0.0
-        self.synced_total = 0.0
         self.format = format
         self.final_format = final_format
-        self.final_format_no_sync = final_format_no_sync
         self.prior = prior
         self.no_print = no_print
         self.require_sync = not no_sync
+        self.synced = False
 
-    def update(self, value, n=1):
-        assert n==1, 'n != 1 is not supported yet.'
+    def append_one_value(self, value):
+        # assert n==1, 'n != 1 is not supported yet.'
         self.deque.append(value)
         self.value_now = value
         self.count += 1
         self.total += value
         
     def prepare_sync_meters(self):
+        assert not self.synced, 'Meters have been synced.'
         d = torch.as_tensor(list(self.deque), dtype=torch.float64, device='cpu')
         t = torch.as_tensor([self.count, self.total], dtype=torch.float64, device='cuda')
         return d, t
@@ -46,28 +42,10 @@ class SmoothedValue(object):
     def write_synced_meters(self, d, t):
         d = d.tolist()
         t = t.tolist()
-        self.synced_deque += list(d)
-        self.synced_count = self.synced_count + int(t[0])
-        self.synced_total = self.synced_total + t[1]
-        self.deque = deque()
-        self.count = 0
-        self.total = 0.0
-    
-    @property
-    def global_std(self):
-        return statistics.stdev(self.synced_deque) if len(self.synced_deque) > 1 else nan
-
-    @property
-    def global_avg(self):
-        return self.synced_total / self.synced_count if self.synced_count > 0 else nan
-    
-    @property
-    def global_min(self):
-        return min(self.synced_deque) if len(self.synced_deque) > 0 else nan
-    
-    @property
-    def global_max(self):
-        return max(self.synced_deque) if len(self.synced_deque) > 0 else nan
+        self.deque.clear()
+        self.deque += list(d)
+        self.count = int(t[0])
+        self.total = t[1]
     
     @property
     def std(self):
@@ -91,10 +69,7 @@ class SmoothedValue(object):
 
     def get_str(self, final=False, synced=True):
         if final:
-            if synced:
-                f = self.final_format
-            else:
-                f = self.final_format_no_sync
+            f = self.final_format
         else:
             f = self.format
         return f.format(
@@ -103,10 +78,6 @@ class SmoothedValue(object):
             min=self.min,
             max=self.max,
             std=self.std,
-            global_min=self.global_min,
-            global_max=self.global_max,
-            global_avg=self.global_avg,
-            global_std=self.global_std,
         )
 
 
@@ -125,13 +96,34 @@ class MetricLogger(object):
         
         self.meters = defaultdict(SmoothedValue)
         self.synced = False
+        
+    def add_meters(self, meters):
+        for meter in meters:
+            if isinstance(meter, str):
+                self.meters[meter] = SmoothedValue()
+            elif isinstance(meter, dict):
+                self.meters.update(meter)
 
-    def update(self, **kwargs):
+    def update_meters(self, **kwargs):
         for k, v in kwargs.items():
             if isinstance(v, torch.Tensor):
                 v = v.item()
             assert isinstance(v, (float, int))
-            self.meters[k].update(v)
+            # self.meters[k] = SmoothedValue()  # as default
+            self.meters[k].append_one_value(v)
+            
+    def add_epoch_meters(self, **kwargs):
+        for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+            assert isinstance(v, (float, int))
+            self.meters[k] = SmoothedValue(
+                window_size=1,
+                format='{value:.4f}',
+                final_format='{value:.4f}',
+                no_sync=True,
+                )
+            self.meters[k].append_one_value(v)
 
     def __getattr__(self, attr):
         if attr in self.meters:
@@ -172,7 +164,7 @@ class MetricLogger(object):
         ts = torch.stack(t_list, dim=0)
         dist.barrier()
         dist.all_reduce(ts)
-        gathered_ds = [None]*DistMisc.get_world_size()
+        gathered_ds = [None] * DistMisc.get_world_size()
         dist.all_gather_object(gathered_ds, ds)
         ds = torch.cat(gathered_ds, dim=1)
         line_idx = 0
@@ -180,13 +172,6 @@ class MetricLogger(object):
             if meter.require_sync:
                 meter.write_synced_meters(ds[line_idx], ts[line_idx])
                 line_idx += 1
-
-    def add_meters(self, meters):
-        for meter in meters:
-            if isinstance(meter, str):
-                self.meters[meter] = SmoothedValue()
-            elif isinstance(meter, dict):
-                self.meters.update(meter)
 
     def log_every(self, iterable):
         self.iter_len = len(iterable)
@@ -212,10 +197,10 @@ class MetricLogger(object):
 
         self.timer = TimeMisc.Timer()
         for idx, obj in enumerate(iterable, start=1):
-            data_time.update(self.timer.info['last'])
+            data_time.append_one_value(self.timer.info['last'])
             yield obj
-            iter_time.update(self.timer.info['last'])
-            model_time.update(iter_time.value_now - data_time.value_now)
+            iter_time.append_one_value(self.timer.info['last'])
+            model_time.append_one_value(iter_time.value_now - data_time.value_now)
             
             if self.pbar is not None:
                 if idx % self.print_freq == 0 or idx == self.iter_len:
@@ -250,9 +235,6 @@ class MetricLogger(object):
     def output_dict(self, no_avg_list=[], sync=False, final_print=False):
         if sync:
             self._synchronize_between_processes()
-            avg_name = 'global_avg'
-        else:
-            avg_name = 'avg'
         if final_print:
             self._final_print(print_time=True, synced=sync)
 
@@ -264,7 +246,7 @@ class MetricLogger(object):
                 })
         else:
             return_dict.update({
-                k: getattr(v, avg_name) if k not in no_avg_list else v.value
+                k: getattr(v, 'avg') if k not in no_avg_list else v.value
                 for k, v in self.meters.items()
                 })
         return return_dict
