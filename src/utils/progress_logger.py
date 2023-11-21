@@ -119,8 +119,8 @@ class MetricLogger(object):
             assert isinstance(v, (float, int))
             self.meters[k] = SmoothedValue(
                 window_size=1,
-                format='{value:.4f}',
-                final_format='{value:.4f}',
+                format='({value:.4f})',
+                final_format='({value:.4f})',
                 no_sync=True,
                 )
             self.meters[k].append_one_value(v)
