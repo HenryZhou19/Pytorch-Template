@@ -405,8 +405,10 @@ class PortalMisc:
                 else:
                     if hasattr(loggers, 'wandb_run'):
                         if cfg.special.debug is None:
-                            for _ in tqdm(range(cfg.info.wandb.wandb_buffer_time), desc='Waiting for wandb to upload all files...'):
-                                time.sleep(1)
+                            seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_str(), cfg.info.start_time))
+                            if seconds_remain > 0:
+                                for _ in tqdm(range(seconds_remain), desc='Waiting for wandb to upload all files...'):
+                                    time.sleep(1)
                         loggers.wandb_run.finish()
                         print('wandb closed.')
             finally:
@@ -963,7 +965,14 @@ class TimeMisc:
     @staticmethod
     def get_time_str():
         return time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
- 
+    
+    @staticmethod
+    def diff_time_str(time_str_new, time_str_old):
+        format_str = '%Y-%m-%d-%H-%M-%S'
+        time_new = time.strptime(time_str_new, format_str)
+        time_old = time.strptime(time_str_old, format_str)
+        return time.mktime(time_new) - time.mktime(time_old)
+    
     class Timer:
         def __init__(self):
             self.t_start= time.time()
