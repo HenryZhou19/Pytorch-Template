@@ -60,7 +60,7 @@ def train_run(cfg, loggers):
         trainer.after_validation()
 
         if cfg.special.debug == 'one_epoch':
-            PortalMisc.end_everything(cfg, force=True)
+            PortalMisc.end_everything(cfg, loggers, force=True)
             
     trainer.after_all_epochs()
 
