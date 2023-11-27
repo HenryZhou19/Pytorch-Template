@@ -1,6 +1,8 @@
 #!/bin/bash
 cuda_devices="6,7"
-omp_num_threads=6
+omp_num_threads=1
+mkl_num_threads=1
+numexpr_num_threads=1
 config_file_name="train"
 params=()
 
@@ -9,6 +11,8 @@ seconds_to_wait=0
 run_cmd() {
     CUDA_VISIBLE_DEVICES=$cuda_devices \
     OMP_NUM_THREADS=$omp_num_threads \
+    MKL_NUM_THREADS=$mkl_num_threads \
+    NUMEXPR_NUM_THREADS=$numexpr_num_threads \
     WANDB_CACHE_DIR=~/.cache/wandb \
     WANDB_CONFIG_DIR=~/.config/wandb \
     torchrun \
@@ -27,16 +31,24 @@ while [[ $# -gt 0 ]]; do
       cuda_devices="$2"
       shift 2
       ;;
-    -t|-threads)
-      omp_num_threads="$2"
-      shift 2
-      ;;
     -c|-config)
       config_file_name="$2"
       shift 2
       ;;
     -w|-wait)
       seconds_to_wait="$2"
+      shift 2
+      ;;
+    -ot|-omp_threads)
+      omp_num_threads="$2"
+      shift 2
+      ;;
+    -mt|-mkl_threads)
+      mkl_num_threads="$2"
+      shift 2
+      ;;
+    -nt|-numexpr_threads)
+      numexpr_num_threads="$2"
       shift 2
       ;;
     *)

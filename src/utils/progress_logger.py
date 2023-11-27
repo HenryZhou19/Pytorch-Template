@@ -3,6 +3,7 @@ import statistics
 from collections import defaultdict, deque
 from math import nan
 
+import numpy as np
 import torch
 import torch.distributed as dist
 
@@ -106,17 +107,17 @@ class MetricLogger(object):
 
     def update_meters(self, **kwargs):
         for k, v in kwargs.items():
-            if isinstance(v, torch.Tensor):
+            if isinstance(v, (torch.Tensor, np.ndarray)):
                 v = v.item()
-            assert isinstance(v, (float, int))
+            assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
             # self.meters[k] = SmoothedValue()  # as default
             self.meters[k].append_one_value(v)
             
     def add_epoch_meters(self, **kwargs):
         for k, v in kwargs.items():
-            if isinstance(v, torch.Tensor):
+            if isinstance(v, (torch.Tensor, np.ndarray)):
                 v = v.item()
-            assert isinstance(v, (float, int))
+            assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
             self.meters[k] = SmoothedValue(
                 window_size=1,
                 format='({value:.4f})',
