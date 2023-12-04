@@ -246,7 +246,7 @@ class PortalMisc:
         if cfg.trainer.resume is not None:  # read 'work_dir', 'start_time' from the .yaml file
             print(LoggerMisc.block_wrapper(f'Resuming from: {cfg.trainer.resume}, reading existing configs...', '>'))
             cfg_old = ConfigMisc.read_from_yaml(cfg.trainer.resume)
-            # TODO: assert critial params are the same, but others can be changed(e.g. info...)
+            # XXX: assert critial params are the same, but others can be changed(e.g. info...)
             work_dir = cfg_old.info.work_dir
             setattr(cfg.info, 'resume_start_time', cfg.info.start_time)
             cfg.info.start_time = cfg_old.info.start_time
