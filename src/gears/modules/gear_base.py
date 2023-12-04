@@ -64,6 +64,7 @@ class TrainerBase:
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
     
     def _get_pbar(self):
+        # called in "before_all_epochs"
         if DistMisc.is_main_process():
             epoch_finished = self.start_epoch - 1
             train_pbar = LoggerMisc.MultiTQDM(
@@ -90,6 +91,7 @@ class TrainerBase:
             self.val_pbar = val_pbar
 
     def _resume_training(self):
+        # called in "before_all_epochs"
         if self.cfg.trainer.resume:
             checkpoint_path = glob(os.path.join(self.cfg.info.work_dir, 'checkpoint_last_epoch_*.pth'))
             print(LoggerMisc.block_wrapper(f'loading the checkpoint from {checkpoint_path}', '>'))
@@ -110,7 +112,8 @@ class TrainerBase:
         print(f'Start from epoch: {self.start_epoch}')
         return self.cfg.trainer.resume
             
-    def save_checkpoint(self):
+    def _save_checkpoint(self):
+        # called in "after_validation"
         if DistMisc.is_main_process():
             epoch_finished = self.epoch
             self.best_metrics, save_flag = self.criterion.choose_best(
@@ -151,11 +154,13 @@ class TrainerBase:
                     torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
                     
     def _train_mode(self):
+        # called in "before_one_epoch"
         for nn_module in self.nn_module_list:
             nn_module.train()
         self.is_train = True
             
     def _eval_mode(self):
+        # called in "after_training_before_validation"
         for nn_module in self.nn_module_list:
             nn_module.eval()
         self.is_train = False
@@ -267,7 +272,7 @@ class TrainerBase:
     def after_validation(self, **kwargs):
         LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.train_iters)
         
-        self.save_checkpoint()
+        self._save_checkpoint()
     
     def after_all_epochs(self, **kwargs):
         dist.barrier()
@@ -301,11 +306,11 @@ class TesterBase:
         self.test_len = len(self.test_loader)
         
         self.nn_module_list = [self.model, self.criterion]
-        self._eval_mode()
             
         self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
 
     def _get_pbar(self):
+        # called in "before_inference"
         if DistMisc.is_main_process():
             test_pbar = LoggerMisc.MultiTQDM(
                 total=self.test_len,
@@ -319,6 +324,7 @@ class TesterBase:
             self.test_pbar = test_pbar
     
     def _load_model(self):
+        # called in "before_inference"
         checkpoint = torch.load(self.cfg.tester.checkpoint_path, map_location=self.device)
         self.model_without_ddp.load_state_dict(checkpoint['model'])
         # print(f'{config.mode} mode: Loading pth from', path)
@@ -330,6 +336,7 @@ class TesterBase:
                     self.loggers.wandb_run.tags = self.loggers.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
     
     def _eval_mode(self):
+        # called in "before_inference"
         for nn_module in self.nn_module_list:
             nn_module.eval()
         # self.is_train = False
@@ -350,6 +357,8 @@ class TesterBase:
     def before_inference(self, **kwargs):
         self._load_model()
         self._get_pbar()
+        
+        self._eval_mode()
 
     def after_inference(self, **kwargs):
         LoggerMisc.logging(self.loggers,  'infer', self.metrics, None)
