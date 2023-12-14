@@ -98,6 +98,7 @@ class DataModuleBase:
             num_workers=self.cfg.env.num_workers,
             worker_init_fn=self.get_worker_init_fn(),
             generator=self.get_generator(),
+            prefetch_factor=self.cfg.env.prefetch_factor if self.cfg.env.num_workers > 0 else None,
             persistent_workers=True if self.cfg.env.num_workers > 0 else False,
             drop_last=is_training,
         )
