@@ -1,8 +1,8 @@
 #!/bin/bash
 cuda_devices="6,7"
-omp_num_threads=1
-mkl_num_threads=1
-numexpr_num_threads=1
+omp_num_threads=4
+mkl_num_threads=4
+numexpr_num_threads=4
 config_file_name="train"
 params=()
 

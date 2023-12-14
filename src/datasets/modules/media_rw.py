@@ -6,7 +6,7 @@ import numpy as np
 cv2.setNumThreads(0)
 cv2.ocl.setUseOpenCL(False)
 
-def load_video(filepath: str, gray_out=False, dtype=np.uint8) -> np.ndarray:
+def load_video(filepath: str, gray_out=False, dtype=np.uint8, max_frame_count=None) -> np.ndarray:
     """
     RGB 24bits video only?
     if gray_out:
@@ -19,6 +19,9 @@ def load_video(filepath: str, gray_out=False, dtype=np.uint8) -> np.ndarray:
     capture = cv2.VideoCapture(filepath)
 
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    if max_frame_count is not None:
+        assert max_frame_count > 0
+        frame_count = min(frame_count, max_frame_count)
     frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
     C = 1 if gray_out else 3
