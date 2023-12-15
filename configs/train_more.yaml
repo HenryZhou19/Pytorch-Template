@@ -1,0 +1,60 @@
+config:  # main config (in this file) overrides additional configs
+  additional: [shared, env_default_train]  # add additional config file names, e.g. [shared, env_default] --- the order matters (later ones overwrite previous ones)
+
+special:
+  extra_name: template  # null for no extra name
+
+info:
+  output_dir: ./outputs/
+  project_name: template
+
+data:
+  dataset: mnist
+  batch_size_per_rank: 64
+  split_rate: 0.8
+
+architecture: mnist_lenet
+
+model:
+  backbone: default
+
+criterion:
+  loss: ce
+  primary_criterion: null  # null (None) to use loss as primary_criterion
+  primary_criterion_higher_better: False  # XXX: important for choosing best model
+
+trainer:
+  trainer_breath_time: 0.0
+  trainer_choice: default
+  dist_eval: True
+  resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
+  epochs: 20
+  optimizer:
+    optimizer_choice: sgd  # adamw, sgd
+    sgd_momentum: 0.9
+    lr_default: 1.0e-2
+    wd_default: 1.0e-2
+    # param_groups:
+    #   lr_backbone: 4.0e-4
+    #   wd_backbone: 1.0e-2
+    #   lr_head: 1.0e-4
+    #   wd_head: 1.0e-4
+  scheduler:
+    scheduler_choice: multistep  # multistep, cosine, linear
+    lr_min: 0.0
+    lr_milestones_epochs: [5, 10, 15]  # only for scheduler_choice == 'multistep' [50, 100]
+    lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
+    lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
+    warmup_epochs: 10
+    warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
+    warmup_factor: 0.0  # [0., 1.] start warmup from: warmup_factor * lr
+  max_grad_norm: 1.0  # <= 0 means no gradient clipping
+  grad_accumulation: 1  # positive integer (keep it '1' in most cases)
+  grad_checkpoint: False
+  save_interval: 1
+
+sweep:
+  sweep_enabled: False
+  sweep_params:  # use '-' as connect symbols for sub-params 
+    trainer-optimizer-lr_default: [2.0e-4, 4.0e-4]
+    trainer-scheduler-scheduler_choice: [linear, cosine]
