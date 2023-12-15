@@ -561,13 +561,13 @@ class ModelMisc:
     @staticmethod
     def show_model_info(cfg, trainer, torchinfo_columns=None):
         if DistMisc.is_main_process():
-            input_data = TensorMisc.to(next(iter(trainer.train_loader))['inputs'], trainer.device)
+            input_data_one_sample = TensorMisc.to(trainer.train_loader.collate_fn([trainer.train_loader.dataset[0]])['inputs'], trainer.device)
             temp_model = deepcopy(trainer.model_without_ddp)
             
             if hasattr(trainer.loggers, 'tensorboard_run'):
                 if cfg.info.tensorboard.tensorboard_graph:
                     
-                    class WriterWrapperModel(torch.nn.Module):
+                    class WriterWrappedModel(torch.nn.Module):
                         def __init__(self, model):
                             super().__init__()
                             self.model = model
@@ -581,8 +581,8 @@ class ModelMisc:
                             return tuple(output_tensor_list)
                         
                     trainer.loggers.tensorboard_run.add_graph(
-                        WriterWrapperModel(temp_model),
-                        TensorMisc.get_one_sample_from_batch(input_data)
+                        WriterWrappedModel(temp_model),
+                        input_data_one_sample,
                         )
             
             if cfg.info.torchinfo:
@@ -598,7 +598,13 @@ class ModelMisc:
                     ]
                 assert cfg.data.batch_size_per_rank == trainer.train_loader.batch_size
                 with torch.cuda.amp.autocast(enabled=trainer.scaler is not None):
-                    print_str = torchinfo.summary(temp_model, input_data=input_data, col_names=torchinfo_columns, depth=9, verbose=0)
+                    print_str = torchinfo.summary(
+                        temp_model,
+                        input_data=TensorMisc.expand_one_sample_to_batch(input_data_one_sample, cfg.data.batch_size_per_rank),
+                        col_names=torchinfo_columns,
+                        depth=9,
+                        verbose=0,
+                        )
                 # Check model info in OUTPUT_PATH/logs.txt
                 print(print_str, file=trainer.loggers.log_file)    
                 print(LoggerMisc.block_wrapper(f'torchinfo: Model structure and summary have been saved.'))
@@ -610,7 +616,7 @@ class ModelMisc:
                 print('\n', file=trainer.loggers.log_file)
                 
             trainer.loggers.log_file.flush()
-            del temp_model, input_data
+            del temp_model, input_data_one_sample
             torch.cuda.empty_cache()
     
     @staticmethod
@@ -905,13 +911,29 @@ class TensorMisc:
     
     @staticmethod
     def get_one_sample_from_batch(data, index=0, keep_batch_dim=True):
-        if isinstance(data, (torch.Tensor, tuple, list)) or getattr(data, 'not_to_cuda', False):
+        if isinstance(data, torch.Tensor) or getattr(data, 'not_to_cuda', False):
             if keep_batch_dim:
                 return data[index:index+1]
             else:
                 return data[index]
         elif isinstance(data, dict):
-            return {k: TensorMisc.get_one_sample_from_batch(v, index) for k, v in data.items()}
+            return {k: TensorMisc.get_one_sample_from_batch(v, index, keep_batch_dim) for k, v in data.items()}
+        else:
+            raise TypeError(f'Unknown type: {type(data)}')
+        
+    @staticmethod
+    def expand_one_sample_to_batch(data, batch_size, have_batch_dim=True):
+        assert have_batch_dim, 'Only support expanding one sample to batch when have_batch_dim is True.'
+        if isinstance(data, torch.Tensor):
+            return data.expand(batch_size, *data.shape[1:])
+            # if have_batch_dim:
+            #     return data.expand(batch_size, *data.shape[1:])
+            # else:
+            #     return data.unsqueeze(0).expand(batch_size, *data.shape)
+        elif getattr(data, 'not_to_cuda', False):
+            return data * batch_size
+        elif isinstance(data, dict):
+            return {k: TensorMisc.expand_one_sample_to_batch(v, batch_size) for k, v in data.items()}
         else:
             raise TypeError(f'Unknown type: {type(data)}')
         
