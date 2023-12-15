@@ -78,8 +78,10 @@ num_devices=${#devices[@]}
 nproc_per_node=$num_devices
 
 echo "CUDA_VISIBLE_DEVICES: $cuda_devices"
-echo "OMP_NUM_THREADS": $omp_num_threads
 echo "nproc_per_node: $nproc_per_node"
+echo "OMP_NUM_THREADS: $omp_num_threads"
+echo "MKL_NUM_THREADS: $mkl_num_threads"
+echo "NUMEXPR_NUM_THREADS: $numexpr_num_threads"
 
 start_port=25950
 end_port=25999

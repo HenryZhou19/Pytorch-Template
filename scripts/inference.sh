@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
       cuda_devices="$2"
       shift 2
       ;;
-        -c|-config)
+    -c|-config)
       config_file_name="$2"
       shift 2
       ;;
@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
       seconds_to_wait="$2"
       shift 2
       ;;
--ot|-omp_threads)
+    -ot|-omp_threads)
       omp_num_threads="$2"
       shift 2
       ;;
@@ -78,8 +78,10 @@ num_devices=${#devices[@]}
 nproc_per_node=$num_devices
 
 echo "CUDA_VISIBLE_DEVICES: $cuda_devices"
-echo "OMP_NUM_THREADS": $omp_num_threads
 echo "nproc_per_node: $nproc_per_node"
+echo "OMP_NUM_THREADS: $omp_num_threads"
+echo "MKL_NUM_THREADS: $mkl_num_threads"
+echo "NUMEXPR_NUM_THREADS: $numexpr_num_threads"
 
 start_port=25950
 end_port=25999
