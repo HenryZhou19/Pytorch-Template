@@ -1,0 +1,38 @@
+env:
+  device: cuda
+  gpu: TBD
+  distributed: TBD
+  dist_url: env://
+  dist_backend: TBD
+  world_size: TBD
+  rank: TBD
+  seed_with_rank: True
+  cuda_deterministic: False
+  find_unused_params: True
+  amp: True
+  num_workers: 4
+  prefetch_factor: 2
+  infinite_dataloader: False
+  pin_memory: True
+
+info: # info & wandb
+  start_time : TBD
+  work_dir: TBD
+  task_type: Train  # Pretrain, Train, Pretrain_Re, Train_Re, ...
+  batch_info: TBD
+  name_tags: [special.extra_name, architecture, model.backbone, criterion.loss, info.batch_info]
+  wandb:
+    wandb_enabled: True
+    wandb_tags: [info.start_time]
+    wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
+    wandb_watch_model: False  # do not use
+    wandb_watch_freq: 100
+    wandb_buffer_time: 300  # seconds
+  tensorboard:
+    tensorboard_enabled: True
+    tensorboard_graph: True
+  iter_log_freq: 10  # <= 0 means only log when an epoch ends
+  cli_log_freq: 1
+  global_tqdm: True
+  torchinfo: True  # print model info to log.txt
+  print_param_names: True

@@ -3,7 +3,7 @@ cuda_devices="6,7"
 omp_num_threads=4
 mkl_num_threads=4
 numexpr_num_threads=4
-config_file_name="train"
+main_config_file_name="train"
 params=()
 
 seconds_to_wait=0
@@ -23,7 +23,7 @@ run_cmd() {
 
 args=("$@")
 echo -e "\033[?25l"  # hide cursor
-trap 'echo -e "\033[?25h"' INT  # show cursor when Ctrl-C
+trap 'echo -e "\033[0m\033[?25h"' INT  # change color back and show cursor when Ctrl-C
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -c|-config)
-      config_file_name="$2"
+      main_config_file_name="$2"
       shift 2
       ;;
     -w|-wait)
@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
     *)
       if [[ $1 == config=* ]]; then
         value="${1#config=}"
-        config_file_name=$value
+        main_config_file_name=$value
       else
         params+=("$1")
       fi
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-params="config=$config_file_name $params"
+params="config.main=$main_config_file_name $params"
 
 current_time=$(date +%s)
 new_time=$((current_time + seconds_to_wait))

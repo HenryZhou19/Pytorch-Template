@@ -66,9 +66,10 @@ def train_run(cfg, loggers):
 
 
 def train_portal(cfg):
+    assert hasattr(cfg, 'info'), 'config field "cfg.info" not found'
     setattr(cfg.info, 'start_time', TimeMisc.get_time_str())
     
-    # special config adjustment(debug)
+    # special config adjustment (debug)
     PortalMisc.special_config_adjustment(cfg)
     
     # resume training or new one (makedirs & write configs to file)
@@ -83,7 +84,7 @@ def train_portal(cfg):
     # choose whether to print configs of each rank
     PortalMisc.print_config(cfg, force_all_rank=False)
 
-    # init loggers(wandb/tensorboard and local:log_file)
+    # init loggers (wandb/tensorboard and local:log_file)
     loggers = PortalMisc.init_loggers(cfg)
 
     # interrupt handler
@@ -97,8 +98,7 @@ def train_portal(cfg):
 
             
 if __name__ == '__main__':
-    cfg = ConfigMisc.get_configs(config_dir='./configs/', default_config_name='train')
-    assert hasattr(cfg, 'info'), 'cfg.info not found'
+    cfg = ConfigMisc.get_configs(config_dir='./configs/')
     
     # init distributed mode
     DistMisc.init_distributed_mode(cfg)

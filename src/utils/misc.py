@@ -39,25 +39,37 @@ __all__ = [
 
 class ConfigMisc:
     @staticmethod
-    def get_configs(config_dir, default_config_name):
-        config_path = ConfigMisc._get_config_file_path(config_dir, default_config_name)
-        return ConfigMisc._get_configs_from_sacred(config_path)
+    def get_configs(config_dir):
+        main_config_path = ConfigMisc._get_main_config_file_path(config_dir)
+        additional_config_paths = ConfigMisc._get_additional_config_file_paths(config_dir, main_config_path)
+        return ConfigMisc._get_configs_from_sacred(main_config_path, additional_config_paths)
     
     @staticmethod
-    def _get_config_file_path(config_dir, default_config_name):
+    def _get_main_config_file_path(config_dir):
         args = sys.argv
-        config_name = default_config_name
+        main_config_name = None
         for arg in args:
-            if arg.startswith('config='):
-                config_name = arg.split('=')[1]
+            if arg.startswith('config.main='):
+                main_config_name = arg.split('=')[1]
                 break
-        return os.path.join(config_dir, config_name + '.yaml')
+        assert main_config_name is not None, 'Should have a main config file name.'
+        return os.path.join(config_dir, main_config_name + '.yaml')
     
     @staticmethod
-    def _get_configs_from_sacred(config_path, do_print=False):
+    def _get_additional_config_file_paths(config_dir, main_config_path):
+        additional_configs = getattr(ConfigMisc.read_from_yaml(main_config_path).config, 'additional', [])
+        for idx, additional_config in enumerate(additional_configs):
+            additional_configs[idx] = os.path.join(config_dir, additional_config + '.yaml')
+        return additional_configs
+    
+    @staticmethod
+    def _get_configs_from_sacred(main_config_path, additional_config_paths, do_print=False):
         ex = sacred.Experiment('Config Collector', save_git_info=False)
-        ex.add_config(config_path)
         
+        for additional_config_path in additional_config_paths:
+            ex.add_config(additional_config_path)
+        ex.add_config(main_config_path)
+                
         def trim_sacred_configs(_run):
             final_config = _run.config
             final_config.pop('seed', None)  # seed given by sacred is useless
