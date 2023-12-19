@@ -13,5 +13,5 @@ tester:
 
 sweep:
   sweep_enabled: False
-  sweep_params:  # use '-' as connect symbols for sub-params 
-    data-batch_size_per_rank: [1, 2]
+  sweep_params:  # use '//' as the connector for sub-params 
+    data//batch_size_per_rank: [1, 2]

@@ -882,7 +882,7 @@ class SweepMisc:
                 
                 cfg_now = deepcopy(cfg)
                 for chained_k, v in combination.items():
-                    k_list = chained_k.split('-')
+                    k_list = chained_k.split('//')
                     ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v)
                 portal_fn(cfg_now)
         else:

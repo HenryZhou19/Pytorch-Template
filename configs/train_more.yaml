@@ -55,6 +55,6 @@ trainer:
 
 sweep:
   sweep_enabled: False
-  sweep_params:  # use '-' as connect symbols for sub-params 
-    trainer-optimizer-lr_default: [2.0e-4, 4.0e-4]
-    trainer-scheduler-scheduler_choice: [linear, cosine]
+  sweep_params:  # use '//' as the connector for sub-params 
+    trainer//optimizer//lr_default: [2.0e-4, 4.0e-4]
+    trainer//scheduler//scheduler_choice: [linear, cosine]
