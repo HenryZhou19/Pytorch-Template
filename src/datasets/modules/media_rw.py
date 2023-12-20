@@ -47,6 +47,10 @@ def save_video(video_array: np.ndarray, filepath: str, fps):
     """
     RGB 24bits video only?
     video_array: np.ndarray [C(gray, RGB)=1 or 3, frame_length, H, W] uint8
+    filepath ends with:
+        .avi: lossy
+        .mp4: lossy
+        .mkv: lossless
     """
     video_array = video_array.transpose((1, 2, 3, 0))
     
@@ -54,9 +58,11 @@ def save_video(video_array: np.ndarray, filepath: str, fps):
     container_format = filepath.split('.')[-1]
     
     if container_format == 'avi':
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')  # lossy
     elif container_format == 'mp4':
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # lossy
+    elif container_format == 'mkv':
+        fourcc = cv2.VideoWriter_fourcc(*'FFV1')  # lossless
     else:
         raise ValueError(f'Unsupported file format: {container_format}')
     
