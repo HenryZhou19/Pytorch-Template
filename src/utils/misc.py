@@ -651,6 +651,15 @@ class ModelMisc:
             return model_without_ddp
         
     @staticmethod
+    def load_state_dict_with_more_info(module, state_dict, strict=False, print_keys_level=1):
+        missing_keys, unexpected_keys = module.load_state_dict(state_dict, strict=strict)
+        if print_keys_level > 0:
+            missing_keys = list(set(['.'.join(missing_keys.split('.')[:print_keys_level]) for missing_keys in missing_keys]))
+            unexpected_keys = list(set(['.'.join(unexpected_key.split('.')[:print_keys_level]) for unexpected_key in unexpected_keys]))
+            print_info = 'state_dict loaded not strictly.\n\nMISSING KEYS:\n    ' + '\n    '.join(missing_keys) + '\n\nUNEXPECTED KEYS:\n    ' + '\n    '.join(unexpected_keys)
+            print(LoggerMisc.block_wrapper(print_info, '#'))
+        
+    @staticmethod
     def toggle_batchnorm_track_running_stats(module: nn.Module, true_or_false: bool):
         for child in module.children():
             if isinstance(child, torch.nn.modules.batchnorm._BatchNorm):
