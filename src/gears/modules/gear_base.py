@@ -174,12 +174,12 @@ class TrainerBase:
         
         if self.is_train:
             with torch.cuda.amp.autocast(enabled=self.scaler is not None):
-                outputs = self.model(**inputs)
+                outputs = self.model(inputs)
                 loss, metrics_dict = self.criterion(outputs, targets)
             self.train_iters += 1
         else:
             with torch.no_grad():
-                outputs = self.model(**inputs)
+                outputs = self.model(inputs)
                 loss, metrics_dict = self.criterion(outputs, targets)
             
         return outputs, loss, metrics_dict
@@ -349,7 +349,7 @@ class TesterBase:
         targets: dict = batch['targets']
         
         with torch.no_grad():
-            outputs = self.model(**inputs)
+            outputs = self.model(inputs)
             loss, metrics_dict = self.criterion(outputs, targets, infer_mode=True)
             
         return outputs, loss, metrics_dict
