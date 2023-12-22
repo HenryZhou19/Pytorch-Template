@@ -22,7 +22,7 @@ class SimpleModel(ModelBase):
         
         # self._freeze_layers(['backbone'], verbose=True)
 
-    def forward(self, **inputs):
+    def forward(self, inputs: dict) -> dict:
         x = inputs['x']
         x = self._grad_checkpoint(self.backbone, x)
         x = self.head(x)
@@ -42,7 +42,7 @@ class SimpleUNet2DModel(ModelBase):
         
         # self._freeze_layers(['backbone'], verbose=True)
 
-    def forward(self, **inputs):
+    def forward(self, inputs: dict) -> dict:
         x = inputs['x']
         x = self.backbone(x)
         return {
@@ -61,7 +61,7 @@ class SimpleUNet3DModel(ModelBase):
         
         # self._freeze_layers(['backbone'], verbose=True)
 
-    def forward(self, **inputs):
+    def forward(self, inputs: dict) -> dict:
         x = inputs['x']
         x = self.backbone(x)
         return {
@@ -80,7 +80,7 @@ class LeNet(ModelBase):
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
 
-    def forward(self, **inputs):
+    def forward(self, inputs: dict) -> dict:
         x = inputs['x']
         x = F.relu(self.conv1(x))
         x = F.max_pool2d(x, 2)

@@ -585,9 +585,8 @@ class ModelMisc:
                             self.model = model
                             
                         def forward(self, inputs):
-                            output_dict = self.model(**inputs)
                             output_tensor_list = []
-                            for v in output_dict.values():
+                            for v in self.model(inputs).values():
                                 if isinstance(v, torch.Tensor):
                                     output_tensor_list.append(v)
                             return tuple(output_tensor_list)
@@ -609,9 +608,18 @@ class ModelMisc:
                     'trainable',
                     ]
                 assert cfg.data.batch_size_per_rank == trainer.train_loader.batch_size
+                
+                class TorchinfoWrappedModel(torch.nn.Module):
+                    def __init__(self, model):
+                        super().__init__()
+                        self.model = model
+                        
+                    def forward(self, **inputs):
+                        return self.model(inputs)
+                
                 with torch.cuda.amp.autocast(enabled=trainer.scaler is not None):
                     print_str = torchinfo.summary(
-                        temp_model,
+                        TorchinfoWrappedModel(temp_model),
                         input_data=TensorMisc.expand_one_sample_to_batch(input_data_one_sample, cfg.data.batch_size_per_rank),
                         col_names=torchinfo_columns,
                         depth=9,

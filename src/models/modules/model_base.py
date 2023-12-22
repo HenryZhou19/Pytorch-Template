@@ -55,6 +55,6 @@ class ModelBase(nn.Module):
     def _custom_init_all(self, init_std=0.02):
         self.apply(partial(self._custom_init, init_std=init_std))
         
-    def forward(self, **inputs):
+    def forward(self, inputs: dict) -> dict:
         raise NotImplementedError
         
