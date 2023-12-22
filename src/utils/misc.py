@@ -1,7 +1,6 @@
 import importlib
 import logging
 import os
-import pickle
 import random
 import shutil
 import signal
@@ -20,6 +19,7 @@ import sacred
 import torch
 import torch.distributed as dist
 import yaml
+from torch import nn
 from tqdm import tqdm
 from tqdm.utils import disp_trim
 
@@ -641,6 +641,26 @@ class ModelMisc:
             )
         else:
             return model_without_ddp
+        
+    @staticmethod
+    def toggle_batchnorm_track_running_stats(module: nn.Module, true_or_false: bool):
+        for child in module.children():
+            if isinstance(child, torch.nn.modules.batchnorm._BatchNorm):
+                child.track_running_stats = true_or_false
+            else:
+                ModelMisc.toggle_batchnorm_track_running_stats(child, true_or_false)
+    
+    @staticmethod
+    def convert_batchnorm_to_instancenorm(module: nn.Module):
+        for name, child in module.named_children():
+            if isinstance(child, nn.BatchNorm3d):
+                setattr(module, name, nn.InstanceNorm3d(child.num_features))
+            elif isinstance(child, nn.BatchNorm2d):
+                setattr(module, name, nn.InstanceNorm2d(child.num_features))
+            elif isinstance(child, nn.BatchNorm1d):
+                setattr(module, name, nn.InstanceNorm1d(child.num_features))
+            else:
+                ModelMisc.convert_batchnorm_to_instancenorm(child)
 
 
 class OptimizerMisc:

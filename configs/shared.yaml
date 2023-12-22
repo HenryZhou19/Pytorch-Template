@@ -5,7 +5,7 @@ special:
   debug: null  # 'one_iter', 'one_epoch', null for no debug
   save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
   print_save_config_ignore: [sweep]
-  logger_config_ignore: [env, info, sweep, special]
+  logger_config_ignore: [config, env, info, sweep, special]
   extra_name: null  # null for no extra name
 
 seed_base: 42
