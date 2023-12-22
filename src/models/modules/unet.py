@@ -3,7 +3,8 @@ import torch.nn as nn
 
 
 class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, dimension, activate_layer=nn.ReLU, norm='batch', padding_mode='zeros', res_in_block=True):
+    def __init__(self, in_channels, out_channels, dimension, activate_layer=nn.ReLU, norm='batch', padding_mode='zeros', res_in_block=True,
+                 kernel_size=3, stride=1, padding=1):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         ConvXd = nn.Conv2d if dimension == 2 else nn.Conv3d
@@ -14,10 +15,10 @@ class ConvBlock(nn.Module):
         else:
             raise NotImplementedError('Unsupported norm type')
         self.conv_block = nn.Sequential(
-            ConvXd(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True, padding_mode=padding_mode),
+            ConvXd(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True, padding_mode=padding_mode),
             NormXd(out_channels),
             activate_layer(inplace=True),
-            ConvXd(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True, padding_mode=padding_mode),
+            ConvXd(out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True, padding_mode=padding_mode),
             NormXd(out_channels),
             )
         self.conv_final_activate = activate_layer(inplace=True)
