@@ -943,9 +943,7 @@ class TensorMisc:
             raise TypeError(f'Unknown type: {type(data)}')
         
     class NotToCudaList(UserList):
-        @property
-        def not_to_cuda(self):
-            return True
+        not_to_cuda = True
         
     class GradCollector:
         def __init__(self, x: torch.Tensor):

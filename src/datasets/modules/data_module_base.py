@@ -64,18 +64,21 @@ class DataModuleBase:
         """
         batch = dict()
         for k, v in data[0].items():
-            if isinstance(v, torch.Tensor):
-                # every d in data, get d[k]: Tensor to form a list, then stack them as batched Tensor 
-                batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
-            elif isinstance(v, str):
-                # every d in data, get d[k]: str to form a list
-                batch[k] = TensorMisc.NotToCudaList(map(lambda d: d[k], data))
-            elif isinstance(v, dict):
+            if isinstance(v, dict):
+                # recursion
                 batch[k] = DataModuleBase.collate_fn(list(map(lambda d: d[k], data)))
-            elif isinstance(v, (int, float, bool)):
-                batch[k] = torch.as_tensor(list(map(lambda d: d[k], data)))
+            elif isinstance(v, torch.Tensor):
+                # every d in data, get d[k]: Tensor to form a list, then stack them as a batched Tensor
+                batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
             elif isinstance(v, np.ndarray):
+                # every d in data, get d[k]: ndarray to form a list of Tensors, then stack them as a batched Tensor
                 batch[k] = torch.stack(list(map(lambda d: torch.as_tensor(d[k]), data)), dim=0)
+            elif isinstance(v, (int, float, bool)):
+                # every d in data, get d[k]: (int, float, bool) to form a batched Tensor
+                batch[k] = torch.as_tensor(list(map(lambda d: d[k], data)))
+            elif isinstance(v, str):
+                # every d in data, get d[k]: str to form a list, which will not be on cuda later
+                batch[k] = TensorMisc.NotToCudaList(map(lambda d: d[k], data))
             else:
                 raise NotImplementedError(f'collate_fn not implemented for {type(v)}')
                 
