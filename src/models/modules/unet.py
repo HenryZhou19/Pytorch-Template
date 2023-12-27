@@ -13,19 +13,20 @@ class ConvBlock(nn.Module):
         elif norm == 'instance':
             NormXd = nn.InstanceNorm2d if dimension == 2 else nn.InstanceNorm3d
         else:
+            # XXX: if using other norm modules, bias may be needed in ConvXd
             raise NotImplementedError('Unsupported norm type')
         self.conv_block = nn.Sequential(
-            ConvXd(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True, padding_mode=padding_mode),
+            ConvXd(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False, padding_mode=padding_mode),
             NormXd(out_channels),
             activate_layer(inplace=True),
-            ConvXd(out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True, padding_mode=padding_mode),
+            ConvXd(out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False, padding_mode=padding_mode),
             NormXd(out_channels),
             )
         self.conv_final_activate = activate_layer(inplace=True)
         self.res_in_block = res_in_block
         if self.res_in_block:
             self.conv_res = nn.Sequential(
-                ConvXd(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=True),
+                ConvXd(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False),
                 NormXd(out_channels),
                 )
 
@@ -101,10 +102,10 @@ class UNetXd(nn.Module):
 
         self.in_conv = ConvBlock(in_channels, layer_out_channels[0], dimension, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
-            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], dimension, padding_mode) for i in range(len(layer_out_channels) - 1)
+            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], dimension, padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
         ])
         self.up_layers = nn.ModuleList([
-            UpSampling(layer_out_channels[i], layer_out_channels[i - 1], layer_out_channels[i - 1], dimension, use_conv_transpose, padding_mode) for i in range(len(layer_out_channels) - 1, 0, -1)
+            UpSampling(layer_out_channels[i], layer_out_channels[i - 1], layer_out_channels[i - 1], dimension, use_conv_transpose, padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1, 0, -1)
         ])
         self.out_conv = LastConv(layer_out_channels[0], final_out_channels, dimension)
 
@@ -125,7 +126,7 @@ class UNetXd(nn.Module):
 
 
 class TimeUpscaleUNet3d(nn.Module):
-    def __init__(self, in_channels, up_scale=4, layer_out_channels=[64, 128, 256], final_out_channels=None, use_conv_transpose=False, padding_mode='replicate', res_in_block=True):
+    def __init__(self, in_channels, up_scale=4, layer_out_channels=[64, 128, 256], final_out_channels=None, use_conv_transpose=False, padding_mode='zeros', res_in_block=True):
         super().__init__()
         assert 2 ** (len(layer_out_channels) - 1) == up_scale, 'up_scale must be 2 ** (len(layer_out_channels) - 1)'
         kernel_size = (2, 1, 1)
@@ -136,7 +137,7 @@ class TimeUpscaleUNet3d(nn.Module):
 
         self.in_conv = ConvBlock(in_channels, layer_out_channels[0], 3, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
-            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode, no_down_dim=2) for i in range(len(layer_out_channels) - 1)
+            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode, no_down_dim=2, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
         ])
         self.special_up = nn.ModuleList([
             nn.ConvTranspose3d(layer_out_channels[i],
@@ -146,7 +147,7 @@ class TimeUpscaleUNet3d(nn.Module):
                             ) for i in range(len(layer_out_channels) - 1)
         ])
         self.up_layers = nn.ModuleList([
-            UpSampling(layer_out_channels[i], layer_out_channels[i - 1], layer_out_channels[i - 1], 3, use_conv_transpose, padding_mode) for i in range(len(layer_out_channels) - 1, 0, -1)
+            UpSampling(layer_out_channels[i], layer_out_channels[i - 1], layer_out_channels[i - 1], 3, use_conv_transpose, padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1, 0, -1)
         ])
         self.out_conv = LastConv(layer_out_channels[0], final_out_channels, 3)
 
@@ -169,7 +170,7 @@ class TimeUpscaleUNet3d(nn.Module):
     
 
 class TimeDownscaleUNet3d(nn.Module):
-    def __init__(self, in_channels, down_scale=4, layer_out_channels=[64, 128, 256], final_out_channels=None, use_conv_transpose=False, padding_mode='replicate', res_in_block=True):
+    def __init__(self, in_channels, down_scale=4, layer_out_channels=[64, 128, 256], final_out_channels=None, use_conv_transpose=False, padding_mode='zeros', res_in_block=True):
         super().__init__()
         assert 2 ** (len(layer_out_channels) - 1) == down_scale, 'down_scale must be 2 ** (len(layer_out_channels) - 1)'
         kernel_size = (2, 1, 1)
@@ -180,7 +181,7 @@ class TimeDownscaleUNet3d(nn.Module):
 
         self.in_conv = ConvBlock(in_channels, layer_out_channels[0], 3, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
-            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode) for i in range(len(layer_out_channels) - 1)
+            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
         ])
         self.special_down = nn.ModuleList([
             nn.MaxPool3d(
@@ -188,7 +189,7 @@ class TimeDownscaleUNet3d(nn.Module):
                 stride=tuple((torch.tensor(stride) ** (len(layer_out_channels) - 1 - i)).tolist())) for i in range(len(layer_out_channels) - 1)
         ])
         self.up_layers = nn.ModuleList([
-            UpSampling(layer_out_channels[i], layer_out_channels[i - 1], layer_out_channels[i - 1], 3, use_conv_transpose, padding_mode, no_up_dim=2) for i in range(len(layer_out_channels) - 1, 0, -1)
+            UpSampling(layer_out_channels[i], layer_out_channels[i - 1], layer_out_channels[i - 1], 3, use_conv_transpose, padding_mode, no_up_dim=2, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1, 0, -1)
         ])
         self.out_conv = LastConv(layer_out_channels[0], final_out_channels, 3)
 
