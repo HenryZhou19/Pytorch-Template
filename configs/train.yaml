@@ -11,6 +11,7 @@ info:
 data:
   dataset: simple
   batch_size_per_rank: 32
+  sync_lr_with_batch_size: 0  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks] / sync_lr_with_batch_size)
   split_rate: 0.8
 
 architecture: simple
@@ -32,7 +33,6 @@ trainer:
   optimizer:
     optimizer_choice: adamw  # adamw, sgd
     sgd_momentum: 0.9
-    sync_lr_with_batch_size: 0  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_of_all_ranks / sync_lr_with_batch_size)
     lr_default: 4.0e-4
     wd_default: 1.0e-2
     # param_groups:
