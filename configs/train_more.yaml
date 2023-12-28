@@ -1,5 +1,5 @@
 config:  # main config (in this file) overrides additional configs
-  additional: [shared, env_default_train]  # add additional config file names, e.g. [shared, env_default] --- the order matters (later ones overwrite previous ones)
+  additional: [default_shared, default_train]  # add additional config file names, e.g. [shared, env_default] --- the order matters (later ones overwrite previous ones)
 
 special:
   extra_name: template  # null for no extra name
