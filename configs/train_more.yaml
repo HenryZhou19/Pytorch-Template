@@ -11,6 +11,7 @@ info:
 data:
   dataset: mnist
   batch_size_per_rank: 64
+  sync_lr_with_batch_size: 64  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks] / sync_lr_with_batch_size)
   split_rate: 0.8
 
 architecture: mnist_lenet
@@ -32,7 +33,6 @@ trainer:
   optimizer:
     optimizer_choice: sgd  # adamw, sgd
     sgd_momentum: 0.9
-    sync_lr_with_batch_size: 64  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_of_all_ranks / sync_lr_with_batch_size)
     lr_default: 1.0e-2
     wd_default: 1.0e-2
     param_groups:
