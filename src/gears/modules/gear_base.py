@@ -184,7 +184,7 @@ class TrainerBase:
             
         return outputs, loss, metrics_dict
     
-    def backward_and_step(self, loss: torch.tensor):       
+    def backward_and_step(self, loss: torch.Tensor):       
         def _backward():
             if self.scaler is not None:
                 self.scaler.scale(loss).backward()
