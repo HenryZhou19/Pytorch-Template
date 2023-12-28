@@ -54,7 +54,7 @@ def train_run(cfg, loggers):
         
         trainer.after_training_before_validation()
 
-        if DistMisc.is_main_process() or cfg.trainer.dist_eval:
+        if cfg.trainer.dist_eval or DistMisc.is_main_process():
             evaluate(trainer)
 
         trainer.after_validation()
