@@ -304,10 +304,11 @@ class PortalMisc:
         if not ConfigMisc.is_inference(cfg):  # only for train
             if cfg.trainer.optimizer.sync_lr_with_batch_size > 0:
                 cfg.trainer.optimizer.lr_default *= float(cfg.data.batch_size_total) / cfg.trainer.optimizer.sync_lr_with_batch_size
-                lr_mark = 'lr_'
-                for k, v in vars(cfg.trainer.optimizer.param_groups).items():
-                    if k.startswith(lr_mark):
-                        setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.data.batch_size_total) / cfg.trainer.optimizer.sync_lr_with_batch_size)
+                if hasattr(cfg.trainer.optimizer, 'param_groups'):
+                    lr_mark = 'lr_'
+                    for k, v in vars(cfg.trainer.optimizer.param_groups).items():
+                        if k.startswith(lr_mark):
+                            setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.data.batch_size_total) / cfg.trainer.optimizer.sync_lr_with_batch_size)
 
     @staticmethod
     def save_configs(cfg):
