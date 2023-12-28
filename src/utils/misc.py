@@ -300,6 +300,14 @@ class PortalMisc:
             warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
         cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
         cfg.info.batch_info = f'{cfg.data.batch_size_total}={cfg.data.batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
+        
+        if not ConfigMisc.is_inference(cfg):  # only for train
+            if cfg.trainer.optimizer.sync_lr_with_batch_size > 0:
+                cfg.trainer.optimizer.lr_default *= float(cfg.data.batch_size_total) / cfg.trainer.optimizer.sync_lr_with_batch_size
+                lr_mark = 'lr_'
+                for k, v in vars(cfg.trainer.optimizer.param_groups).items():
+                    if k.startswith(lr_mark):
+                        setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.data.batch_size_total) / cfg.trainer.optimizer.sync_lr_with_batch_size)
 
     @staticmethod
     def save_configs(cfg):

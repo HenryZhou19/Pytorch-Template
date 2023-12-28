@@ -32,13 +32,14 @@ trainer:
   optimizer:
     optimizer_choice: sgd  # adamw, sgd
     sgd_momentum: 0.9
+    sync_lr_with_batch_size: 64  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_of_all_ranks / sync_lr_with_batch_size)
     lr_default: 1.0e-2
     wd_default: 1.0e-2
-    # param_groups:
-    #   lr_backbone: 4.0e-4
-    #   wd_backbone: 1.0e-2
-    #   lr_head: 1.0e-4
-    #   wd_head: 1.0e-4
+    param_groups:
+      lr_backbone: 4.0e-4
+      wd_backbone: 1.0e-2
+      lr_head: 1.0e-4
+      wd_head: 1.0e-4
   scheduler:
     scheduler_choice: multistep  # multistep, cosine, linear
     lr_min: 0.0
