@@ -28,13 +28,11 @@ __all__ = [
     'PortalMisc',
     'DistMisc',
     'ModelMisc',
-    'OptimizerMisc',
-    'SchedulerMisc',
     'LoggerMisc',
     'SweepMisc',
     'TensorMisc',
     'ImportMisc',
-    'TimeMisc'
+    'TimeMisc',
     ]
 
 class ConfigMisc:
@@ -687,120 +685,6 @@ class ModelMisc:
                 setattr(module, name, nn.InstanceNorm1d(child.num_features))
             else:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
-
-
-class OptimizerMisc:
-    @staticmethod
-    def _get_param_dicts_with_specific_lr_wd(cfg, model_without_ddp: torch.nn.Module):
-        def match_param_groups(param_name, param_group_names):
-            flag = False
-            param_group_name = 'default'
-            for lr_group_name in param_group_names:
-                if lr_group_name in param_name:
-                    assert not flag, f'Name {param_name} matches multiple param_group names in {param_group_names}.'
-                    flag = True
-                    param_group_name = lr_group_name
-            return param_group_name
-
-        if hasattr(cfg.trainer.optimizer, 'param_groups'):
-            lr_mark = 'lr_'
-            wd_mark = 'wd_'
-            param_groups = {
-                'default': {
-                    'params': [],
-                    'lr': cfg.trainer.optimizer.lr_default,
-                    'weight_decay': cfg.trainer.optimizer.wd_default,
-                }
-            }
-            for k, v in vars(cfg.trainer.optimizer.param_groups).items():
-                assert k.startswith(lr_mark) or k.startswith(wd_mark), f'Unknown param_groups config: {k}'
-                if k.startswith(lr_mark): 
-                    param_groups[k[len(lr_mark):]] = {
-                        'params': [],
-                        'lr': v,
-                        'weight_decay': getattr(cfg.trainer.optimizer.param_groups, k.replace(lr_mark, wd_mark)),
-                        }
-            for n, p in model_without_ddp.named_parameters():
-                if p.requires_grad:
-                    param_groups[match_param_groups(n, param_groups.keys())]['params'].append(p)
-
-            param_dicts_with_lr_wd = []
-            for k, v in param_groups.items():
-                param_dicts_with_lr_wd.append({
-                    **v,
-                    'group_name': k
-                    })
-        else:  # if no cfg.optimizer.param_groups, then all params use 'default' config
-            param_dicts_with_lr_wd = [{
-                'params': [p for _, p in model_without_ddp.named_parameters()
-                            if p.requires_grad],
-                'lr': cfg.trainer.optimizer.lr_default,
-                'weight_decay': cfg.trainer.optimizer.wd_default,
-                'group_name': 'default'
-                }]
-        
-        return param_dicts_with_lr_wd
-    
-    @staticmethod
-    def get_optimizer(cfg, model_without_ddp) -> tuple[torch.optim.Optimizer, torch.cuda.amp.GradScaler]:
-        param_dicts_with_lr_wd = OptimizerMisc._get_param_dicts_with_specific_lr_wd(cfg, model_without_ddp)
-        if cfg.trainer.optimizer.optimizer_choice == 'adamw':
-            optimizer = torch.optim.AdamW(param_dicts_with_lr_wd)
-        elif cfg.trainer.optimizer.optimizer_choice == 'sgd':
-            optimizer = torch.optim.SGD(param_dicts_with_lr_wd, momentum=cfg.trainer.optimizer.sgd_momentum)
-        else:
-            raise ValueError(f'Unknown optimizer choice: {cfg.trainer.optimizer.optimizer_choice}')
-        
-        scaler = torch.cuda.amp.GradScaler() if cfg.env.amp and cfg.env.device=='cuda' else None
-        
-        return optimizer, scaler
-
-
-class SchedulerMisc:   
-    @staticmethod
-    def get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader) -> torch.optim.lr_scheduler._LRScheduler:
-        from .scheduler.warmup_scheduler import (WarmUpCosineAnnealingLR,
-                                                 WarmupLinearLR, WarmUpLR,
-                                                 WarmupMultiStepLR)
-        
-        len_train_loader = len(train_loader)
-        if cfg.trainer.scheduler.warmup_steps >= 0:
-            warmup_iters = cfg.trainer.scheduler.warmup_steps
-        elif cfg.trainer.scheduler.warmup_epochs >= 0:
-            warmup_iters = cfg.trainer.scheduler.warmup_epochs * len_train_loader
-        else:
-            warmup_iters = 0
-            
-        kwargs = {
-            'optimizer': optimizer,
-            'scaler': scaler,
-            'do_grad_accumulation': cfg.trainer.grad_accumulation > 1,
-            'T_max': cfg.trainer.epochs * len_train_loader,
-            'T_warmup': warmup_iters,
-            'warmup_factor': cfg.trainer.scheduler.warmup_factor,
-            'lr_min': cfg.trainer.scheduler.lr_min,
-        }
-        if cfg.trainer.scheduler.scheduler_choice == 'vanilla':
-            kwargs.pop('lr_min')
-            return WarmUpLR(**kwargs) 
-        elif cfg.trainer.scheduler.scheduler_choice == 'cosine':
-            return WarmUpCosineAnnealingLR(**kwargs)
-        elif cfg.trainer.scheduler.scheduler_choice == 'linear':
-            return WarmupLinearLR(**kwargs)
-        elif cfg.trainer.scheduler.scheduler_choice == 'multistep':
-            if cfg.trainer.scheduler.lr_milestones_steps is not None:
-                step_milestones = cfg.trainer.scheduler.lr_milestones_steps
-            elif cfg.trainer.scheduler.lr_milestones_epochs is not None:
-                step_milestones = [len_train_loader * lr_milestones_epoch for lr_milestones_epoch in cfg.trainer.scheduler.lr_milestones_epochs]
-            else:
-                raise ValueError('lr_milestones_steps and lr_milestones_epochs cannot be both None.')
-            kwargs.update({
-                'step_milestones': step_milestones,
-                'gamma': cfg.trainer.scheduler.lr_decay_gamma,
-            })
-            return WarmupMultiStepLR(**kwargs)
-        else:
-            raise ValueError(f'Unknown scheduler choice: {cfg.trainer.scheduler.scheduler_choice}')
 
 
 class LoggerMisc:

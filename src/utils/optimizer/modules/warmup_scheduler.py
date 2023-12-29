@@ -6,6 +6,12 @@ from typing import List
 
 from torch.optim.lr_scheduler import _LRScheduler
 
+__all__ = [
+    'WarmUpLR',
+    'WarmUpCosineAnnealingLR',
+    'WarmupLinearLR',
+    'WarmupMultiStepLR',
+    ]
 
 class _AmpStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` before `optimizer.step()`' warning when use amp or grad_accumulation
     @staticmethod

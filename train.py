@@ -3,8 +3,9 @@ from src.datasets import DataManager
 from src.engine import evaluate, train_one_epoch
 from src.gears import GearManager
 from src.models import ModelManager
-from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, OptimizerMisc,
-                            PortalMisc, SchedulerMisc, SweepMisc, TimeMisc)
+from src.utils.misc import (ConfigMisc, DistMisc, ModelMisc, PortalMisc,
+                            SweepMisc, TimeMisc)
+from src.utils.optimizer import OptimizerUtils, SchedulerUtils
 
 
 def train_run(cfg, loggers):
@@ -24,10 +25,10 @@ def train_run(cfg, loggers):
     criterion = criterion_manager.build_criterion()
 
     # prepare for optimizer and scaler (cuda auto mixed precision(amp)) if needed
-    optimizer, scaler = OptimizerMisc.get_optimizer(cfg, model_without_ddp)
+    optimizer, scaler = OptimizerUtils.get_optimizer(cfg, model_without_ddp)
 
     # prepare for lr_scheduler
-    lr_scheduler = SchedulerMisc.get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader)
+    lr_scheduler = SchedulerUtils.get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader)
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
