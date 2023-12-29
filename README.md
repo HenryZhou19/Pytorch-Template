@@ -10,7 +10,9 @@ A simple template for Pytorch projects.
 
 ## Introduction to files & folders in this repo
 ### configs
-* the folder for "xxx.yaml" files, each of which contains all configs for train or inference in a certain setting
+* the folder for "xxx.yaml" files
+    * some contains main configs for train or inference in a certain setting
+    * others are used as inheritances specified by "config.additional" in main yaml files
 * most of the things can be configured easily in "xxx.yaml" files
 
 ### data
@@ -56,5 +58,5 @@ A simple template for Pytorch projects.
     * "with TimeMisc.TimerContext(block_name):..." shows the time it takes to execute a particular block of code
     * ……
 #### engine.py
-* implement the main loop of the dataloader in train_one_epoch / evaluate / test
+* implementation of the main loop of the dataloader in train_one_epoch / evaluate / test
 
