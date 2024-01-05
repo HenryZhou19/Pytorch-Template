@@ -32,13 +32,13 @@ class ModelBase(nn.Module):
             return func(*args, **kwargs)
     
     @staticmethod
-    def _custom_init(module, bias=0., std=0.02):
+    def _custom_init(module, std=0.02):
         if isinstance(module, nn.modules.conv._ConvNd):
-            nn.init.normal_(module.weight)
+            nn.init.normal_(module.weight, 0.0, std)
             if module.bias is not None:
                 nn.init.constant_(module.bias, 0)
         elif isinstance(module, nn.Linear):
-            nn.init.normal_(module.weight)
+            nn.init.normal_(module.weight, 0.0, std)
             if module.bias is not None:
                 nn.init.constant_(module.bias, 0)
         elif isinstance(module, nn.Embedding):
@@ -52,8 +52,8 @@ class ModelBase(nn.Module):
             nn.init.constant_(module.weight, 1)
             nn.init.constant_(module.bias, 0)
             
-    def _custom_init_all(self, init_std=0.02):
-        self.apply(partial(self._custom_init, init_std=init_std))
+    def _custom_init_all(self, std=0.02):
+        self.apply(partial(self._custom_init, std=std))
         
     def forward(self, inputs: dict) -> dict:
         raise NotImplementedError
