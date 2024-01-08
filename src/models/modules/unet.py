@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, dimension, activate_layer=nn.ReLU, norm='batch', padding_mode='zeros', res_in_block=True,
+    def __init__(self, in_channels, out_channels, dimension, activation_layer=nn.SiLU, norm='batch', padding_mode='zeros', res_in_block=True,
                  kernel_size=3, stride=1, padding=1):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
@@ -18,11 +18,11 @@ class ConvBlock(nn.Module):
         self.conv_block = nn.Sequential(
             ConvXd(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False, padding_mode=padding_mode),
             NormXd(out_channels),
-            activate_layer(inplace=True),
+            activation_layer(inplace=True),
             ConvXd(out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False, padding_mode=padding_mode),
             NormXd(out_channels),
             )
-        self.conv_final_activate = activate_layer(inplace=True)
+        self.conv_final_activation = activation_layer(inplace=True)
         self.res_in_block = res_in_block
         if self.res_in_block:
             self.conv_res = nn.Sequential(
@@ -31,7 +31,7 @@ class ConvBlock(nn.Module):
                 )
 
     def forward(self, x):
-        x = self.conv_final_activate(self.conv_res(x) + self.conv_block(x)) if self.res_in_block else self.conv_final_activate(self.conv_block(x))
+        x = self.conv_final_activation(self.conv_res(x) + self.conv_block(x)) if self.res_in_block else self.conv_final_activation(self.conv_block(x))
         return x
 
 
