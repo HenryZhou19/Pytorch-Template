@@ -3,49 +3,54 @@ from torch.nn import functional as F
 
 
 class ResNetBasicBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride):
+    def __init__(self, in_channels, out_channels, stride, activation_layer=nn.SiLU):
         super(ResNetBasicBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        self.ac1 = activation_layer(inplace=True)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        self.ac2 = activation_layer(inplace=True)
 
     def forward(self, x):
         output = self.conv1(x)
-        output = F.relu(self.bn1(output))
+        output = self.ac1(self.bn1(output))
         output = self.conv2(output)
         output = self.bn2(output)
-        return F.relu(x + output)
+        return self.ac2(x + output)
 
 
 class ResNetDownBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride):
+    def __init__(self, in_channels, out_channels, stride, activation_layer=nn.SiLU):
         super(ResNetDownBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride[0], padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        self.ac1 = activation_layer(inplace=True)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=stride[1], padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
         self.downsample = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride[0], padding=0, bias=False),
             nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
         )
+        self.ac2 = activation_layer(inplace=True)
 
     def forward(self, x):
         downsampled_x = self.downsample(x)
         output = self.conv1(x)
-        output = F.relu(self.bn1(output))
+        output = self.ac1(self.bn1(output))
 
         output = self.conv2(output)
         output = self.bn2(output)
-        return F.relu(downsampled_x + output)
+        return self.ac2(downsampled_x + output)
     
     
 class ResNet18(nn.Module):
-    def __init__(self, pretrained_weight=False):
+    def __init__(self, pretrained_weight=False, activation_layer=nn.SiLU):
         super().__init__()
         
         self.conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         self.bn1 = nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        self.ac1 = activation_layer(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
 
         self.layer1 = nn.Sequential(
@@ -75,7 +80,7 @@ class ResNet18(nn.Module):
             self.load_state_dict(torchvision.models.ResNet18_Weights.IMAGENET1K_V1.get_state_dict(progress=True), strict=True)
 
     def forward(self, x):
-        x = self.maxpool(F.relu(self.bn1(self.conv1(x))))
+        x = self.maxpool(self.ac1(self.bn1(self.conv1(x))))
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -86,12 +91,12 @@ class ResNet18(nn.Module):
     
 
 class ResNet18WithoutFC(nn.Module):
-    def __init__(self, out=nn.AdaptiveAvgPool2d, pretrained_weight=False):
+    def __init__(self, out=nn.AdaptiveAvgPool2d, pretrained_weight=False, activation_layer=nn.SiLU):
         super().__init__()
         
         self.conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         self.bn1 = nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.relu = nn.ReLU(inplace=True)
+        self.ac1 = activation_layer(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
 
         self.layer1 = nn.Sequential(
@@ -121,7 +126,7 @@ class ResNet18WithoutFC(nn.Module):
             self.load_state_dict(torchvision.models.ResNet18_Weights.IMAGENET1K_V1.get_state_dict(progress=True), strict=False)
 
     def forward(self, x):
-        x = self.maxpool(F.relu(self.bn1(self.conv1(x))))
+        x = self.maxpool(self.ac1(self.bn1(self.conv1(x))))
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)

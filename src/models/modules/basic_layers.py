@@ -5,14 +5,15 @@ from torch import nn
 
 
 class MLP(nn.Module):
-    def __init__(self, in_channel: int, out_channels: list, activate_layer: nn.Module=nn.GELU, dropout=0.0) -> None:
+    def __init__(self, in_channel: int, out_channels: list, activation_layer: nn.Module=nn.GELU, dropout=0.0, final_activation=False) -> None:
         super().__init__()
         self.mlp = nn.Sequential()
         for idx, out_channel in enumerate(out_channels):
             self.mlp.append(nn.Linear(in_channel, out_channel))
-            if idx < len(out_channels) - 1:
-                self.mlp.append(activate_layer())
-            self.mlp.append(nn.Dropout(dropout))
+            if idx < len(out_channels) - 1 or final_activation:
+                self.mlp.append(activation_layer())
+            if dropout > 0.0:
+                self.mlp.append(nn.Dropout(dropout))
             in_channel = out_channel
         self.out_channel = out_channels[-1]
 
