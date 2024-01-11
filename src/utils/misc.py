@@ -785,10 +785,8 @@ class LoggerMisc:
             if 'wandb' in p.name():
                 wandb_pid_list.append(p.pid)
                 if kill_all:
-                    import subprocess
-                    bash_command = f'sleep {kill_wait_time} && pid_to_kill={p.pid} && [ -n "$(ps -p $pid_to_kill -o pid=)" ] && kill -9 $pid_to_kill'
-                    subprocess.Popen(bash_command, shell=True)
-                    print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) will be killed in {kill_wait_time} seconds.', s='#'))
+                    os.kill(p.pid, signal.SIGTERM)
+                    print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running.', s='#'))
         return wandb_pid_list
 
 
