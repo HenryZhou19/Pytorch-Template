@@ -62,6 +62,8 @@ class TrainerBase:
         self.is_train = True
         
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
+        self.checkpoint_save_interval = self.cfg.trainer.checkpoint_save_interval
+        self.checkpoint_reserve_interval = self.cfg.trainer.checkpoint_save_interval * self.cfg.trainer.checkpoint_reserve_factor
     
     def _get_pbar(self):
         # called in "before_all_epochs"
@@ -106,7 +108,7 @@ class TrainerBase:
             self.best_metrics = checkpoint.get('best_metrics', {})
             self.metrics = checkpoint.get('last_metrics', {})
             self.train_iters = checkpoint['epoch'] * self.train_len
-            self.epoch = self.start_epoch - 1
+            self.epoch = self.start_epoch - 1  # will be the same as {checkpoint['epoch'] + 1} by doing '+1' in "before_one_epoch"
         else:
             print(LoggerMisc.block_wrapper('New trainer.', '>'))
         print(f'Start from epoch: {self.start_epoch}')
@@ -135,7 +137,7 @@ class TrainerBase:
                 else:
                     torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
 
-            if (self.epoch + 1) % self.cfg.trainer.save_interval == 0:
+            if self.epoch % self.checkpoint_save_interval == 0:
                 save_files.update({
                     'optimizer': self.optimizer.state_dict(),
                     'lr_scheduler': self.lr_scheduler.state_dict(),
@@ -146,12 +148,13 @@ class TrainerBase:
                         'scaler': self.scaler.state_dict()
                     })
                 last = glob(os.path.join(self.cfg.info.work_dir, 'checkpoint_last_epoch_*.pth'))
-                assert len(last) <= 1
-                if len(last) == 1:
-                    torch.save(save_files, last[0])
-                    os.rename(last[0], os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
-                else:
+                last_saved_epoch = max([int(os.path.basename(path).split('_')[-1].split('.')[0]) for path in last] + [0])
+                if last_saved_epoch == 0 or (self.checkpoint_reserve_interval > 0 and last_saved_epoch % self.checkpoint_reserve_interval == 0):
                     torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
+                else:
+                    last_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{last_saved_epoch}.pth')
+                    torch.save(save_files, last_path)
+                    os.rename(last_path, os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
                     
     def _train_mode(self):
         # called in "before_one_epoch"

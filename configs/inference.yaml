@@ -5,7 +5,6 @@ data:
   batch_size_per_rank: 1
 
 tester:
-  tester_breath_time: 0.0
   tester_choice: default
   use_best: True
   checkpoint_path: TBD
