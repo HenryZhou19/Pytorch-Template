@@ -70,6 +70,9 @@ def train_portal(cfg):
     assert hasattr(cfg, 'info'), 'config field "cfg.info" not found'
     setattr(cfg.info, 'start_time', TimeMisc.get_time_str())
     
+    # interrupt handler
+    PortalMisc.interrupt_handler(cfg)
+    
     # special config adjustment (debug)
     PortalMisc.special_config_adjustment(cfg)
     
@@ -87,9 +90,6 @@ def train_portal(cfg):
 
     # init loggers (wandb/tensorboard and local:log_file)
     loggers = PortalMisc.init_loggers(cfg)
-
-    # interrupt handler
-    PortalMisc.interrupt_handler(cfg)
     
     # main trainer
     train_run(cfg, loggers)
