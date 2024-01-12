@@ -687,16 +687,31 @@ class ModelMisc:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
 
     @staticmethod
-    def train_or_freeze_submodules(module, submodule_name_list, trainable: bool, set_submodule_mode: bool = True):
+    def update_or_freeze_submodules(module, submodule_name_list, is_trainable: bool):  # whether to update the parameters of the submodules
+        """
+        Just change the trainable property of submodules' parameters.
+        
+        Some special statistics(e.g. BatchNorm's running mean and variance) are still updated and Dropouts are still working 
+        unless the submodules are set to eval mode by calling ModelMisc.train_or_eval_submodules().
+        
+        """
         for name in submodule_name_list:
             submodule: torch.nn.Module = getattr(module, name)
             for param in submodule.parameters():
-                param.requires_grad = trainable
-            if set_submodule_mode:
-                if trainable:
-                    submodule.train()
-                else:
-                    submodule.eval()
+                param.requires_grad = is_trainable
+    
+    @staticmethod
+    def train_or_eval_submodules(module, submodule_name_list, is_train: bool):
+        """
+        Just change the behavior of some specific submodules (e.g. BatchNorm, Dropout).
+        
+        Gradients of the submodules are still computed (and updated if trainable)
+        unless the submodules are set to untrainable mode by calling ModelMisc.update_or_freeze_submodules().
+        
+        """
+        for name in submodule_name_list:
+            submodule: torch.nn.Module = getattr(module, name)
+            submodule.train() if is_train else submodule.eval()
         
 
 class LoggerMisc:
