@@ -51,6 +51,10 @@ while [[ $# -gt 0 ]]; do
       numexpr_num_threads="$2"
       shift 2
       ;;
+    -e|-extra_name)
+      extra_name="$2"
+      shift 2
+      ;;
     *)
       if [[ $1 == config=* ]]; then
         value="${1#config=}"
@@ -63,6 +67,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 params="config.main=$main_config_file_name $params"
+if [[ $extra_name != "" ]]; then
+  params+="special.extra_name=$extra_name"
+fi
 
 current_time=$(date +%s)
 new_time=$((current_time + seconds_to_wait))
