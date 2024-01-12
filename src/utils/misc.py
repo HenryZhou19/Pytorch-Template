@@ -686,6 +686,18 @@ class ModelMisc:
             else:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
 
+    @staticmethod
+    def train_or_freeze_submodules(module, submodule_name_list, trainable: bool, set_submodule_mode: bool = True):
+        for name in submodule_name_list:
+            submodule: torch.nn.Module = getattr(module, name)
+            for param in submodule.parameters():
+                param.requires_grad = trainable
+            if set_submodule_mode:
+                if trainable:
+                    submodule.train()
+                else:
+                    submodule.eval()
+        
 
 class LoggerMisc:
     class MultiTQDM:
