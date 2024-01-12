@@ -58,9 +58,8 @@ class DataModuleBase:
                         }
                     }
                 [1] ...
-                ), len(data) = batch_size
-        AcceptableType:
-            torch.Tensor, str
+                ), len(data) = batch_size       
+        which means the '__getitem__' of dataset should return a dict, whose values are AcceptableType
         """
         batch = dict()
         for k, v in data[0].items():
