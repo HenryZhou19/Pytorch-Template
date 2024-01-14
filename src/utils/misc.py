@@ -707,7 +707,7 @@ class ModelMisc:
                     param.requires_grad = is_trainable
     
     @staticmethod
-    def train_or_eval_submodules(module, submodule_name_list, is_train: bool, strict=True):
+    def train_or_eval_submodules(module, submodule_name_list, is_train: bool, strict=False):
         """
         Just change the behavior of some specific submodules (e.g. BatchNorm, Dropout).
         
