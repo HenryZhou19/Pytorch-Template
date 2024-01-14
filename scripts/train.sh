@@ -68,7 +68,7 @@ while [[ $# -gt 0 ]]; do
 done
 params="config.main=$main_config_file_name $params"
 if [[ $extra_name != "" ]]; then
-  params+="special.extra_name=$extra_name"
+  params+=" special.extra_name=$extra_name"
 fi
 
 current_time=$(date +%s)
