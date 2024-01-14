@@ -687,7 +687,7 @@ class ModelMisc:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
 
     @staticmethod
-    def update_or_freeze_submodules(module, submodule_name_list, is_trainable: bool):  # whether to update the parameters of the submodules
+    def update_or_freeze_submodules(module, submodule_name_list, is_trainable: bool, strict=False):  # whether to update the parameters of the submodules
         """
         Just change the trainable property of submodules' parameters.
         
@@ -696,12 +696,18 @@ class ModelMisc:
         
         """
         for name in submodule_name_list:
-            submodule: torch.nn.Module = getattr(module, name)
-            for param in submodule.parameters():
-                param.requires_grad = is_trainable
+            submodule: torch.nn.Module = getattr(module, name, 'None')
+            if submodule == 'None':
+                if strict:
+                    raise ValueError(f'Cannot find submodule "{name}" in {module.__class__.__name__}.')
+                else:
+                    warnings.warn(f'Cannot find submodule "{name}" in {module.__class__.__name__}.')
+            else:
+                for param in submodule.parameters():
+                    param.requires_grad = is_trainable
     
     @staticmethod
-    def train_or_eval_submodules(module, submodule_name_list, is_train: bool):
+    def train_or_eval_submodules(module, submodule_name_list, is_train: bool, strict=True):
         """
         Just change the behavior of some specific submodules (e.g. BatchNorm, Dropout).
         
@@ -710,8 +716,14 @@ class ModelMisc:
         
         """
         for name in submodule_name_list:
-            submodule: torch.nn.Module = getattr(module, name)
-            submodule.train() if is_train else submodule.eval()
+            submodule: torch.nn.Module = getattr(module, name, 'None')
+            if submodule == 'None':
+                if strict:
+                    raise ValueError(f'Cannot find submodule "{name}" in {module.__class__.__name__}.')
+                else:
+                    warnings.warn(f'Cannot find submodule "{name}" in {module.__class__.__name__}.')
+            else:
+                submodule.train() if is_train else submodule.eval()
         
 
 class LoggerMisc:
