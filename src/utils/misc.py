@@ -861,7 +861,7 @@ class TensorMisc:
     def to(data, device, non_blocking=False):
         if isinstance(data, torch.Tensor):
             return data.to(device, non_blocking=non_blocking)
-        elif getattr(data, 'not_to_cuda', False):
+        elif getattr(data, 'not_to_cuda', False) or isinstance(data, (str, int, float)):
             return data
         elif isinstance(data, tuple):
             return tuple(TensorMisc.to(d, device, non_blocking) for d in data)

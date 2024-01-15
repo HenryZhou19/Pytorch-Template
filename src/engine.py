@@ -1,7 +1,7 @@
 from src.gears import TesterBase, TrainerBase
 from src.utils.misc import LoggerMisc
 from src.utils.progress_logger import MetricLogger
-from src.utils.progress_logger import SmoothedValue as SV
+from src.utils.progress_logger import ValueMeter as VM
 
 
 def train_one_epoch(trainer: TrainerBase):
@@ -16,15 +16,16 @@ def train_one_epoch(trainer: TrainerBase):
         epoch_str=f'epoch: [{trainer.epoch}/{cfg.trainer.epochs}]',
         )
     mlogger.add_meters([{
-        'loss': SV(prior=True),
-        **{lr_group: SV(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', no_sync=True) for lr_group in trainer.lr_groups.keys()},
-        'epoch': SV(window_size=1, no_print=True, no_sync=True)
+        'loss': VM(prior=True),
+        **{lr_group: VM(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', no_sync=True) for lr_group in trainer.lr_groups.keys()},
+        'epoch': VM(window_size=1, no_print=True, no_sync=True)
         }])
     for batch in mlogger.log_every(trainer.train_loader):
         
         _, loss, metrics_dict = trainer.forward(batch)
         
         mlogger.update_meters(
+            sample_count=batch['batch_size'],
             **trainer.lr_groups,
             epoch=trainer.train_iters / trainer.train_len,
             loss=loss,
@@ -51,12 +52,13 @@ def evaluate(trainer: TrainerBase):
         header='Eval ',
         epoch_str=f'epoch: [{trainer.epoch}/{cfg.trainer.epochs}]',
         )
-    mlogger.add_meters([{'loss': SV(prior=True)}])
+    mlogger.add_meters([{'loss': VM(prior=True)}])
     for batch in mlogger.log_every(trainer.val_loader):
         
         _, loss, metrics_dict = trainer.forward(batch)
 
         mlogger.update_meters(
+            sample_count=batch['batch_size'],
             loss=loss,
             **metrics_dict,
         )
@@ -78,7 +80,10 @@ def test(tester: TesterBase):
         
         outputs, _, metrics_dict = tester.forward(batch)
             
-        mlogger.update_meters(**metrics_dict)
+        mlogger.update_meters(
+            sample_count=batch['batch_size'],
+            **metrics_dict,
+            )
         
     mlogger.add_epoch_meters(**tester.criterion.get_epoch_metrics())
     tester.metrics = mlogger.output_dict(sync=True, final_print=True)
