@@ -38,7 +38,7 @@ class _AmpStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` bef
         if scaler is not None:  # wrap scaler.step() to replace the number of optimizer.step() calls
             scaler.step = self.with_counter(scaler.step, is_scaler_step=True)
         if do_grad_accumulation:  # just avoid the warning when use grad_accumulation
-            optimizer._step_count == 1
+            optimizer._step_count = 1
 
 
 class WarmUpLR(_AmpStepLR):
