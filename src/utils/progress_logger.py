@@ -10,7 +10,7 @@ import torch.distributed as dist
 from .misc import ConfigMisc, DistMisc, LoggerMisc, TimeMisc
 
 
-class SmoothedValue(object):
+class ValueMeter(object):
     def __init__(self, window_size=None, format=None, final_format=None, prior=False, no_print=False, no_sync=False):
         if format is None:  # show current value and average when running
             format = '{value:.4f} ({avg:.4f})'
@@ -18,7 +18,7 @@ class SmoothedValue(object):
             final_format = '({avg:.4f} ± {std:.4f}) [{min:.4f}, {max:.4f}]'
         self.value_now = 0.0
         self.deque = deque(maxlen=window_size)
-        self.count = 0
+        self.sample_count = 0
         self.total = 0.0
         self.format = format
         self.final_format = final_format
@@ -27,17 +27,17 @@ class SmoothedValue(object):
         self.require_sync = not no_sync
         self.synced = False
 
-    def append_one_value(self, value):
-        # assert n==1, 'n != 1 is not supported yet.'
+    def append_one_value(self, value, sample_count=1):
+        # maybe the mean of one batch, so sample_count can be larger than 1
         self.deque.append(value)
         self.value_now = value
-        self.count += 1
-        self.total += value
+        self.sample_count += sample_count
+        self.total += value * sample_count
         
     def prepare_sync_meters(self):
         assert not self.synced, 'Meters have been synced.'
         d = torch.as_tensor(list(self.deque), dtype=torch.float64, device='cpu')
-        t = torch.as_tensor([self.count, self.total], dtype=torch.float64, device='cuda')
+        t = torch.as_tensor([self.sample_count, self.total], dtype=torch.float64, device='cuda')
         return d, t
     
     def write_synced_meters(self, d, t):
@@ -45,7 +45,7 @@ class SmoothedValue(object):
         t = t.tolist()
         self.deque.clear()
         self.deque += list(d)
-        self.count = int(t[0])
+        self.sample_count = int(t[0])
         self.total = t[1]
     
     @property
@@ -54,7 +54,7 @@ class SmoothedValue(object):
     
     @property
     def avg(self):
-        return self.total / self.count if self.count > 0 else nan
+        return self.total / self.sample_count if self.sample_count > 0 else nan
     
     @property
     def min(self):
@@ -95,30 +95,30 @@ class MetricLogger(object):
         self.header = header
         self.epoch_str = epoch_str
         
-        self.meters = defaultdict(SmoothedValue)
+        self.meters = defaultdict(ValueMeter)
         self.synced = False
         
     def add_meters(self, meters):
         for meter in meters:
             if isinstance(meter, str):
-                self.meters[meter] = SmoothedValue()
+                self.meters[meter] = ValueMeter()
             elif isinstance(meter, dict):
                 self.meters.update(meter)
 
-    def update_meters(self, **kwargs):
+    def update_meters(self, sample_count=1, **kwargs):
         for k, v in kwargs.items():
             if isinstance(v, (torch.Tensor, np.ndarray)):
                 v = v.item()
             assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
             # self.meters[k] = SmoothedValue()  # as default
-            self.meters[k].append_one_value(v)
+            self.meters[k].append_one_value(v, sample_count)
             
     def add_epoch_meters(self, **kwargs):
         for k, v in kwargs.items():
             if isinstance(v, (torch.Tensor, np.ndarray)):
                 v = v.item()
             assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
-            self.meters[k] = SmoothedValue(
+            self.meters[k] = ValueMeter(
                 window_size=1,
                 format='({value:.4f})',
                 final_format='({value:.4f})',
@@ -177,9 +177,9 @@ class MetricLogger(object):
     def log_every(self, iterable):
         self.iter_len = len(iterable)
 
-        iter_time = SmoothedValue(format='{value:.4f} ({avg:.4f})')
-        data_time = SmoothedValue(format='{value:.4f} ({avg:.4f})')
-        model_time = SmoothedValue(format='{value:.4f} ({avg:.4f})')
+        iter_time = ValueMeter(format='{value:.4f} ({avg:.4f})')
+        data_time = ValueMeter(format='{value:.4f} ({avg:.4f})')
+        model_time = ValueMeter(format='{value:.4f} ({avg:.4f})')
         
         if self.pbar is not None:
             if self.global_tqdm:
@@ -238,7 +238,7 @@ class MetricLogger(object):
             self._synchronize_between_processes()
         if final_print:
             self._final_print(print_time=True, synced=sync)
-
+        
         return_dict = {}         
         if 'all' in no_avg_list:
             return_dict.update({

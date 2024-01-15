@@ -44,7 +44,7 @@ class DataModuleBase:
             raise NotImplementedError(f'Invalid split {split}')
         
     @staticmethod
-    def collate_fn(data):
+    def collate_fn(data, recursion=False):
         """
         AcceptableType: torch.Tensor, str, dict, int, float, bool, np.ndarray
         data: 
@@ -65,7 +65,7 @@ class DataModuleBase:
         for k, v in data[0].items():
             if isinstance(v, dict):
                 # recursion
-                batch[k] = DataModuleBase.collate_fn(list(map(lambda d: d[k], data)))
+                batch[k] = DataModuleBase.collate_fn(list(map(lambda d: d[k], data)), recursion=True)
             elif isinstance(v, torch.Tensor):
                 # every d in data, get d[k]: Tensor to form a list, then stack them as a batched Tensor
                 batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
@@ -80,7 +80,8 @@ class DataModuleBase:
                 batch[k] = TensorMisc.NotToCudaList(map(lambda d: d[k], data))
             else:
                 raise NotImplementedError(f'collate_fn not implemented for {type(v)}')
-                
+        if not recursion:
+            batch['batch_size'] = len(data)
         return batch  # batch: dataloader's output
     
     def get_dataloader(self, split: str):
