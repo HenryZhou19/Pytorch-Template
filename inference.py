@@ -45,11 +45,11 @@ def infer_portal(infer_cfg):
     assert hasattr(infer_cfg, 'info'), 'config field "infer_cfg.info" not found'
     setattr(infer_cfg.info, 'infer_start_time', TimeMisc.get_time_str())
     
-    # interrupt handler
-    PortalMisc.interrupt_handler(cfg)
-    
     # combine train(read) inference(input) configs
     cfg = PortalMisc.combine_train_infer_configs(infer_cfg, use_train_seed=True)
+    
+    # interrupt handler
+    PortalMisc.interrupt_handler(cfg)
     
     # special config adjustment (debug and work_dir for inference)
     PortalMisc.special_config_adjustment(cfg)
