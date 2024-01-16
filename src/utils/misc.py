@@ -409,6 +409,7 @@ class PortalMisc:
     def end_everything(cfg, loggers, end_with_printed_cfg=False, force=False):
         if end_with_printed_cfg:
             PortalMisc.print_config(cfg)
+        seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_str(), cfg.info.start_time))
         if DistMisc.is_main_process():
             loggers.log_file.close()
             print('log_file closed.')
@@ -424,7 +425,6 @@ class PortalMisc:
                 else:
                     if hasattr(loggers, 'wandb_run'):
                         if cfg.special.debug is None:
-                            seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_str(), cfg.info.start_time))
                             if seconds_remain > 0:
                                 for _ in tqdm(range(seconds_remain), desc='Waiting for wandb to upload all files...'):
                                     time.sleep(1)
@@ -434,8 +434,9 @@ class PortalMisc:
                 pass
         else:
             if cfg.special.debug is None and cfg.info.wandb.wandb_enabled:
-                for _ in range(cfg.info.wandb.wandb_buffer_time):
-                    time.sleep(1)
+                if seconds_remain > 0:
+                    for _ in range(seconds_remain):
+                        time.sleep(1)
 
     @staticmethod 
     def interrupt_handler(cfg):
