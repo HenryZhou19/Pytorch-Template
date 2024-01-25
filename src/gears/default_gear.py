@@ -16,8 +16,11 @@ class Trainer(TrainerBase):
     def before_one_epoch(self, **kwargs):
         super().before_one_epoch(**kwargs)
         
-    def after_training_before_validation(self, **kwargs):
-        super().after_training_before_validation(**kwargs)
+    def after_one_epoch(self, **kwargs):
+        super().after_one_epoch(**kwargs)
+        
+    def before_validation(self, **kwargs):
+        super().before_validation(**kwargs)
 
     def after_validation(self, **kwargs):
         super().after_validation(**kwargs)

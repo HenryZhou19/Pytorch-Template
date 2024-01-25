@@ -50,8 +50,10 @@ class TrainerBase:
         self.best_metrics = {}
         self.train_pbar = None
         self.val_pbar = None
+        self.val_epoch_list = self._get_val_epochs()
         
         assert self.cfg.trainer.grad_accumulation > 0 and isinstance(self.cfg.trainer.grad_accumulation, int), 'grad_accumulation should be a positive integer.'
+        
         self.gradient_accumulation_steps = self.cfg.trainer.grad_accumulation
         self.do_gradient_accumulation = self.gradient_accumulation_steps > 1
         self.max_grad_norm = self.cfg.trainer.max_grad_norm
@@ -64,6 +66,15 @@ class TrainerBase:
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
         self.checkpoint_save_interval = self.cfg.trainer.checkpoint_save_interval
         self.checkpoint_reserve_interval = self.cfg.trainer.checkpoint_save_interval * self.cfg.trainer.checkpoint_reserve_factor
+        
+    def _get_val_epochs(self):
+        if self.cfg.trainer.eval_freq <= 0:
+            val_epochs = [self.cfg.trainer.epochs]
+        else:
+            val_epochs = list(range(self.cfg.trainer.eval_freq, self.cfg.trainer.epochs + 1, self.cfg.trainer.eval_freq))
+            if val_epochs[-1] != self.cfg.trainer.epochs:
+                val_epochs.append(self.cfg.trainer.epochs)
+        return val_epochs
     
     def _get_pbar(self):
         # called in "before_all_epochs"
@@ -80,12 +91,12 @@ class TrainerBase:
             train_pbar.set_description_str('Train')
             print('')
             val_pbar = LoggerMisc.MultiTQDM(
-                total=self.cfg.trainer.epochs * self.val_len if self.cfg.info.global_tqdm else self.val_len,
+                total=len(self.val_epoch_list) * self.val_len if self.cfg.info.global_tqdm else self.val_len,
                 dynamic_ncols=True,
                 colour='green',
                 position=0,
                 maxinterval=math.inf,
-                initial=epoch_finished * self.val_len,
+                initial=len([x for x in self.val_epoch_list if x <= epoch_finished]) * self.val_len,
             )
             val_pbar.set_description_str('Eval ')
             print('')
@@ -113,37 +124,21 @@ class TrainerBase:
             print(LoggerMisc.block_wrapper('New trainer.', '>'))
         print(f'Start from epoch: {self.start_epoch}')
         return self.cfg.trainer.resume
-            
+    
     def _save_checkpoint(self):
-        # called in "after_validation"
+        # called in "after_one_epoch"
         if DistMisc.is_main_process():
             epoch_finished = self.epoch
-            self.best_metrics, save_flag = self.criterion.choose_best(
-                self.metrics, self.best_metrics
-            )
-
-            save_files = {
-                'model': self.model_without_ddp.state_dict(),
-                'best_metrics': self.best_metrics,
-                'epoch': epoch_finished,
-            }
-
-            if save_flag:
-                best = glob(os.path.join(self.cfg.info.work_dir, 'checkpoint_best_epoch_*.pth'))
-                assert len(best) <= 1
-                if len(best) == 1:
-                    torch.save(save_files, best[0])
-                    os.rename(best[0], os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
-                else:
-                    torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
-
-            if self.epoch % self.checkpoint_save_interval == 0:
-                save_files.update({
+            
+            if epoch_finished % self.checkpoint_save_interval == 0:
+                save_files = {
+                    'model': self.model_without_ddp.state_dict(),
                     'optimizer': self.optimizer.state_dict(),
                     'lr_scheduler': self.lr_scheduler.state_dict(),
                     'last_metrics': self.metrics,
-                })
-                if self.cfg.env.amp and self.cfg.env.device:
+                    'epoch': epoch_finished,
+                }
+                if self.cfg.env.amp:
                     save_files.update({
                         'scaler': self.scaler.state_dict()
                     })
@@ -155,6 +150,29 @@ class TrainerBase:
                     last_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{last_saved_epoch}.pth')
                     torch.save(save_files, last_path)
                     os.rename(last_path, os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
+            
+    def _save_best_checkpoint(self):
+        # called in "after_validation"
+        if DistMisc.is_main_process():
+            epoch_finished = self.epoch
+            
+            self.best_metrics, save_flag = self.criterion.choose_best(
+                self.metrics, self.best_metrics
+            )
+            if save_flag:
+                save_files = {
+                    'model': self.model_without_ddp.state_dict(),
+                    'best_metrics': self.best_metrics,
+                    'epoch': epoch_finished,
+                }
+                
+                best = glob(os.path.join(self.cfg.info.work_dir, 'checkpoint_best_epoch_*.pth'))
+                assert len(best) <= 1
+                if len(best) == 1:
+                    torch.save(save_files, best[0])
+                    os.rename(best[0], os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
+                else:
+                    torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
                     
     def _train_mode(self):
         # called in "before_one_epoch"
@@ -262,9 +280,12 @@ class TrainerBase:
         self.optimizer.zero_grad()
         self._train_mode()
 
-    def after_training_before_validation(self, **kwargs):
+    def after_one_epoch(self, **kwargs):
         LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.train_iters)
         
+        self._save_checkpoint()
+        
+    def before_validation(self, **kwargs):
         dist.barrier()
 
         if DistMisc.is_main_process():
@@ -275,7 +296,7 @@ class TrainerBase:
     def after_validation(self, **kwargs):
         LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.train_iters)
         
-        self._save_checkpoint()
+        self._save_best_checkpoint()
     
     def after_all_epochs(self, **kwargs):
         dist.barrier()
