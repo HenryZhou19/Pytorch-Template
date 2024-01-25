@@ -53,12 +53,19 @@ def train_run(cfg, loggers):
 
         train_one_epoch(trainer)
         
-        trainer.after_training_before_validation()
-
-        if cfg.trainer.dist_eval or DistMisc.is_main_process():
-            evaluate(trainer)
-
-        trainer.after_validation()
+        trainer.after_one_epoch()
+        
+        if trainer.epoch in trainer.val_epoch_list:
+            
+            trainer.before_validation()
+            
+            if cfg.trainer.dist_eval or DistMisc.is_main_process():
+                evaluate(trainer)
+                
+            trainer.after_validation()
+            
+            if cfg.special.debug == 'one_val_epoch':
+                PortalMisc.end_everything(cfg, loggers, force=True)
 
         if cfg.special.debug == 'one_epoch':
             PortalMisc.end_everything(cfg, loggers, force=True)
