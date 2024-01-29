@@ -5,17 +5,20 @@ from .basic_layers import MLP
 
 class MHAttention(nn.MultiheadAttention):
     def __init__(self, d_model, num_heads, dropout=0.0, batch_first=False):
-        super().__init__(d_model, num_heads, dropout, bias=True, add_bias_kv=False, add_zero_attn=False,
-                 kdim=None, vdim=None, batch_first=batch_first, device=None, dtype=None)
-
+        super().__init__(d_model, num_heads, dropout, bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None, vdim=None, batch_first=False, device=None, dtype=None)
+        # batch_first: ``True``(N, L, d_feature) ``False``(L, N, d_feature). super().__init__(batch_first===False) as the transpose of the input is taken here.
         # self.num_heads = num_heads  # self.num_heads is already defined in nn.MultiheadAttention
+        self.batch_first = batch_first
         self.mha_final_dropout = nn.Dropout(dropout)
 
     def forward(self, query, key, value, key_padding_mask=None, need_weights=False, attn_mask=None):
-        batch_size = query.shape[0] if self.batch_first else query.shape[1]
-        tgt_len = query.shape[1] if self.batch_first else query.shape[0]
-        src_len = key.shape[1] if self.batch_first else key.shape[0]
+        if self.batch_first:
+            query, key, value = [x.transpose(1, 0) for x in (query, key, value)]
+        
         if attn_mask is not None:
+            batch_size = query.shape[1]
+            tgt_len =  query.shape[0]
+            src_len = key.shape[0]
             if attn_mask.dim() == 3 and attn_mask.shape[0] == batch_size:
                 attn_mask = attn_mask.unsqueeze(1).expand(batch_size, self.num_heads, tgt_len, src_len).reshape(-1, tgt_len, src_len)
         
@@ -28,6 +31,9 @@ class MHAttention(nn.MultiheadAttention):
             attn_mask=attn_mask
             )
         
+        if self.batch_first:
+            attn_output = attn_output.transpose(1, 0)
+    
         return self.mha_final_dropout(attn_output)
     
 
