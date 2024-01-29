@@ -8,11 +8,11 @@ class MHAttention(nn.MultiheadAttention):
         super().__init__(d_model, num_heads, dropout, bias=True, add_bias_kv=False, add_zero_attn=False, kdim=None, vdim=None, batch_first=False, device=None, dtype=None)
         # batch_first: ``True``(N, L, d_feature) ``False``(L, N, d_feature). super().__init__(batch_first===False) as the transpose of the input is taken here.
         # self.num_heads = num_heads  # self.num_heads is already defined in nn.MultiheadAttention
-        self.batch_first = batch_first
+        self.here_batch_first = batch_first
         self.mha_final_dropout = nn.Dropout(dropout)
 
     def forward(self, query, key, value, key_padding_mask=None, need_weights=False, attn_mask=None):
-        if self.batch_first:
+        if self.here_batch_first:
             query, key, value = [x.transpose(1, 0) for x in (query, key, value)]
         
         if attn_mask is not None:
@@ -31,7 +31,7 @@ class MHAttention(nn.MultiheadAttention):
             attn_mask=attn_mask
             )
         
-        if self.batch_first:
+        if self.here_batch_first:
             attn_output = attn_output.transpose(1, 0)
     
         return self.mha_final_dropout(attn_output)
