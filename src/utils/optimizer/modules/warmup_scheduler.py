@@ -9,8 +9,8 @@ from torch.optim.lr_scheduler import _LRScheduler
 __all__ = [
     'WarmUpLR',
     'WarmUpCosineAnnealingLR',
-    'WarmupLinearLR',
-    'WarmupMultiStepLR',
+    'WarmUpLinearLR',
+    'WarmUpMultiStepLR',
     ]
 
 class _AmpStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` before `optimizer.step()`' warning when use amp or grad_accumulation
@@ -78,7 +78,7 @@ class WarmUpCosineAnnealingLR(_AmpStepLR):
             return [self.lr_min + alpha * (base_lr - self.lr_min) for base_lr in self.base_lrs]
 
 
-class WarmupLinearLR(_AmpStepLR):
+class WarmUpLinearLR(_AmpStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, lr_min, last_epoch=-1):
         assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
@@ -98,7 +98,7 @@ class WarmupLinearLR(_AmpStepLR):
             return [self.lr_min + alpha * (base_lr - self.lr_min) for base_lr in self.base_lrs]
 
 
-class WarmupMultiStepLR(_AmpStepLR):
+class WarmUpMultiStepLR(_AmpStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, step_milestones: List[int], gamma, T_max, T_warmup, warmup_factor, lr_min, last_epoch=-1):
         assert list(step_milestones) == sorted(step_milestones), 'MultiStepLR milestones should be a list of increasing integers.'
         assert T_max > step_milestones[-1], 'T_max should be larger than the last milestone.'
