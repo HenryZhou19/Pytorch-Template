@@ -22,11 +22,12 @@ class SchedulerUtils:
             'T_max': cfg.trainer.epochs * len_train_loader,
             'T_warmup': warmup_iters,
             'warmup_factor': cfg.trainer.scheduler.warmup_factor,
+            'warmup_fn': WarmUpFn.get_warmup_fn(cfg.trainer.scheduler.warmup_type, cfg.trainer.scheduler.warmup_factor),
             'lr_min': cfg.trainer.scheduler.lr_min,
         }
         if cfg.trainer.scheduler.scheduler_choice == 'vanilla':
             kwargs.pop('lr_min')
-            return WarmUpLR(**kwargs) 
+            return WarmUpVanillaLR(**kwargs) 
         elif cfg.trainer.scheduler.scheduler_choice == 'cosine':
             return WarmUpCosineAnnealingLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'linear':

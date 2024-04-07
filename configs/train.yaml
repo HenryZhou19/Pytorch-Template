@@ -46,7 +46,8 @@ trainer:
     lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
     warmup_epochs: 10
     warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
-    warmup_factor: 0.0  # [0., 1.] start warmup from: warmup_factor * lr
+    # warmup_factor: 0.0  # default
+    # warmup_type: constant  # default
   max_grad_norm: 1.0  # <= 0 means no gradient clipping
 
 sweep:
