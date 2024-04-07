@@ -30,7 +30,7 @@ class SchedulerUtils:
         elif cfg.trainer.scheduler.scheduler_choice == 'cosine':
             return WarmUpCosineAnnealingLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'linear':
-            return WarmupLinearLR(**kwargs)
+            return WarmUpLinearLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'multistep':
             if cfg.trainer.scheduler.lr_milestones_steps is not None:
                 step_milestones = cfg.trainer.scheduler.lr_milestones_steps
@@ -42,6 +42,6 @@ class SchedulerUtils:
                 'step_milestones': step_milestones,
                 'gamma': cfg.trainer.scheduler.lr_decay_gamma,
             })
-            return WarmupMultiStepLR(**kwargs)
+            return WarmUpMultiStepLR(**kwargs)
         else:
             raise ValueError(f'Unknown scheduler choice: {cfg.trainer.scheduler.scheduler_choice}')
