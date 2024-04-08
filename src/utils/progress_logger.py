@@ -149,7 +149,7 @@ class MetricLogger(object):
                 )
         return self.delimiter.join(prior_meter_s + meters_s)
     
-    def _synchronize_between_processes(self):
+    def _synchronize_all_processes(self):
         if not DistMisc.is_dist_avail_and_initialized():
             return
         assert not self.synced, 'Meters have been synced.'
@@ -235,7 +235,7 @@ class MetricLogger(object):
                  
     def output_dict(self, no_avg_list=[], sync=False, final_print=False):
         if sync:
-            self._synchronize_between_processes()
+            self._synchronize_all_processes()
         if final_print:
             self._final_print(print_time=True, synced=sync)
         
