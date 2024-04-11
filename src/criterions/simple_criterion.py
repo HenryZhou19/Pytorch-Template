@@ -81,7 +81,7 @@ class MnistCriterion(CriterionBase):
             'ce_loss': ce_loss,
             }
 
-    def get_epoch_metrics(self):
+    def get_epoch_metrics_and_reset(self):
         import torch.distributed as dist
 
         from src.utils.misc import DistMisc

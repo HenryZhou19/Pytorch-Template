@@ -1,3 +1,4 @@
+import ema_pytorch
 import torch
 
 from src.utils.misc import ImportMisc
@@ -23,3 +24,27 @@ class ModelManager(object):
                     self.loggers.wandb_run.watch(model, log='all', log_freq=self.cfg.info.wandb.wandb_watch_freq, log_graph=True)
 
         return model
+    
+    def build_ema(self, model, verbose=True) -> ModelBase:
+        if self.cfg.model.ema.ema_enabled:
+            assert self.cfg.model.ema.ema_type == 'EMA', 'only support vanilla EMA for now.'
+            
+            ema_init_kwargs = {
+                'model': model,
+                'beta': self.cfg.model.ema.ema_beta,
+                'update_after_step': self.cfg.model.ema.ema_update_after_step,
+                'update_every': self.cfg.model.ema.ema_update_every,
+                'include_online_model': False,
+                }
+            ema_model = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
+            ema_model.eval()
+            
+            if verbose:
+                print('EMA_model built successfully.')
+                
+        else:
+            ema_model = None
+            if verbose:
+                print('Not using EMA.')
+
+        return ema_model

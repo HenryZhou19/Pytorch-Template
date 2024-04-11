@@ -9,6 +9,12 @@ class CriterionBase(nn.Module):
         super().__init__()
         self.loss_config = cfg.criterion.loss
         self.primary_criterion = cfg.criterion.primary_criterion
+        if self.primary_criterion is None:
+            self.primary_criterion = 'loss'
+        
+        if cfg.model.ema.ema_enabled and cfg.model.ema.ema_primary_criterion:
+            self.primary_criterion = 'ema_' + self.primary_criterion  # use 'ema_xxx' as primary criterion
+            
         if cfg.criterion.primary_criterion_higher_better:
             self.choose_better_fn = lambda now, stored: now > stored  # higher better  
         else:
@@ -19,12 +25,7 @@ class CriterionBase(nn.Module):
         assert len(trainable_params) == 0, f'Criterion {self.__class__} has trainable parameters.'
 
     def choose_best(self, metric: dict, best_metric: dict):
-        def compare_loss(m, b_m):
-            if m['loss'] < b_m['loss']:
-                return m, True
-            else:
-                return b_m, False
-            
+          
         def compare_primary_criterion(m, b_m):
             assert self.primary_criterion in m, f'best_criterion "{self.primary_criterion}" not in metric {m}'
             if self.choose_better_fn(m[self.primary_criterion], b_m[self.primary_criterion]):
@@ -34,10 +35,8 @@ class CriterionBase(nn.Module):
 
         if metric == {} or best_metric == {}:
             return metric, True
-        elif self.primary_criterion is not None:
-            return compare_primary_criterion(metric, best_metric)
-        else:
-            return compare_loss(metric, best_metric)
+        
+        return compare_primary_criterion(metric, best_metric)
         
     def forward(self, outputs, targets, infer_mode=False):
         """
@@ -59,7 +58,7 @@ class CriterionBase(nn.Module):
         if infer_mode:
             assert self.training == False, f'CriterionModule {self.__class__} is in training mode while infer_mode is True.'
         
-    def get_epoch_metrics(self):
+    def get_epoch_metrics_and_reset(self):
         """
         metrics which should be calculated after a whole epoch
         """

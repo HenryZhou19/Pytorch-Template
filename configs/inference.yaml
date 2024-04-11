@@ -8,7 +8,7 @@ tester:
   tester_choice: default
   use_best: True
   checkpoint_path: TBD
-  train_cfg_path: outputs/2023-12-15-18-53-29_template_simple_default_mse_32=32_1_1/cfg.yaml  # XXX: required
+  train_cfg_path: outputs/2024-04-11-12-20-02_template_simple_default_mse_32=32_1_1/cfg.yaml  # XXX: required
 
 sweep:
   sweep_enabled: False
