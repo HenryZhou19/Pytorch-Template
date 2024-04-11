@@ -1,3 +1,4 @@
+from copy import deepcopy
 import math
 import os
 import time
@@ -22,6 +23,7 @@ class TrainerBase:
         cfg: Namespace,
         loggers: Namespace,
         model: ModelBase,
+        ema_model: torch.nn.Module,
         criterion: CriterionBase,
         train_loader: DataLoader,
         val_loader: DataLoader,
@@ -35,6 +37,7 @@ class TrainerBase:
         self.loggers = loggers
         self.model = model
         self.model_without_ddp = model.module if cfg.env.distributed else model
+        self.ema_model = ema_model  # already in eval mode (in ModelManager)
         self.criterion = criterion
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -62,6 +65,9 @@ class TrainerBase:
           
         self.nn_module_list = [self.model, self.criterion]
         self.is_train = True
+        
+        if self.ema_model is not None:
+            self.ema_criterion = deepcopy(self.criterion).to(self.device)
         
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
         self.checkpoint_save_interval = self.cfg.trainer.checkpoint_save_interval
@@ -111,6 +117,9 @@ class TrainerBase:
             assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
             checkpoint = torch.load(checkpoint_path[0], map_location='cpu')
             self.model_without_ddp.load_state_dict(checkpoint['model'])
+            if self.ema_model is not None:
+                assert checkpoint['ema_model'] is not None, 'ema_model is None in the checkpoint.'
+                self.ema_model.load_state_dict(checkpoint['ema_model'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             if self.cfg.env.amp:
@@ -133,6 +142,7 @@ class TrainerBase:
             if epoch_finished % self.checkpoint_save_interval == 0:
                 save_files = {
                     'model': self.model_without_ddp.state_dict(),
+                    'ema_model': self.ema_model.state_dict() if self.ema_model is not None else None,
                     'optimizer': self.optimizer.state_dict(),
                     'lr_scheduler': self.lr_scheduler.state_dict(),
                     'last_metrics': self.metrics,
@@ -162,6 +172,7 @@ class TrainerBase:
             if save_flag:
                 save_files = {
                     'model': self.model_without_ddp.state_dict(),
+                    'ema_model': self.ema_model.state_dict() if self.ema_model is not None else None,
                     'best_metrics': self.best_metrics,
                     'epoch': epoch_finished,
                 }
@@ -202,6 +213,13 @@ class TrainerBase:
             with torch.no_grad():
                 outputs = self.model(inputs)
                 loss, metrics_dict = self.criterion(outputs, targets)
+                
+                if self.ema_model is not None:
+                    ema_outputs = self.ema_model(inputs)
+                    ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
+                    metrics_dict['ema_loss'] = ema_loss
+                    for key, value in ema_metrics_dict.items():
+                        metrics_dict[f'ema_{key}'] = value
             
         return outputs, loss, metrics_dict
     
@@ -224,6 +242,8 @@ class TrainerBase:
                     torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
             self.optimizer.zero_grad()
+            if self.ema_model is not None:
+                self.ema_model.update()
         
         if not math.isfinite(loss):
             LoggerMisc.get_wandb_pid(kill_all=True)
@@ -311,7 +331,8 @@ class TesterBase:
         self,
         cfg: Namespace,
         loggers: Namespace,
-        model: ModelBase,
+        model_without_ddp: ModelBase,
+        ema_model: torch.nn.Module,
         criterion: CriterionBase,
         test_loader: DataLoader,
         device: torch.device,
@@ -319,8 +340,8 @@ class TesterBase:
         super().__init__()
         self.cfg = cfg
         self.loggers = loggers
-        self.model = model
-        self.model_without_ddp = model.module if cfg.env.distributed else model
+        self.model = model_without_ddp
+        self.ema_model = ema_model  # already in eval mode (in ModelManager)
         self.criterion = criterion
         self.test_loader = test_loader
         self.device = device
@@ -330,6 +351,9 @@ class TesterBase:
         self.test_len = len(self.test_loader)
         
         self.nn_module_list = [self.model, self.criterion]
+        
+        if self.ema_model is not None:
+            self.ema_criterion = deepcopy(self.criterion).to(self.device)
             
         self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
 
@@ -350,7 +374,10 @@ class TesterBase:
     def _load_model(self):
         # called in "before_inference"
         checkpoint = torch.load(self.cfg.tester.checkpoint_path, map_location=self.device)
-        self.model_without_ddp.load_state_dict(checkpoint['model'])
+        self.model.load_state_dict(checkpoint['model'])
+        if self.ema_model is not None:
+            assert checkpoint['ema_model'] is not None, 'ema_model is None in the checkpoint.'
+            self.ema_model.load_state_dict(checkpoint['ema_model'])
         # print(f'{config.mode} mode: Loading pth from', path)
         print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_trainer_metrics {checkpoint.get("best_metrics", {})}\nlast_trainer_metrics {checkpoint.get("last_metrics", {})}', '>'))
         if DistMisc.is_main_process():
@@ -375,6 +402,13 @@ class TesterBase:
         with torch.no_grad():
             outputs = self.model(inputs)
             loss, metrics_dict = self.criterion(outputs, targets, infer_mode=True)
+            
+            if self.ema_model is not None:
+                    ema_outputs = self.ema_model(inputs)
+                    ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
+                    # metrics_dict['ema_loss'] = ema_loss  # no need to show 'loss' & 'ema_loss' in inference
+                    for key, value in ema_metrics_dict.items():
+                        metrics_dict[f'ema_{key}'] = value
             
         return outputs, loss, metrics_dict
 

@@ -18,6 +18,7 @@ def train_run(cfg, loggers):
     # prepare for model, postprocessor
     model_manager = ModelManager(cfg, loggers)
     model_without_ddp = model_manager.build_model()
+    ema_model = model_manager.build_ema(model_without_ddp)
     # postprocessor = model_manager.build_postprocessor()
     
     # prepare for criterion
@@ -36,6 +37,7 @@ def train_run(cfg, loggers):
     # get Trainer instance
     trainer = GearManager(cfg, loggers).build_trainer(
         model=model,
+        ema_model=ema_model,
         criterion=criterion,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -112,3 +114,5 @@ if __name__ == '__main__':
     DistMisc.init_distributed_mode(cfg)
     
     SweepMisc.init_sweep_mode(cfg, train_portal)
+
+    
