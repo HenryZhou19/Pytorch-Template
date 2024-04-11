@@ -92,4 +92,10 @@ def test(tester: TesterBase):
             )
         
     mlogger.add_epoch_meters(**tester.criterion.get_epoch_metrics_and_reset())
+    if hasattr(tester, 'ema_criterion'):
+        ema_epoch_metrics = {}
+        raw_epoch_metrics = tester.ema_criterion.get_epoch_metrics_and_reset()
+        for k, v in raw_epoch_metrics.items():
+            ema_epoch_metrics[f'ema_{k}'] = v
+        mlogger.add_epoch_meters(**ema_epoch_metrics)
     tester.metrics = mlogger.output_dict(sync=True, final_print=True)
