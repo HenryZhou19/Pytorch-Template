@@ -64,6 +64,7 @@ class TrainerBase:
         self.val_len = len(self.val_loader)
           
         self.nn_module_list = [self.model, self.criterion]
+        self.freeze_modules = getattr(self.cfg.trainer, 'freeze_modules', [])
         self.is_train = True
         
         if self.ema_model is not None:
@@ -134,6 +135,33 @@ class TrainerBase:
         print(f'Start from epoch: {self.start_epoch}')
         return self.cfg.trainer.resume
     
+                        
+    def _load_pretrained_models(self):
+        def _load_pretrained_model(model_path, pretrain_model_name):
+            if self.ema_model is not None:
+                print(f'\nLoading {pretrain_model_name} (key="ema_model") from {model_path}')
+                ModelMisc.load_state_dict_with_more_info(
+                    self.ema_model,
+                    torch.load(model_path, map_location='cpu')['ema_model'],
+                    strict=False,
+                    print_keys_level=2,
+                    )
+                self.ema_model.copy_params_from_ema_to_model()     
+            else:
+                print(f'\nLoading {pretrain_model_name} (key="model") from {model_path}')
+                ModelMisc.load_state_dict_with_more_info(
+                    self.model_without_ddp,
+                    torch.load(model_path, map_location='cpu')['model'],
+                    strict=False,
+                    print_keys_level=1,
+                    )
+        
+        if getattr(self.cfg.trainer, 'pretrained_models', None) is not None:
+            for pretrain_model_name, pretrained_model_path in ConfigMisc.nested_namespace_to_nested_dict(self.cfg.trainer.pretrained_models).items():
+                if pretrained_model_path is not None:
+                    _load_pretrained_model(pretrained_model_path, pretrain_model_name)
+    
+    
     def _save_checkpoint(self):
         # called in "after_one_epoch"
         if DistMisc.is_main_process():
@@ -189,6 +217,12 @@ class TrainerBase:
         # called in "before_one_epoch"
         for nn_module in self.nn_module_list:
             nn_module.train()
+            
+        ModelMisc.train_or_eval_submodules(
+            self.model_without_ddp,
+            self.freeze_modules,
+            False,
+        )
         self.is_train = True
             
     def _eval_mode(self):
@@ -277,7 +311,16 @@ class TrainerBase:
         return {'wd_' + param_group['group_name']: param_group['weight_decay'] for param_group in self.optimizer.param_groups}
     
     def before_all_epochs(self, **kwargs):
-        self._resume_training()
+        is_resumed = self._resume_training()
+        if not is_resumed:
+            self._load_pretrained_models()
+            
+        ModelMisc.update_or_freeze_submodules(
+            self.model_without_ddp,
+            self.freeze_modules,
+            False,
+            )
+            
         ModelMisc.show_model_info(self.cfg, self)
         self._get_pbar()
     
