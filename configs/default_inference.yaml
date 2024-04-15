@@ -30,3 +30,4 @@ info:
 
 tester:
   tester_breath_time: 0.0
+  tester_choice: default
