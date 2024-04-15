@@ -294,10 +294,16 @@ class PortalMisc:
     def special_config_adjustment(cfg):
         if cfg.special.debug == 'one_iter':  # 'one_iter' debug mode
             cfg.env.num_workers = 0
+        
         if cfg.trainer.grad_accumulation > 1:
             warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
+        
         cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
         cfg.info.batch_info = f'{cfg.data.batch_size_total}={cfg.data.batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
+         
+        if cfg.special.no_logger:
+            cfg.info.wandb.wandb_enabled = False
+            cfg.info.tensorboard.tensorboard_enabled = False
         
         if not ConfigMisc.is_inference(cfg):  # only for train
             if cfg.data.sync_lr_with_batch_size > 0:
@@ -662,9 +668,12 @@ class ModelMisc:
     def load_state_dict_with_more_info(module, state_dict, strict=False, print_keys_level=1):
         missing_keys, unexpected_keys = module.load_state_dict(state_dict, strict=strict)
         if print_keys_level > 0:
+            matched_keys = list(set(state_dict.keys()) - set(missing_keys) - set(unexpected_keys))
+            
+            matched_keys = list(set(['.'.join(matched_key.split('.')[:print_keys_level]) for matched_key in matched_keys]))
             missing_keys = list(set(['.'.join(missing_keys.split('.')[:print_keys_level]) for missing_keys in missing_keys]))
             unexpected_keys = list(set(['.'.join(unexpected_key.split('.')[:print_keys_level]) for unexpected_key in unexpected_keys]))
-            print_info = 'state_dict loaded not strictly.\n\nMISSING KEYS:\n    ' + '\n    '.join(missing_keys) + '\n\nUNEXPECTED KEYS:\n    ' + '\n    '.join(unexpected_keys)
+            print_info = f'state_dict loaded not strictly.\n\nMATCHED KEYS:\n    ' + '\n    '.join(matched_keys) + '\n\nMISSING KEYS:\n    ' + '\n    '.join(missing_keys) + '\n\nUNEXPECTED KEYS:\n    ' + '\n    '.join(unexpected_keys)
             print(LoggerMisc.block_wrapper(print_info, '#'))
         
     @staticmethod
@@ -688,7 +697,7 @@ class ModelMisc:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
 
     @staticmethod
-    def update_or_freeze_submodules(module, submodule_name_list, is_trainable: bool, strict=False):  # whether to update the parameters of the submodules
+    def update_or_freeze_submodules(module: nn.Module, submodule_name_list, is_trainable: bool, strict=False):  # whether to update the parameters of the submodules
         """
         Just change the trainable property of submodules' parameters.
         
@@ -696,19 +705,20 @@ class ModelMisc:
         unless the submodules are set to eval mode by calling ModelMisc.train_or_eval_submodules().
         
         """
-        for name in submodule_name_list:
-            submodule: torch.nn.Module = getattr(module, name, 'None')
-            if submodule == 'None':
+        named_modules = dict(module.named_modules())
+        for submodule_name in submodule_name_list:
+            submodule: torch.nn.Module = named_modules.get(submodule_name, None)
+            if submodule is None:
                 if strict:
-                    raise ValueError(f'Cannot find submodule "{name}" in {module.__class__.__name__}.')
+                    raise ValueError(f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.')
                 else:
-                    warnings.warn(f'Cannot find submodule "{name}" in {module.__class__.__name__}.')
+                    warnings.warn(f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.')
             else:
                 for param in submodule.parameters():
                     param.requires_grad = is_trainable
     
     @staticmethod
-    def train_or_eval_submodules(module, submodule_name_list, is_train: bool, strict=False):
+    def train_or_eval_submodules(module: nn.Module, submodule_name_list, is_train: bool, strict=False):
         """
         Just change the behavior of some specific submodules (e.g. BatchNorm, Dropout).
         
@@ -716,13 +726,14 @@ class ModelMisc:
         unless the submodules are set to untrainable mode by calling ModelMisc.update_or_freeze_submodules().
         
         """
-        for name in submodule_name_list:
-            submodule: torch.nn.Module = getattr(module, name, 'None')
-            if submodule == 'None':
+        named_modules = dict(module.named_modules())
+        for submodule_name in submodule_name_list:
+            submodule: torch.nn.Module = named_modules.get(submodule_name, None)
+            if submodule is None:
                 if strict:
-                    raise ValueError(f'Cannot find submodule "{name}" in {module.__class__.__name__}.')
+                    raise ValueError(f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.')
                 else:
-                    warnings.warn(f'Cannot find submodule "{name}" in {module.__class__.__name__}.')
+                    warnings.warn(f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.')
             else:
                 submodule.train() if is_train else submodule.eval()
         

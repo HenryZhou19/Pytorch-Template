@@ -27,13 +27,15 @@ criterion:
 trainer:
   trainer_choice: default
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
+  pretrained_models: null  # None or a dict of pretrained models {name1: path1, name2: path2, ...}
+  freeze_modules: []  # [submodule_name1, submodule_name2, ...]
   epochs: 10
   optimizer:
     optimizer_choice: adamw  # adamw, sgd
     sgd_momentum: 0.9
     lr_default: 4.0e-4
     wd_default: 1.0e-2
-    # param_groups:
+    # param_groups:  # xx_name means if string 'name' in named_parameters, use this xx settings
     #   lr_backbone: 4.0e-4
     #   wd_backbone: 1.0e-2
     #   lr_head: 1.0e-4

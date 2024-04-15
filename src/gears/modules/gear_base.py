@@ -226,7 +226,7 @@ class TrainerBase:
         self.is_train = True
             
     def _eval_mode(self):
-        # called in "after_training_before_validation"
+        # called in "before_validation"
         for nn_module in self.nn_module_list:
             nn_module.eval()
         self.is_train = False
