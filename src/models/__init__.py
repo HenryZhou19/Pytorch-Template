@@ -37,8 +37,6 @@ class ModelManager(object):
                 'include_online_model': False,
                 }
             ema_model = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
-            ema_model.eval()
-            
             if verbose:
                 print('EMA_model built successfully.')
                 

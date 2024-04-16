@@ -37,7 +37,7 @@ class TrainerBase:
         self.loggers = loggers
         self.model = model
         self.model_without_ddp = model.module if cfg.env.distributed else model
-        self.ema_model = ema_model  # already in eval mode (in ModelManager)
+        self.ema_model = ema_model  # still in train mode (in ModelManager)
         self.criterion = criterion
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -68,7 +68,10 @@ class TrainerBase:
         self.is_train = True
         
         if self.ema_model is not None:
-            self.ema_criterion = deepcopy(self.criterion).to(self.device)
+            print(LoggerMisc.block_wrapper('Using EMA model to evaluate. Setting EMA model and criterion to eval mode...', '='))
+            self.ema_model.eval()
+            self.ema_criterion = deepcopy(self.criterion)
+            self.ema_criterion.eval()
         
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
         self.checkpoint_save_interval = self.cfg.trainer.checkpoint_save_interval
