@@ -315,7 +315,7 @@ class TrainerBase:
         if not is_resumed:
             self._load_pretrained_models()
             
-        ModelMisc.update_or_freeze_submodules(
+        ModelMisc.unfreeze_or_freeze_submodules(
             self.model_without_ddp,
             self.freeze_modules,
             False,

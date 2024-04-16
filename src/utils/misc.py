@@ -673,7 +673,10 @@ class ModelMisc:
             matched_keys = list(set(['.'.join(matched_key.split('.')[:print_keys_level]) for matched_key in matched_keys]))
             missing_keys = list(set(['.'.join(missing_keys.split('.')[:print_keys_level]) for missing_keys in missing_keys]))
             unexpected_keys = list(set(['.'.join(unexpected_key.split('.')[:print_keys_level]) for unexpected_key in unexpected_keys]))
-            print_info = f'state_dict loaded not strictly.\n\nMATCHED KEYS:\n    ' + '\n    '.join(matched_keys) + '\n\nMISSING KEYS:\n    ' + '\n    '.join(missing_keys) + '\n\nUNEXPECTED KEYS:\n    ' + '\n    '.join(unexpected_keys)
+            print_info = f'state_dict loaded not strictly.' \
+                + '\n\033[32m\nMATCHED KEYS:\n\033[0m    ' + '\n    '.join(matched_keys) \
+                + '\n\033[33m\nMISSING KEYS (only in model):\n\033[0m    ' + '\n    '.join(missing_keys) \
+                + '\n\033[34m\nUNEXPECTED KEYS (only in pth):\n\033[0m    ' + '\n    '.join(unexpected_keys)
             print(LoggerMisc.block_wrapper(print_info, '#'))
         
     @staticmethod
@@ -697,46 +700,57 @@ class ModelMisc:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
 
     @staticmethod
-    def update_or_freeze_submodules(module: nn.Module, submodule_name_list, is_trainable: bool, strict=False):  # whether to update the parameters of the submodules
+    def unfreeze_or_freeze_submodules(module: nn.Module, submodule_name_list, is_trainable: bool, strict=False, verbose=True):  # whether to update the parameters of the submodules
         """
         Just change the trainable property of submodules' parameters.
         
         Some special statistics(e.g. BatchNorm's running mean and variance) are still updated and Dropouts are still working 
         unless the submodules are set to eval mode by calling ModelMisc.train_or_eval_submodules().
         
+        verbose: (default True) as this function is usually called only once --- before all epochs
         """
         named_modules = dict(module.named_modules())
+        verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} parameters of the following submodules:'
         for submodule_name in submodule_name_list:
             submodule: torch.nn.Module = named_modules.get(submodule_name, None)
             if submodule is None:
+                error_message = f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__} when {"unfreezing" if is_trainable else "freezing"} parameters.'
                 if strict:
-                    raise ValueError(f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.')
+                    raise ValueError(error_message)
                 else:
-                    warnings.warn(f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.')
+                    warnings.warn(error_message)
             else:
+                verbose_string += f'\n    {submodule_name}'
                 for param in submodule.parameters():
                     param.requires_grad = is_trainable
+        if verbose:
+            print(LoggerMisc.block_wrapper(verbose_string, '='))
     
     @staticmethod
-    def train_or_eval_submodules(module: nn.Module, submodule_name_list, is_train: bool, strict=False):
+    def train_or_eval_submodules(module: nn.Module, submodule_name_list, is_train: bool, strict=False, verbose=False):
         """
         Just change the behavior of some specific submodules (e.g. BatchNorm, Dropout).
         
         Gradients of the submodules are still computed (and updated if trainable)
-        unless the submodules are set to untrainable mode by calling ModelMisc.update_or_freeze_submodules().
+        unless the submodules are set to untrainable mode by calling ModelMisc.unfreeze_or_freeze_submodules().
         
+        verbose: (default False) as this function is usually called multiple times --- before one (each) epoch
         """
         named_modules = dict(module.named_modules())
+        verbose_string = f'Set nn.Module mode of the following submodules to {"train" if is_train else "eval"}:'
         for submodule_name in submodule_name_list:
             submodule: torch.nn.Module = named_modules.get(submodule_name, None)
             if submodule is None:
+                error_message = f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__} when setting nn.Module mode to {"train" if is_train else "eval"}'
                 if strict:
-                    raise ValueError(f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.')
+                    raise ValueError(error_message)
                 else:
-                    warnings.warn(f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.')
+                    warnings.warn(error_message)
             else:
+                verbose_string += f'\n    {submodule_name}'
                 submodule.train() if is_train else submodule.eval()
-        
+        if verbose:
+            print(LoggerMisc.block_wrapper(verbose_string, '='))
 
 class LoggerMisc:
     class MultiTQDM:
