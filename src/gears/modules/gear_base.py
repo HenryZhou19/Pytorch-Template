@@ -47,7 +47,6 @@ class TrainerBase:
         self.device = device
         self.start_epoch = 1
         self.epoch = self.start_epoch - 1
-        self.train_iters = 0
         self.train_outputs = {}
         self.metrics = {}
         self.best_metrics = {}
@@ -62,6 +61,9 @@ class TrainerBase:
         self.max_grad_norm = self.cfg.trainer.max_grad_norm
         self.train_len = len(self.train_loader)
         self.val_len = len(self.val_loader)
+        
+        self.trained_iters = 0
+        self.total_iters = self.cfg.trainer.epochs * self.train_len
           
         self.nn_module_list = [self.model, self.criterion]
         self.freeze_modules = getattr(self.cfg.trainer, 'freeze_modules', [])
@@ -91,7 +93,7 @@ class TrainerBase:
         if DistMisc.is_main_process():
             epoch_finished = self.start_epoch - 1
             train_pbar = LoggerMisc.MultiTQDM(
-                total=self.cfg.trainer.epochs * self.train_len if self.cfg.info.global_tqdm else self.train_len,
+                total=self.total_iters if self.cfg.info.global_tqdm else self.train_len,
                 dynamic_ncols=True,
                 colour='green',
                 position=0,
@@ -131,7 +133,7 @@ class TrainerBase:
             self.start_epoch = checkpoint['epoch'] + 1
             self.best_metrics = checkpoint.get('best_metrics', {})
             self.metrics = checkpoint.get('last_metrics', {})
-            self.train_iters = checkpoint['epoch'] * self.train_len
+            self.trained_iters = checkpoint['epoch'] * self.train_len
             self.epoch = self.start_epoch - 1  # will be the same as {checkpoint['epoch'] + 1} by doing '+1' in "before_one_epoch"
         else:
             print(LoggerMisc.block_wrapper('New trainer.', '>'))
@@ -242,10 +244,10 @@ class TrainerBase:
         targets: dict = batch['targets']
         
         if self.is_train:
+            inputs['train_progress'] = self.trained_iters / self.total_iters
             with torch.cuda.amp.autocast(enabled=self.scaler is not None):
                 outputs = self.model(inputs)
                 loss, metrics_dict = self.criterion(outputs, targets)
-            self.train_iters += 1
         else:
             with torch.no_grad():
                 outputs = self.model(inputs)
@@ -292,7 +294,7 @@ class TrainerBase:
         
         _backward()
         
-        if self.do_gradient_accumulation and (self.train_iters % self.train_len != 0):
+        if self.do_gradient_accumulation and (self.trained_iters % self.train_len != 0):
             if self.step_count % self.gradient_accumulation_steps == 0:
                 _optimize()
                 self.step_count = 0
@@ -300,6 +302,7 @@ class TrainerBase:
             _optimize()
         
         self.lr_scheduler.step()  # update special lr_scheduler after each iter
+        self.trained_iters += 1
     
     @property
     def epoch_loop(self):
@@ -347,7 +350,7 @@ class TrainerBase:
         self._train_mode()
 
     def after_one_epoch(self, **kwargs):
-        LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.train_iters)
+        LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.trained_iters)
         
         self._save_checkpoint()
         
@@ -360,7 +363,7 @@ class TrainerBase:
         self._eval_mode()
 
     def after_validation(self, **kwargs):
-        LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.train_iters)
+        LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.trained_iters)
         
         self._save_best_checkpoint()
     
