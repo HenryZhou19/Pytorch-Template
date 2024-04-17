@@ -27,16 +27,19 @@ def train_one_epoch(trainer: TrainerBase):
         mlogger.update_meters(
             sample_count=batch['batch_size'],
             **trainer.lr_groups,
-            epoch=trainer.train_iters / trainer.train_len,
             loss=loss,
             **metrics_dict,
         )
         
-        if cfg.info.iter_log_freq > 0:
-            if trainer.train_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
-                LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), int(trainer.train_iters / cfg.trainer.grad_accumulation))
-
         trainer.backward_and_step(loss)
+        
+        mlogger.update_meters(
+            epoch=trainer.trained_iters / trainer.train_len,
+        )
+        
+        if cfg.info.iter_log_freq > 0:
+            if trainer.trained_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
+                LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), int(trainer.trained_iters / cfg.trainer.grad_accumulation))
     
     mlogger.add_epoch_meters(**trainer.criterion.get_epoch_metrics_and_reset())
     trainer.train_outputs = mlogger.output_dict(no_avg_list=[*trainer.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
