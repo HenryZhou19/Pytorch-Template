@@ -145,13 +145,16 @@ class TrainerBase:
         def _load_pretrained_model(model_path, pretrain_model_name):
             if self.ema_model is not None:
                 print(f'\nLoading {pretrain_model_name} (key="ema_model") from {model_path}')
+                state_dict = torch.load(model_path, map_location='cpu')['ema_model']
+                state_dict.pop('initted', None)
+                state_dict.pop('step', None)
                 ModelMisc.load_state_dict_with_more_info(
                     self.ema_model,
                     torch.load(model_path, map_location='cpu')['ema_model'],
                     strict=False,
                     print_keys_level=2,
                     )
-                self.ema_model.copy_params_from_ema_to_model()     
+                self.ema_model.copy_params_from_ema_to_model()
             else:
                 print(f'\nLoading {pretrain_model_name} (key="model") from {model_path}')
                 ModelMisc.load_state_dict_with_more_info(
