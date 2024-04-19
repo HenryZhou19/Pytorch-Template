@@ -150,7 +150,7 @@ class TrainerBase:
                 state_dict.pop('step', None)
                 ModelMisc.load_state_dict_with_more_info(
                     self.ema_model,
-                    torch.load(model_path, map_location='cpu')['ema_model'],
+                    state_dict,
                     strict=False,
                     print_keys_level=2,
                     )
