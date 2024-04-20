@@ -393,7 +393,7 @@ class TesterBase:
         self.cfg = cfg
         self.loggers = loggers
         self.model = model_without_ddp
-        self.ema_model = ema_model  # already in eval mode (in ModelManager)
+        self.ema_model = ema_model  # still in train mode (in ModelManager)
         self.criterion = criterion
         self.test_loader = test_loader
         self.device = device
@@ -405,7 +405,10 @@ class TesterBase:
         self.nn_module_list = [self.model, self.criterion]
         
         if self.ema_model is not None:
-            self.ema_criterion = deepcopy(self.criterion).to(self.device)
+            print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
+            self.ema_model.eval()
+            self.ema_criterion = deepcopy(self.criterion)
+            self.ema_criterion.eval()
             
         self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
 
@@ -456,11 +459,11 @@ class TesterBase:
             loss, metrics_dict = self.criterion(outputs, targets, infer_mode=True)
             
             if self.ema_model is not None:
-                    ema_outputs = self.ema_model(inputs)
-                    ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
-                    # metrics_dict['ema_loss'] = ema_loss  # no need to show 'loss' & 'ema_loss' in inference
-                    for key, value in ema_metrics_dict.items():
-                        metrics_dict[f'ema_{key}'] = value
+                ema_outputs = self.ema_model(inputs)
+                ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
+                # metrics_dict['ema_loss'] = ema_loss  # no need to show 'loss' & 'ema_loss' in inference
+                for key, value in ema_metrics_dict.items():
+                    metrics_dict[f'ema_{key}'] = value
             
         return outputs, loss, metrics_dict
 
