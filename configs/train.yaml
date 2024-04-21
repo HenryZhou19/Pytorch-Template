@@ -46,6 +46,10 @@ trainer:
     lr_milestones_epochs: null  # only for scheduler_choice == 'multistep' [50, 100]
     lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
     lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
+    lr_first_cycle_epochs: null  # only for scheduler_choice == 'cosine_restart'
+    lr_first_cycle_steps: null  # only for scheduler_choice == 'cosine_restart'
+    lr_cycle_mult: 1.0  # only for scheduler_choice == 'cosine_restart'
+    lr_cycle_gamma: 1.0  # only for scheduler_choice == 'cosine_restart'
     warmup_epochs: 10
     warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
     # warmup_factor: 0.0  # default

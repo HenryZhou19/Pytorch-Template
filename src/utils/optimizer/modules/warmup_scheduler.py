@@ -12,6 +12,7 @@ __all__ = [
     'WarmUpCosineAnnealingLR',
     'WarmUpLinearLR',
     'WarmUpMultiStepLR',
+    'WarmupCosineAnnealingRestartLR',
     ]
 
 
@@ -141,3 +142,108 @@ class WarmUpMultiStepLR(_AmpStepLR):
             alpha = self.gamma ** bisect_right(self.milestones, self.last_epoch)
             return [self.lr_min + alpha * (base_lr - self.lr_min) for base_lr in self.base_lrs]
 
+
+class WarmupCosineAnnealingRestartLR(_AmpStepLR):
+    """
+    Hacked from https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup/blob/master/cosine_annealing_warmup/scheduler.py
+
+        optimizer (Optimizer): Wrapped optimizer.
+        first_cycle_steps (int): First cycle step size.
+        cycle_mult(float): Cycle steps magnification. Default: 1.0
+        max_lr(float): First cycle's max learning rate. Default: 0.1.
+        min_lr(float): Min learning rate. Default: 0.001.
+        warmup_steps(int): Linear warmup step size. Default: 0.
+        gamma(float): Decrease rate of max learning rate by cycle. Default: 1.
+        last_epoch (int): The index of last epoch. Default: -1.
+    """
+    def __init__(self, optimizer, scaler, do_grad_accumulation, T_warmup, lr_min, warmup_fn,
+        first_cycle_steps: int,
+        cycle_mult: float = 1.0,
+        gamma: float = 1.0,
+        last_epoch: int = -1,
+    ):
+        assert T_warmup < first_cycle_steps
+
+        self.first_cycle_steps = first_cycle_steps  # first cycle step size
+        self.cycle_mult = cycle_mult  # cycle steps magnification
+        self.lr_min = lr_min  # min learning rate
+        self.T_warmup = T_warmup  # warmup step size
+        self.warmup_fn = warmup_fn
+        self.gamma = gamma  # decrease rate of max learning rate by cycle
+
+        self.cur_cycle_steps = first_cycle_steps  # first cycle step size
+        self.cycle = 0  # cycle count
+        self.step_in_cycle = last_epoch  # step size of the current cycle
+
+        super().__init__(optimizer, scaler, do_grad_accumulation, last_epoch)
+        
+        self.cycle_max_lrs = self.base_lrs  # max learning rate in the current cycle
+
+    def get_lr(self):
+        # if self.step_in_cycle == -1:
+        #     return self.base_lrs
+        if self.step_in_cycle < self.T_warmup:
+            alpha = self.warmup_fn(self.step_in_cycle, self.T_warmup)
+            return [
+                alpha * (cycle_max_lr - self.lr_min)
+                + self.lr_min
+                for cycle_max_lr in self.cycle_max_lrs
+            ]
+        else:
+            return [
+                self.lr_min
+                + (cycle_max_lr - self.lr_min)
+                * (
+                    1
+                    + math.cos(
+                        math.pi
+                        * (self.step_in_cycle - self.T_warmup)
+                        / (self.cur_cycle_steps - self.T_warmup)
+                    )
+                )
+                / 2
+                for cycle_max_lr in self.cycle_max_lrs
+            ]
+
+    def step(self, epoch=None):
+        if epoch is None:
+            epoch = self.last_epoch + 1
+            self.step_in_cycle = self.step_in_cycle + 1
+            if self.step_in_cycle >= self.cur_cycle_steps:
+                self.cycle += 1
+                self.step_in_cycle = self.step_in_cycle - self.cur_cycle_steps
+                self.cur_cycle_steps = int(self.cur_cycle_steps * self.cycle_mult)
+        else:
+            if epoch >= self.first_cycle_steps:
+                if self.cycle_mult == 1.0:
+                    self.step_in_cycle = epoch % self.first_cycle_steps
+                    self.cycle = epoch // self.first_cycle_steps
+                else:
+                    n = int(
+                        math.log(
+                            (
+                                epoch / self.first_cycle_steps * (self.cycle_mult - 1)
+                                + 1
+                            ),
+                            self.cycle_mult,
+                        )
+                    )
+                    self.cycle = n
+                    self.step_in_cycle = epoch - int(
+                        self.first_cycle_steps
+                        * (self.cycle_mult ** n - 1)
+                        / (self.cycle_mult - 1)
+                    )
+                    self.cur_cycle_steps = self.first_cycle_steps * self.cycle_mult ** (
+                        n
+                    )
+            else:
+                self.cur_cycle_steps = self.first_cycle_steps
+                self.step_in_cycle = epoch
+
+        self.cycle_max_lrs = [base_lr * (self.gamma ** self.cycle) for base_lr in self.base_lrs]
+        self.last_epoch = math.floor(epoch)
+        for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
+            param_group['lr'] = lr
+            
+        self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
