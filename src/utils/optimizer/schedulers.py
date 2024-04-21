@@ -21,17 +21,14 @@ class SchedulerUtils:
             'do_grad_accumulation': cfg.trainer.grad_accumulation > 1,
             'T_max': cfg.trainer.epochs * len_train_loader,
             'T_warmup': warmup_iters,
-            'warmup_factor': cfg.trainer.scheduler.warmup_factor,
-            'warmup_fn': WarmUpFn.get_warmup_fn(cfg.trainer.scheduler.warmup_type, cfg.trainer.scheduler.warmup_factor),
-            'lr_min': cfg.trainer.scheduler.lr_min,
+            'warmup_fn': WarmUpFn.get_warmup_fn(cfg.trainer.scheduler.warmup_type),
+            'lr_min_factor': cfg.trainer.scheduler.lr_min_factor,
         }
         if cfg.trainer.scheduler.scheduler_choice == 'vanilla':
-            kwargs.pop('lr_min')
             return WarmUpVanillaLR(**kwargs) 
         elif cfg.trainer.scheduler.scheduler_choice == 'cosine':
             return WarmUpCosineAnnealingLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'cosine_restart':
-            kwargs.pop('warmup_factor')  # warmup_factor is not used in CosineAnnealingRestartLR
             kwargs.pop('T_max')  # T_max is not used in CosineAnnealingRestartLR
             if cfg.trainer.scheduler.lr_first_cycle_steps is not None:
                 first_cycle_steps = cfg.trainer.scheduler.lr_first_cycle_steps
