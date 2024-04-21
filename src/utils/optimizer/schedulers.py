@@ -30,6 +30,19 @@ class SchedulerUtils:
             return WarmUpVanillaLR(**kwargs) 
         elif cfg.trainer.scheduler.scheduler_choice == 'cosine':
             return WarmUpCosineAnnealingLR(**kwargs)
+        elif cfg.trainer.scheduler.scheduler_choice == 'cosine_restart':
+            kwargs.pop('warmup_factor')  # warmup_factor is not used in CosineAnnealingRestartLR
+            kwargs.pop('T_max')  # T_max is not used in CosineAnnealingRestartLR
+            if cfg.trainer.scheduler.lr_first_cycle_steps is not None:
+                first_cycle_steps = cfg.trainer.scheduler.lr_first_cycle_steps
+            elif cfg.trainer.scheduler.lr_first_cycle_epochs is not None:
+                first_cycle_steps = len_train_loader * cfg.trainer.scheduler.lr_first_cycle_epochs
+            kwargs.update({
+                'first_cycle_steps': first_cycle_steps,
+                'cycle_mult': getattr(cfg.trainer.scheduler, 'lr_cycle_mult', 1.0),
+                'gamma': getattr(cfg.trainer.scheduler, 'lr_cycle_gamma', 1.0),
+            })
+            return WarmupCosineAnnealingRestartLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'linear':
             return WarmUpLinearLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'multistep':
