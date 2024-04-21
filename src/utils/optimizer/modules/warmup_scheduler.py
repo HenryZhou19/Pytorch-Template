@@ -17,14 +17,13 @@ __all__ = [
 
 
 class WarmUpFn:
+    no_warmup = lambda last_epoch, T_warmup: 1.0
     constant = lambda last_epoch, T_warmup: 0.0
     linear = lambda last_epoch, T_warmup: float(last_epoch) / T_warmup
     exponential = lambda last_epoch, T_warmup, gamma=5.0: math.exp(gamma * float(last_epoch) / T_warmup - gamma)
     cosine = lambda last_epoch, T_warmup: 0.5 * (1.0 - math.cos(math.pi * float(last_epoch) / T_warmup))
     
-    def get_warmup_fn(warmup_type, warmup_factor):
-        if warmup_type == 'constant' and warmup_factor < 1e-8:
-            Warning(f'warmup_factor = {warmup_factor} is too small for constant warmup.')
+    def get_warmup_fn(warmup_type):
         return getattr(WarmUpFn, warmup_type)
 
 
@@ -60,67 +59,63 @@ class _AmpStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` bef
 
 
 class WarmUpVanillaLR(_AmpStepLR):
-    def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, warmup_fn, last_epoch=-1):
+    def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
         assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
         self.T_warmup = T_warmup
-        self.warmup_factor = warmup_factor
         self.warmup_fn = warmup_fn
+        self.lr_min_factor = lr_min_factor
+        self.min_lrs = [self.lr_min_factor * group['lr'] for group in optimizer.param_groups]
         super().__init__(optimizer, scaler, do_grad_accumulation, last_epoch)
 
     def get_lr(self):
         if self.last_epoch < self.T_warmup:
             alpha = self.warmup_fn(self.last_epoch, self.T_warmup)
-            alpha = self.warmup_factor * (1 - alpha) + alpha
-            return [base_lr * alpha for base_lr in self.base_lrs]
         else:
-            return [base_lr for base_lr in self.base_lrs]
+            alpha = 1.0
+        return [min_lr + alpha * (base_lr - min_lr) for base_lr, min_lr in zip(self.base_lrs, self.min_lrs)]
 
 
 class WarmUpCosineAnnealingLR(_AmpStepLR):
-    def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, lr_min, warmup_fn, last_epoch=-1):
+    def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
         assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
         self.T_warmup = T_warmup
-        self.warmup_factor = warmup_factor
         self.warmup_fn = warmup_fn
-        self.lr_min = lr_min
+        self.lr_min_factor = lr_min_factor
+        self.min_lrs = [self.lr_min_factor * group['lr'] for group in optimizer.param_groups]
         super().__init__(optimizer, scaler, do_grad_accumulation, last_epoch)
 
     def get_lr(self):
         if self.last_epoch < self.T_warmup:
             alpha = self.warmup_fn(self.last_epoch, self.T_warmup)
-            alpha = self.warmup_factor * (1 - alpha) + alpha
-            return [base_lr * alpha for base_lr in self.base_lrs]
         else:
             alpha = float(self.last_epoch - self.T_warmup) / (self.T_max - self.T_warmup)
             alpha = 0.5 + 0.5 * math.cos(math.pi * alpha)
-            return [self.lr_min + alpha * (base_lr - self.lr_min) for base_lr in self.base_lrs]
+        return [min_lr + alpha * (base_lr - min_lr) for base_lr, min_lr in zip(self.base_lrs, self.min_lrs)]
 
 
 class WarmUpLinearLR(_AmpStepLR):
-    def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, warmup_factor, lr_min, warmup_fn, last_epoch=-1):
+    def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
         assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
         self.T_warmup = T_warmup
-        self.warmup_factor = warmup_factor
         self.warmup_fn = warmup_fn
-        self.lr_min = lr_min
+        self.lr_min_factor = lr_min_factor
+        self.min_lrs = [self.lr_min_factor * group['lr'] for group in optimizer.param_groups]
         super().__init__(optimizer, scaler, do_grad_accumulation, last_epoch)
 
     def get_lr(self):
         if self.last_epoch < self.T_warmup:
             alpha = self.warmup_fn(self.last_epoch, self.T_warmup)
-            alpha = self.warmup_factor * (1 - alpha) + alpha
-            return [base_lr * alpha for base_lr in self.base_lrs]
         else:
             alpha = float(self.last_epoch - self.T_warmup) / (self.T_max - self.T_warmup)
             alpha = 1 - alpha
-            return [self.lr_min + alpha * (base_lr - self.lr_min) for base_lr in self.base_lrs]
+        return [min_lr + alpha * (base_lr - min_lr) for base_lr, min_lr in zip(self.base_lrs, self.min_lrs)]
 
 
 class WarmUpMultiStepLR(_AmpStepLR):
-    def __init__(self, optimizer, scaler, do_grad_accumulation, step_milestones: List[int], gamma, T_max, T_warmup, warmup_factor, lr_min, warmup_fn, last_epoch=-1):
+    def __init__(self, optimizer, scaler, do_grad_accumulation, step_milestones: List[int], gamma, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
         assert list(step_milestones) == sorted(step_milestones), 'MultiStepLR milestones should be a list of increasing integers.'
         assert T_max > step_milestones[-1], 'T_max should be larger than the last milestone.'
         assert T_warmup < step_milestones[0], 'T_warmup should be smaller than the first milestone.'
@@ -128,19 +123,17 @@ class WarmUpMultiStepLR(_AmpStepLR):
         self.gamma = gamma
         self.T_max = T_max
         self.T_warmup = T_warmup
-        self.warmup_factor = warmup_factor
         self.warmup_fn = warmup_fn
-        self.lr_min = lr_min
+        self.lr_min_factor = lr_min_factor
+        self.min_lrs = [self.lr_min_factor * group['lr'] for group in optimizer.param_groups]
         super().__init__(optimizer, scaler, do_grad_accumulation, last_epoch)
 
     def get_lr(self):
         if self.last_epoch < self.T_warmup:
             alpha = self.warmup_fn(self.last_epoch, self.T_warmup)
-            alpha = self.warmup_factor * (1 - alpha) + alpha
-            return [base_lr * alpha for base_lr in self.base_lrs]
         else:
             alpha = self.gamma ** bisect_right(self.milestones, self.last_epoch)
-            return [self.lr_min + alpha * (base_lr - self.lr_min) for base_lr in self.base_lrs]
+        return [min_lr + alpha * (base_lr - min_lr) for base_lr, min_lr in zip(self.base_lrs, self.min_lrs)]
 
 
 class WarmupCosineAnnealingRestartLR(_AmpStepLR):
@@ -156,7 +149,7 @@ class WarmupCosineAnnealingRestartLR(_AmpStepLR):
         gamma(float): Decrease rate of max learning rate by cycle. Default: 1.
         last_epoch (int): The index of last epoch. Default: -1.
     """
-    def __init__(self, optimizer, scaler, do_grad_accumulation, T_warmup, lr_min, warmup_fn,
+    def __init__(self, optimizer, scaler, do_grad_accumulation, T_warmup, lr_min_factor, warmup_fn,
         first_cycle_steps: int,
         cycle_mult: float = 1.0,
         gamma: float = 1.0,
@@ -166,44 +159,27 @@ class WarmupCosineAnnealingRestartLR(_AmpStepLR):
 
         self.first_cycle_steps = first_cycle_steps  # first cycle step size
         self.cycle_mult = cycle_mult  # cycle steps magnification
-        self.lr_min = lr_min  # min learning rate
-        self.T_warmup = T_warmup  # warmup step size
+        self.T_warmup = T_warmup
         self.warmup_fn = warmup_fn
         self.gamma = gamma  # decrease rate of max learning rate by cycle
-
+        self.lr_min_factor = lr_min_factor
+        self.min_lrs = [self.lr_min_factor * group['lr'] for group in optimizer.param_groups]
+        
         self.cur_cycle_steps = first_cycle_steps  # first cycle step size
         self.cycle = 0  # cycle count
         self.step_in_cycle = last_epoch  # step size of the current cycle
 
         super().__init__(optimizer, scaler, do_grad_accumulation, last_epoch)
-        
-        self.cycle_max_lrs = self.base_lrs  # max learning rate in the current cycle
 
     def get_lr(self):
-        # if self.step_in_cycle == -1:
-        #     return self.base_lrs
         if self.step_in_cycle < self.T_warmup:
             alpha = self.warmup_fn(self.step_in_cycle, self.T_warmup)
-            return [
-                alpha * (cycle_max_lr - self.lr_min)
-                + self.lr_min
-                for cycle_max_lr in self.cycle_max_lrs
-            ]
+            cycle_min_lrs = [cycle_min_lr / self.gamma for cycle_min_lr in self.cycle_min_lrs]
         else:
-            return [
-                self.lr_min
-                + (cycle_max_lr - self.lr_min)
-                * (
-                    1
-                    + math.cos(
-                        math.pi
-                        * (self.step_in_cycle - self.T_warmup)
-                        / (self.cur_cycle_steps - self.T_warmup)
-                    )
-                )
-                / 2
-                for cycle_max_lr in self.cycle_max_lrs
-            ]
+            alpha = float(self.step_in_cycle - self.T_warmup) / (self.cur_cycle_steps - self.T_warmup)
+            alpha = 0.5 + 0.5 * math.cos(math.pi * alpha)
+            cycle_min_lrs = self.cycle_min_lrs
+        return [alpha * (cycle_max_lr - min_lr) + min_lr for cycle_max_lr, min_lr in zip(self.cycle_max_lrs, cycle_min_lrs)]
 
     def step(self, epoch=None):
         if epoch is None:
@@ -242,6 +218,7 @@ class WarmupCosineAnnealingRestartLR(_AmpStepLR):
                 self.step_in_cycle = epoch
 
         self.cycle_max_lrs = [base_lr * (self.gamma ** self.cycle) for base_lr in self.base_lrs]
+        self.cycle_min_lrs = [self.lr_min_factor * cycle_max_lr for cycle_max_lr in self.cycle_max_lrs]
         self.last_epoch = math.floor(epoch)
         for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
             param_group['lr'] = lr

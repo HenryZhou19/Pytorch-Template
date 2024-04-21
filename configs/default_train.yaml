@@ -61,5 +61,5 @@ trainer:
   checkpoint_save_interval: 1  # n, save the epoch n, 2n, ... (but the later one will overwrite the previous one)
   checkpoint_reserve_factor: 0  # m, 0 means no reserve (only the last k*n epoch will be kept on disk), otherwise the m*n, 2m*n, ... will be kept on disk
   scheduler:
-    warmup_factor: 0.0  # [0., 1.] start warmup from: warmup_factor * lr
-    warmup_type: linear  # constant, linear, exponential, cosine
+    lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
+    warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
