@@ -287,7 +287,7 @@ class TrainerBase:
             if self.ema_model is not None:
                 self.ema_model.update()
         
-        if not math.isfinite(loss):
+        if not math.isfinite(loss) and self.scaler is None:
             LoggerMisc.get_wandb_pid(kill_all=True)
             raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss}, stopping training.')
         
