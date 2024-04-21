@@ -723,7 +723,7 @@ class ModelMisc:
                 verbose_string += f'\n    {submodule_name}'
                 for param in submodule.parameters():
                     param.requires_grad = is_trainable
-        if verbose:
+        if verbose and len(submodule_name_list) > 0:
             print(LoggerMisc.block_wrapper(verbose_string, '='))
     
     @staticmethod
@@ -749,7 +749,7 @@ class ModelMisc:
             else:
                 verbose_string += f'\n    {submodule_name}'
                 submodule.train() if is_train else submodule.eval()
-        if verbose:
+        if verbose and len(submodule_name_list) > 0:
             print(LoggerMisc.block_wrapper(verbose_string, '='))
 
 class LoggerMisc:
