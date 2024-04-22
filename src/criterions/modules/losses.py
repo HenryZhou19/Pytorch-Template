@@ -20,7 +20,7 @@ def one_hot_after_batch(x: torch.Tensor):
     return x
 
 
-def soft_mse_loss(outputs, targets, tolerance=0.1):
+def soft_regression_loss(outputs, targets, tolerance=0.1, mode='l1', **kwargs):
     """
     outputs: Tensor of shape (batch_size, ...) type: float, output scores
     targets: Tensor of shape (batch_size, ...) type: float, ground truth or targets
@@ -28,7 +28,17 @@ def soft_mse_loss(outputs, targets, tolerance=0.1):
     if isinstance(targets, (int, float)):
         targets = targets * torch.ones_like(outputs)
     abs_diff = torch.abs(outputs - targets)
-    loss = torch.where(abs_diff <= tolerance, 0., abs_diff ** 2)
+    abs_diff = torch.where(abs_diff <= tolerance, 0., abs_diff)
+    if mode == 'l1':
+        loss = torch.nn.functional.l1_loss(abs_diff, torch.zeros_like(outputs), reduction='none', **kwargs)
+    elif mode == 'mse':
+        loss = torch.nn.functional.mse_loss(abs_diff, torch.zeros_like(outputs), reduction='none', **kwargs)
+    elif mode == 'smooth_l1':
+        loss = torch.nn.functional.smooth_l1_loss(abs_diff, torch.zeros_like(outputs), reduction='none', **kwargs)
+    elif mode == 'huber':
+        loss = torch.nn.functional.huber_loss(abs_diff, torch.zeros_like(outputs), reduction='none', **kwargs)
+    else:
+        raise ValueError(f'Invalid mode {mode}')
     return loss.mean()
 
 
