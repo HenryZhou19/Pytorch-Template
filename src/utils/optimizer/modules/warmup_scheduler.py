@@ -27,7 +27,7 @@ class WarmUpFn:
         return getattr(WarmUpFn, warmup_type)
 
 
-class _AmpStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` before `optimizer.step()`' warning when use amp or grad_accumulation
+class _AmpStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` before `optimizer.step()`' warning when using amp or grad_accumulation
     @staticmethod
     def with_counter(method, is_scaler_step=False):
         instance_ref = weakref.ref(method.__self__)
