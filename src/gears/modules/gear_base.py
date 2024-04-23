@@ -67,7 +67,7 @@ class TrainerBase:
           
         self.nn_module_list = [self.model, self.criterion]
         self.freeze_modules = getattr(self.cfg.trainer, 'freeze_modules', [])
-        self.is_train = True
+        self.training = True
         
         if self.ema_model is not None:
             print(LoggerMisc.block_wrapper('Using EMA model to evaluate. Setting EMA model and criterion to eval mode...', '='))
@@ -231,13 +231,13 @@ class TrainerBase:
             self.freeze_modules,
             False,
         )
-        self.is_train = True
+        self.training = True
             
     def _eval_mode(self):
         # called in "before_validation"
         for nn_module in self.nn_module_list:
             nn_module.eval()
-        self.is_train = False
+        self.training = False
                     
     def forward(self, batch: dict):
         time.sleep(self.breath_time)
@@ -246,7 +246,7 @@ class TrainerBase:
         inputs: dict = batch['inputs']
         targets: dict = batch['targets']
         
-        if self.is_train:
+        if self.training:
             inputs['train_progress'] = self.trained_iters / self.total_iters
             with torch.cuda.amp.autocast(enabled=self.scaler is not None):
                 outputs = self.model(inputs)
@@ -445,7 +445,7 @@ class TesterBase:
         # called in "before_inference"
         for nn_module in self.nn_module_list:
             nn_module.eval()
-        # self.is_train = False
+        # self.training = False
         
     def forward(self, batch: dict):
         time.sleep(self.breath_time)
