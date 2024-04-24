@@ -10,6 +10,7 @@ source_folder=$(pwd)
 echo -e "Source project path：\n\t$source_folder"
 
 destination_folder=$(readlink -m "$source_folder-cloned")
+dry_run=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,6 +21,10 @@ while [[ $# -gt 0 ]]; do
     -d|-destination)
       destination_folder="$2"
       shift 2
+      ;;
+    -n|-dryrun)
+      dry_run=true
+      shift
       ;;
     *)
       echo "Unknown option: $1"
@@ -32,6 +37,11 @@ echo -e "Destination project path：\n\t$destination_folder"
 echo -e "Exclusion："
 cat $excludsion_list_file | sed 's/^/\t/'
 
-rsync -a --stats --exclude-from=$excludsion_list_file "$source_folder/" "$destination_folder/"
-
-echo -e "\n\nProject cloned to \"$destination_folder\" successfully.\n"
+if [ "$dry_run" = true ]; then
+  echo -e "\n\nDry run, no files will be copied.\n"
+  rsync -ahn --stats --exclude-from=$excludsion_list_file "$source_folder/" "$destination_folder/"
+else
+  echo -e "\n\nCloning project...\n"
+  rsync -ah --stats --exclude-from=$excludsion_list_file "$source_folder/" "$destination_folder/"
+  echo -e "\n\nProject cloned to \"$destination_folder\" successfully.\n"
+fi
