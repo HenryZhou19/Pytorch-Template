@@ -659,7 +659,7 @@ class ModelMisc:
             model_without_ddp = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_without_ddp)
             
             return torch.nn.parallel.DistributedDataParallel(model_without_ddp, device_ids=[cfg.env.gpu],
-                find_unused_parameters=cfg.env.find_unused_params,
+                find_unused_parameters=cfg.env.find_unused_parameters,
             )
         else:
             return model_without_ddp

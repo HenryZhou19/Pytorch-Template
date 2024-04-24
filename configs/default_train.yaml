@@ -8,7 +8,7 @@ env:
   rank: TBD
   seed_with_rank: True
   cuda_deterministic: False
-  find_unused_params: True
+  find_unused_parameters: True
   amp: True
   num_workers: 4
   prefetch_factor: 2
