@@ -20,26 +20,80 @@ def one_hot_after_batch(x: torch.Tensor):
     return x
 
 
-def soft_regression_loss(outputs, targets, tolerance=0.1, mode='l1', **kwargs):
-    """
-    outputs: Tensor of shape (batch_size, ...) type: float, output scores
-    targets: Tensor of shape (batch_size, ...) type: float, ground truth or targets
-    """
-    if isinstance(targets, (int, float)):
-        targets = targets * torch.ones_like(outputs)
-    abs_diff = torch.abs(outputs - targets)
-    abs_diff = torch.where(abs_diff <= tolerance, 0., abs_diff)
-    if mode == 'l1':
-        loss = torch.nn.functional.l1_loss(abs_diff, torch.zeros_like(outputs), reduction='none', **kwargs)
-    elif mode == 'mse':
-        loss = torch.nn.functional.mse_loss(abs_diff, torch.zeros_like(outputs), reduction='none', **kwargs)
-    elif mode == 'smooth_l1':
-        loss = torch.nn.functional.smooth_l1_loss(abs_diff, torch.zeros_like(outputs), reduction='none', **kwargs)
-    elif mode == 'huber':
-        loss = torch.nn.functional.huber_loss(abs_diff, torch.zeros_like(outputs), reduction='none', **kwargs)
-    else:
-        raise ValueError(f'Invalid mode {mode}')
-    return loss.mean()
+class _SoftRegressionLoss(nn.Module):
+    def __init__(self, abs_tolerance):
+        super().__init__()
+        self.abs_tolerance = abs_tolerance
+        
+    def set_abs_tolerance(self, abs_tolerance):
+        self.abs_tolerance = abs_tolerance
+    
+    def forward(self, outputs, targets):
+        """
+        outputs: Tensor of shape (batch_size, ...) type: float, output scores
+        targets: Tensor of shape (batch_size, ...) type: float, ground truth or targets
+        """
+        if isinstance(targets, (int, float)):
+            targets = targets * torch.ones_like(outputs)
+        abs_diff = torch.abs(outputs - targets)
+        abs_diff = torch.where(abs_diff <= self.abs_tolerance, 0., abs_diff)
+        return abs_diff
+
+
+class SoftMSELoss(_SoftRegressionLoss):
+    def __init__(self, abs_tolerance, reduction='mean'):
+        super().__init__(abs_tolerance)
+        self.loss = nn.MSELoss(reduction=reduction)
+    
+    def forward(self, outputs, targets):
+        """
+        outputs: Tensor of shape (batch_size, ...) type: float, output scores
+        targets: Tensor of shape (batch_size, ...) type: float, ground truth or targets
+        """
+        abs_diff = super().forward(outputs, targets)
+        return self.loss(abs_diff, torch.zeros_like(abs_diff))
+    
+
+class SoftL1Loss(_SoftRegressionLoss):
+    def __init__(self, abs_tolerance, reduction='mean'):
+        super().__init__(abs_tolerance)
+        self.loss = nn.L1Loss(reduction=reduction)
+    
+    def forward(self, outputs, targets):
+        """
+        outputs: Tensor of shape (batch_size, ...) type: float, output scores
+        targets: Tensor of shape (batch_size, ...) type: float, ground truth or targets
+        """
+        abs_diff = super().forward(outputs, targets)
+        return self.loss(abs_diff, torch.zeros_like(abs_diff))
+    
+
+class SoftSmoothL1Loss(_SoftRegressionLoss):
+    def __init__(self, abs_tolerance, reduction='mean', beta=1.0):
+        super().__init__(abs_tolerance)
+        self.loss = nn.SmoothL1Loss(reduction=reduction, beta=beta)
+    
+    def forward(self, outputs, targets):
+        """
+        outputs: Tensor of shape (batch_size, ...) type: float, output scores
+        targets: Tensor of shape (batch_size, ...) type: float, ground truth or targets
+        """
+        abs_diff = super().forward(outputs, targets)
+        return self.loss(abs_diff, torch.zeros_like(abs_diff))
+    
+
+class SoftHuberLoss(_SoftRegressionLoss):
+    def __init__(self, abs_tolerance, reduction='mean', delta=1.0):
+        super().__init__(abs_tolerance)
+        self.loss = nn.HuberLoss(reduction=reduction, delta=delta)
+    
+    def forward(self, outputs, targets):
+        """
+        outputs: Tensor of shape (batch_size, ...) type: float, output scores
+        targets: Tensor of shape (batch_size, ...) type: float, ground truth or targets
+        """
+        abs_diff = super().forward(outputs, targets)
+        return self.loss(abs_diff, torch.zeros_like(abs_diff))
 
 
 class DiceLoss(nn.Module):
