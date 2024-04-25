@@ -34,12 +34,25 @@ class SchedulerUtils:
                 first_cycle_steps = cfg.trainer.scheduler.lr_first_cycle_steps
             elif cfg.trainer.scheduler.lr_first_cycle_epochs is not None:
                 first_cycle_steps = len_train_loader * cfg.trainer.scheduler.lr_first_cycle_epochs
+            else:
+                raise ValueError('lr_first_cycle_steps and lr_first_cycle_epochs cannot be both None.')
             kwargs.update({
                 'first_cycle_steps': first_cycle_steps,
                 'cycle_mult': getattr(cfg.trainer.scheduler, 'lr_cycle_mult', 1.0),
                 'gamma': getattr(cfg.trainer.scheduler, 'lr_cycle_gamma', 1.0),
             })
             return WarmupCosineAnnealingRestartLR(**kwargs)
+        elif cfg.trainer.scheduler.scheduler_choice == 'cosine_multi_cycle':
+            kwargs.pop('T_max')  # T_max is not used in WarmupCosineAnnealingMultiCycleLR
+            if cfg.trainer.scheduler.lr_cycle_epochs_list is not None:
+                cycle_steps_list = [len_train_loader * lr_cycle_epoch for lr_cycle_epoch in cfg.trainer.scheduler.lr_cycle_epochs_list]
+            else:
+                raise ValueError('lr_cycle_epochs_list cannot be None.')
+            kwargs.update({
+                'cycle_steps_list': cycle_steps_list,
+                'gamma': getattr(cfg.trainer.scheduler, 'lr_cycle_gamma', 1.0),
+            })
+            return WarmupCosineAnnealingMultiCycleLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'linear':
             return WarmUpLinearLR(**kwargs)
         elif cfg.trainer.scheduler.scheduler_choice == 'multistep':
