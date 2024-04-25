@@ -7,7 +7,7 @@ from .modules.gear_base import (TesterBase, TrainerBase, tester_register,
 
 
 @trainer_register('multi_cycle')
-class Trainer(TrainerBase):
+class MultiCycleTrainer(TrainerBase):
     def _train_mode(self):
         super()._train_mode()
         
