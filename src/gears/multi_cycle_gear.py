@@ -59,7 +59,6 @@ class MultiCycleTrainer(TrainerBase):
     @staticmethod
     def change_train_mode(model_without_ddp, cycle_type, cycle_modules_list):
         for cycle_modules_idx in range(len(cycle_modules_list)):
-            print('\n\n\n', cycle_modules_list[cycle_type])
             if cycle_modules_idx == cycle_type:
                 ModelMisc.train_or_eval_submodules(
                     model_without_ddp,
@@ -71,7 +70,7 @@ class MultiCycleTrainer(TrainerBase):
                     model_without_ddp,
                     cycle_modules_list[cycle_modules_idx],
                     True,
-                    verbose=True,
+                    verbose=False,
                 )
             else:
                 ModelMisc.train_or_eval_submodules(
@@ -84,7 +83,7 @@ class MultiCycleTrainer(TrainerBase):
                     model_without_ddp,
                     cycle_modules_list[cycle_modules_idx],
                     False,
-                    verbose=True,
+                    verbose=False,
                 )
 
 
