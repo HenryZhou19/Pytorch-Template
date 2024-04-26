@@ -823,8 +823,8 @@ class LoggerMisc:
                         loggers.tensorboard_run.add_scalar(k, v, global_step=step)  # log epoch without group
                     else:
                         loggers.tensorboard_run.add_scalar(f'{group}/{k}', v, global_step=step)
-                    # loggers.tensorboard_run.add_image("output_image", output_dict['output_image'], global_step=step)
-                    # loggers.tensorboard_run.add_image("output_video", output_dict['output_video'], global_step=step)
+                    # loggers.tensorboard_run.add_image('output_image', output_dict['output_image'], global_step=step)
+                    # loggers.tensorboard_run.add_image('output_video', output_dict['output_video'], global_step=step)
                     
     @staticmethod
     def print_all_pid(get_parent=True, specific_parent='torchrun', file=sys.stdout):
@@ -939,6 +939,30 @@ class TensorMisc:
             return {k: TensorMisc.expand_one_sample_to_batch(v, batch_size) for k, v in data.items()}
         else:
             raise TypeError(f'Unknown type: {type(data)}')
+        
+    @staticmethod
+    def get_gpu_memory_usage(verbose=False, device='cuda'):
+        allocated_bytes = torch.cuda.memory_allocated(device=device)
+        max_allocated_bytes = torch.cuda.max_memory_allocated(device=device)
+        total_bytes = torch.cuda.get_device_properties(device=device).total_memory
+
+        allocated_mb = allocated_bytes / 1048576
+        max_allocated_mb = max_allocated_bytes / 1048576
+        total_mb = total_bytes / 1048576
+        
+        if verbose:
+            print(f'Rank {DistMisc.get_rank()} --- Allocated in this process: {allocated_mb:.2f} MB', force=True)
+            print(f'Rank {DistMisc.get_rank()} --- Max Allocated in this process: {max_allocated_mb:.2f} MB', force=True)
+            print(f'Rank {DistMisc.get_rank()} --- Total: {total_mb:.2f} MB', force=True)
+        return allocated_mb, max_allocated_mb, total_mb
+    
+    @staticmethod
+    def allocate_memory_to_tensor(required_memory_mb, verbose=False, device='cuda'):
+        required_memory = required_memory_mb * 1048576
+        new_tensor = torch.empty(int(required_memory / 4), dtype=torch.float, device=device)
+        if verbose:
+            print(f'Rank {DistMisc.get_rank()} --- Now allocated memory: {torch.cuda.memory_allocated() / 1048576} MB', force=True)
+        return new_tensor
         
         
 class ImportMisc:

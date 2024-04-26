@@ -1,4 +1,6 @@
-from src.utils.misc import ModelMisc
+import torch
+
+from src.utils.misc import ModelMisc, TensorMisc
 from src.utils.optimizer.modules.warmup_scheduler import \
     WarmupCosineAnnealingMultiCycleLR
 
@@ -29,20 +31,38 @@ class MultiCycleTrainer(TrainerBase):
         
         self.cycle_type = self.lr_scheduler.cycle_type
         self.cycle_modules_list = [clean_cycle_modules(cycle_modules) for cycle_modules in self.cfg.trainer.cycle_modules_list]
+        self.min_hold_memory_mb = self.cfg.trainer.min_hold_memory_mb
         
     def before_one_epoch(self, **kwargs):
         # self.epoch == 0 here before the first epoch
         super().before_one_epoch(**kwargs)
         # self.epoch == self.epoch + 1 after the "super.()..."
         
+        self.new_cycle = (self.epoch == 1)
+        
         if self.cycle_type != self.lr_scheduler.cycle_type:
             self.cycle_type = self.lr_scheduler.cycle_type
             if self.cfg.trainer.copy_ema_after_each_cycle:
                 assert self.ema_model is not None, "EMA model is not initialized"
                 self.ema_model.copy_params_from_ema_to_model()
+            
+            self.new_cycle = True
+
+        if self.new_cycle:
             self.change_train_mode(self.model_without_ddp, self.cycle_type, self.cycle_modules_list)
-        if self.epoch == 1:
-            self.change_train_mode(self.model_without_ddp, self.cycle_type, self.cycle_modules_list)
+            
+            if hasattr(self, 'memory_tensor'):
+                del self.memory_tensor
+            torch.cuda.empty_cache()
+            torch.cuda.reset_peak_memory_stats()
+        
+    def after_first_train_iter(self, **kwargs):
+        super().after_first_train_iter(**kwargs)
+        
+        if self.new_cycle:
+            _, max_allocated_bytes, _ = TensorMisc.get_gpu_memory_usage(verbose=False)
+            if max_allocated_bytes < self.min_hold_memory_mb:
+                self.memory_tensor = TensorMisc.allocate_memory_to_tensor(self.min_hold_memory_mb - max_allocated_bytes)
         
     def after_one_epoch(self, **kwargs):
         super().after_one_epoch(**kwargs)

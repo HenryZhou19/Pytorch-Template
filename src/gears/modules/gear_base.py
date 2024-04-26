@@ -1,8 +1,8 @@
-from copy import deepcopy
 import math
 import os
 import time
 from argparse import Namespace
+from copy import deepcopy
 from glob import glob
 
 import torch
@@ -351,6 +351,9 @@ class TrainerBase:
         self.step_count = 0
         self.optimizer.zero_grad()
         self._train_mode()
+        
+    def after_first_train_iter(self, **kwargs):
+        pass
 
     def after_one_epoch(self, **kwargs):
         LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.trained_iters)
@@ -364,6 +367,9 @@ class TrainerBase:
             self.val_pbar.unpause()
             
         self._eval_mode()
+    
+    def after_first_validation_iter(self, **kwargs):
+        pass
 
     def after_validation(self, **kwargs):
         LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.trained_iters)
@@ -472,6 +478,9 @@ class TesterBase:
         self._get_pbar()
         
         self._eval_mode()
+    
+    def after_first_inference_iter(self, **kwargs):
+        pass
 
     def after_inference(self, **kwargs):
         LoggerMisc.logging(self.loggers,  'infer', self.metrics, None)
