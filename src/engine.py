@@ -20,6 +20,7 @@ def train_one_epoch(trainer: TrainerBase):
         **{lr_group: VM(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', no_sync=True) for lr_group in trainer.lr_groups.keys()},
         'epoch': VM(window_size=1, no_print=True, no_sync=True)
         }])
+    first_iter = True
     for batch in mlogger.log_every(trainer.train_loader):
         
         _, loss, metrics_dict = trainer.forward(batch)
@@ -40,6 +41,10 @@ def train_one_epoch(trainer: TrainerBase):
         if cfg.info.iter_log_freq > 0:
             if trainer.trained_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
                 LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), int(trainer.trained_iters / cfg.trainer.grad_accumulation))
+        
+        if first_iter:
+            first_iter = False
+            trainer.after_first_train_iter()
     
     mlogger.add_epoch_meters(**trainer.criterion.get_epoch_metrics_and_reset())
     trainer.train_outputs = mlogger.output_dict(no_avg_list=[*trainer.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
@@ -56,6 +61,7 @@ def evaluate(trainer: TrainerBase):
         epoch_str=f'epoch: [{trainer.epoch}/{cfg.trainer.epochs}]',
         )
     mlogger.add_meters([{'loss': VM(prior=True)}])
+    first_iter = True
     for batch in mlogger.log_every(trainer.val_loader):
         
         _, loss, metrics_dict = trainer.forward(batch)
@@ -65,6 +71,10 @@ def evaluate(trainer: TrainerBase):
             loss=loss,
             **metrics_dict,
         )
+
+        if first_iter:
+            first_iter = False
+            trainer.after_first_validation_iter()
     
     mlogger.add_epoch_meters(**trainer.criterion.get_epoch_metrics_and_reset())
     if hasattr(trainer, 'ema_criterion'):
@@ -85,6 +95,7 @@ def test(tester: TesterBase):
         pbar=tester.test_pbar,  
         header='Test',
         )
+    first_iter = True
     for batch in mlogger.log_every(tester.test_loader):
         
         outputs, _, metrics_dict = tester.forward(batch)
@@ -94,6 +105,10 @@ def test(tester: TesterBase):
             **metrics_dict,
             )
         
+        if first_iter:
+            first_iter = False
+            tester.after_first_inference_iter()
+    
     mlogger.add_epoch_meters(**tester.criterion.get_epoch_metrics_and_reset())
     if hasattr(tester, 'ema_criterion'):
         ema_epoch_metrics = {}

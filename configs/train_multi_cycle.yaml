@@ -59,6 +59,7 @@ trainer:
   max_grad_norm: 1.0  # <= 0 means no gradient clipping
   cycle_modules_list: [[backbone], [head]]  # only for trainer_choice == 'multi_cycle'
   copy_ema_after_each_cycle: True  # only for trainer_choice == 'multi_cycle'
+  min_hold_memory_mb: 7000
 
 sweep:
   sweep_enabled: False
