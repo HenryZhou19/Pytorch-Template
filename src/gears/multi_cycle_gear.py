@@ -1,6 +1,6 @@
 import torch
 
-from src.utils.misc import ModelMisc, TensorMisc
+from src.utils.misc import LoggerMisc, ModelMisc, TensorMisc
 from src.utils.optimizer.modules.warmup_scheduler import \
     WarmupCosineAnnealingMultiCycleLR
 
@@ -61,6 +61,7 @@ class MultiCycleTrainer(TrainerBase):
         
         if self.new_cycle:
             _, max_allocated_bytes, _ = TensorMisc.get_gpu_memory_usage(verbose=False)
+            print(LoggerMisc.block_wrapper(f'Epoch {self.epoch} --- Max allocated memory: {max_allocated_bytes:.2f} MB'))
             if max_allocated_bytes < self.min_hold_memory_mb:
                 self.memory_tensor = TensorMisc.allocate_memory_to_tensor(self.min_hold_memory_mb - max_allocated_bytes)
         

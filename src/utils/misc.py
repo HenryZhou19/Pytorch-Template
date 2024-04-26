@@ -961,7 +961,7 @@ class TensorMisc:
         required_memory = required_memory_mb * 1048576
         new_tensor = torch.empty(int(required_memory / 4), dtype=torch.float, device=device)
         if verbose:
-            print(f'Rank {DistMisc.get_rank()} --- Now allocated memory: {torch.cuda.memory_allocated() / 1048576} MB', force=True)
+            print(f'Rank {DistMisc.get_rank()} --- Now allocated memory: {torch.cuda.memory_allocated() / 1048576:.2f} MB', force=True)
         return new_tensor
         
         
