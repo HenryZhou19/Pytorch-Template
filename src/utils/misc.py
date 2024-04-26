@@ -944,17 +944,20 @@ class TensorMisc:
     def get_gpu_memory_usage(verbose=False, device='cuda'):
         allocated_bytes = torch.cuda.memory_allocated(device=device)
         max_allocated_bytes = torch.cuda.max_memory_allocated(device=device)
+        reserved_bytes = torch.cuda.memory_reserved(device=device)
         total_bytes = torch.cuda.get_device_properties(device=device).total_memory
 
         allocated_mb = allocated_bytes / 1048576
         max_allocated_mb = max_allocated_bytes / 1048576
+        reserved_mb = reserved_bytes / 1048576
         total_mb = total_bytes / 1048576
         
         if verbose:
             print(f'Rank {DistMisc.get_rank()} --- Allocated in this process: {allocated_mb:.2f} MB', force=True)
             print(f'Rank {DistMisc.get_rank()} --- Max Allocated in this process: {max_allocated_mb:.2f} MB', force=True)
+            print(f'Rank {DistMisc.get_rank()} --- Reserved in this process: {reserved_mb:.2f} MB', force=True)
             print(f'Rank {DistMisc.get_rank()} --- Total: {total_mb:.2f} MB', force=True)
-        return allocated_mb, max_allocated_mb, total_mb
+        return allocated_mb, max_allocated_mb, reserved_mb, total_mb
     
     @staticmethod
     def allocate_memory_to_tensor(required_memory_mb, verbose=False, device='cuda'):

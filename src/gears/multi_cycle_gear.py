@@ -31,6 +31,7 @@ class MultiCycleTrainer(TrainerBase):
         
         self.cycle_type = self.lr_scheduler.cycle_type
         self.cycle_modules_list = [clean_cycle_modules(cycle_modules) for cycle_modules in self.cfg.trainer.cycle_modules_list]
+        print(LoggerMisc.block_wrapper(f'Cycle modules list: {self.cycle_modules_list}'))
         self.min_hold_memory_mb = self.cfg.trainer.min_hold_memory_mb
         
     def before_one_epoch(self, **kwargs):
@@ -48,9 +49,9 @@ class MultiCycleTrainer(TrainerBase):
             
             self.new_cycle = True
 
+        self.set_cycle_train_mode(self.model_without_ddp, self.cycle_type, self.cycle_modules_list)
+
         if self.new_cycle:
-            self.change_train_mode(self.model_without_ddp, self.cycle_type, self.cycle_modules_list)
-            
             if hasattr(self, 'memory_tensor'):
                 del self.memory_tensor
             torch.cuda.empty_cache()
@@ -60,10 +61,10 @@ class MultiCycleTrainer(TrainerBase):
         super().after_first_train_iter(**kwargs)
         
         if self.new_cycle:
-            _, max_allocated_bytes, _ = TensorMisc.get_gpu_memory_usage(verbose=False)
-            print(LoggerMisc.block_wrapper(f'Epoch {self.epoch} --- Max allocated memory: {max_allocated_bytes:.2f} MB'))
-            if max_allocated_bytes < self.min_hold_memory_mb:
-                self.memory_tensor = TensorMisc.allocate_memory_to_tensor(self.min_hold_memory_mb - max_allocated_bytes)
+            _, max_allocated_mb, reserved_mb, _ = TensorMisc.get_gpu_memory_usage(verbose=False)
+            print(LoggerMisc.block_wrapper(f'Epoch {self.epoch}\n\tMax allocated memory: {max_allocated_mb:.2f} MB\n\tReserved memory: {reserved_mb:.2f} MB\n'))
+            if reserved_mb < self.min_hold_memory_mb:
+                self.memory_tensor = TensorMisc.allocate_memory_to_tensor(self.min_hold_memory_mb - reserved_mb)
         
     def after_one_epoch(self, **kwargs):
         super().after_one_epoch(**kwargs)
@@ -78,7 +79,7 @@ class MultiCycleTrainer(TrainerBase):
         super().after_all_epochs(**kwargs)
     
     @staticmethod
-    def change_train_mode(model_without_ddp, cycle_type, cycle_modules_list):
+    def set_cycle_train_mode(model_without_ddp, cycle_type, cycle_modules_list):
         for cycle_modules_idx in range(len(cycle_modules_list)):
             if cycle_modules_idx == cycle_type:
                 ModelMisc.train_or_eval_submodules(
