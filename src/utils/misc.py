@@ -236,7 +236,11 @@ class PortalMisc:
         if use_train_seed:
             cfg.seed_base = train_seed_base
 
-        cfg.info.train_work_dir = cfg.info.work_dir
+        # cfg.info.train_work_dir = cfg.info.work_dir
+        cfg.info.train_work_dir = '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1])
+        if os.path.abspath(cfg.info.train_work_dir) != os.path.abspath(cfg.info.work_dir):
+            print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', '#'))
+        
         cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + cfg.info.infer_start_time
         cfg.trainer.grad_accumulation = 1
         if DistMisc.is_main_process():
