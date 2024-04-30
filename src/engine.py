@@ -1,7 +1,7 @@
 from src.gears import TesterBase, TrainerBase
 from src.utils.misc import LoggerMisc
 from src.utils.progress_logger import MetricLogger
-from src.utils.progress_logger import ValueMeter as VM
+from src.utils.progress_logger import ValueMetric as VM
 
 
 def train_one_epoch(trainer: TrainerBase):
@@ -15,7 +15,7 @@ def train_one_epoch(trainer: TrainerBase):
         header='Train',
         epoch_str=f'epoch: [{trainer.epoch}/{cfg.trainer.epochs}]',
         )
-    mlogger.add_meters([{
+    mlogger.add_metrics([{
         'loss': VM(prior=True),
         **{lr_group: VM(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', no_sync=True) for lr_group in trainer.lr_groups.keys()},
         'epoch': VM(window_size=1, no_print=True, no_sync=True)
@@ -25,7 +25,7 @@ def train_one_epoch(trainer: TrainerBase):
         
         _, loss, metrics_dict = trainer.forward(batch)
         
-        mlogger.update_meters(
+        mlogger.update_metrics(
             sample_count=batch['batch_size'],
             **trainer.lr_groups,
             loss=loss,
@@ -34,7 +34,7 @@ def train_one_epoch(trainer: TrainerBase):
         
         trainer.backward_and_step(loss)
         
-        mlogger.update_meters(
+        mlogger.update_metrics(
             epoch=trainer.trained_iters / trainer.train_len,
         )
         
@@ -46,7 +46,7 @@ def train_one_epoch(trainer: TrainerBase):
             first_iter = False
             trainer.after_first_train_iter()
     
-    mlogger.add_epoch_meters(**trainer.criterion.get_epoch_metrics_and_reset())
+    mlogger.add_epoch_metrics(**trainer.criterion.get_epoch_metrics_and_reset())
     trainer.train_outputs = mlogger.output_dict(no_avg_list=[*trainer.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
 
 
@@ -60,13 +60,13 @@ def evaluate(trainer: TrainerBase):
         header='Eval ',
         epoch_str=f'epoch: [{trainer.epoch}/{cfg.trainer.epochs}]',
         )
-    mlogger.add_meters([{'loss': VM(prior=True)}])
+    mlogger.add_metrics([{'loss': VM(prior=True)}])
     first_iter = True
     for batch in mlogger.log_every(trainer.val_loader):
         
         _, loss, metrics_dict = trainer.forward(batch)
 
-        mlogger.update_meters(
+        mlogger.update_metrics(
             sample_count=batch['batch_size'],
             loss=loss,
             **metrics_dict,
@@ -76,13 +76,13 @@ def evaluate(trainer: TrainerBase):
             first_iter = False
             trainer.after_first_validation_iter()
     
-    mlogger.add_epoch_meters(**trainer.criterion.get_epoch_metrics_and_reset())
+    mlogger.add_epoch_metrics(**trainer.criterion.get_epoch_metrics_and_reset())
     if hasattr(trainer, 'ema_criterion'):
         ema_epoch_metrics = {}
         raw_epoch_metrics = trainer.ema_criterion.get_epoch_metrics_and_reset()
         for k, v in raw_epoch_metrics.items():
             ema_epoch_metrics[f'ema_{k}'] = v
-        mlogger.add_epoch_meters(**ema_epoch_metrics)
+        mlogger.add_epoch_metrics(**ema_epoch_metrics)
     trainer.metrics = mlogger.output_dict(sync=cfg.trainer.dist_eval, final_print=True)
 
 
@@ -100,7 +100,7 @@ def test(tester: TesterBase):
         
         outputs, _, metrics_dict = tester.forward(batch)
             
-        mlogger.update_meters(
+        mlogger.update_metrics(
             sample_count=batch['batch_size'],
             **metrics_dict,
             )
@@ -109,11 +109,11 @@ def test(tester: TesterBase):
             first_iter = False
             tester.after_first_inference_iter()
     
-    mlogger.add_epoch_meters(**tester.criterion.get_epoch_metrics_and_reset())
+    mlogger.add_epoch_metrics(**tester.criterion.get_epoch_metrics_and_reset())
     if hasattr(tester, 'ema_criterion'):
         ema_epoch_metrics = {}
         raw_epoch_metrics = tester.ema_criterion.get_epoch_metrics_and_reset()
         for k, v in raw_epoch_metrics.items():
             ema_epoch_metrics[f'ema_{k}'] = v
-        mlogger.add_epoch_meters(**ema_epoch_metrics)
+        mlogger.add_epoch_metrics(**ema_epoch_metrics)
     tester.metrics = mlogger.output_dict(sync=True, final_print=True)

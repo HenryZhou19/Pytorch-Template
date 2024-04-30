@@ -10,7 +10,7 @@ import torch.distributed as dist
 from .misc import ConfigMisc, DistMisc, LoggerMisc, TimeMisc
 
 
-class ValueMeter(object):
+class ValueMetric(object):
     def __init__(self, window_size=None, format=None, final_format=None, prior=False, no_print=False, no_sync=False):
         if format is None:  # show current value and average when running
             format = '{value:.4f} ({avg:.4f})'
@@ -34,19 +34,19 @@ class ValueMeter(object):
         self.sample_count += sample_count
         self.total += value * sample_count
         
-    def prepare_sync_meters(self):
-        assert not self.synced, 'Meters have been synced.'
-        d = torch.as_tensor(list(self.deque), dtype=torch.float64, device='cpu')
-        t = torch.as_tensor([self.sample_count, self.total], dtype=torch.float64, device='cuda')
-        return d, t
+    def prepare_sync_metrics(self):
+        assert not self.synced, 'metrics have been synced.'
+        queue = torch.as_tensor(list(self.deque), dtype=torch.float64, device='cpu')
+        summary = torch.as_tensor([self.sample_count, self.total], dtype=torch.float64, device='cuda')
+        return queue, summary
     
-    def write_synced_meters(self, d, t):
-        d = d.tolist()
-        t = t.tolist()
+    def write_synced_metrics(self, queue, summary):
+        queue = queue.tolist()
+        summary = summary.tolist()
         self.deque.clear()
-        self.deque += list(d)
-        self.sample_count = int(t[0])
-        self.total = t[1]
+        self.deque += list(queue)
+        self.sample_count = int(summary[0])
+        self.total = summary[1]
     
     @property
     def std(self):
@@ -95,91 +95,91 @@ class MetricLogger(object):
         self.header = header
         self.epoch_str = epoch_str
         
-        self.meters = defaultdict(ValueMeter)
+        self.metrics = defaultdict(ValueMetric)
         self.synced = False
         
-    def add_meters(self, meters):
-        for meter in meters:
-            if isinstance(meter, str):
-                self.meters[meter] = ValueMeter()
-            elif isinstance(meter, dict):
-                self.meters.update(meter)
+    def add_metrics(self, metrics):
+        for metric in metrics:
+            if isinstance(metric, str):
+                self.metrics[metric] = ValueMetric()
+            elif isinstance(metric, dict):
+                self.metrics.update(metric)
 
-    def update_meters(self, sample_count=1, **kwargs):
+    def update_metrics(self, sample_count=1, **kwargs):
         for k, v in kwargs.items():
             if isinstance(v, (torch.Tensor, np.ndarray)):
                 v = v.item()
             assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
-            # self.meters[k] = SmoothedValue()  # as default
-            self.meters[k].append_one_value(v, sample_count)
+            # self.metrics[k] = SmoothedValue()  # as default
+            self.metrics[k].append_one_value(v, sample_count)
             
-    def add_epoch_meters(self, **kwargs):
+    def add_epoch_metrics(self, **kwargs):
         for k, v in kwargs.items():
             if isinstance(v, (torch.Tensor, np.ndarray)):
                 v = v.item()
             assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
-            self.meters[k] = ValueMeter(
+            self.metrics[k] = ValueMetric(
                 window_size=1,
                 format='({value:.4f})',
                 final_format='({value:.4f})',
                 no_sync=True,
                 )
-            self.meters[k].append_one_value(v)
+            self.metrics[k].append_one_value(v)
 
     def __getattr__(self, attr):
-        if attr in self.meters:
-            return self.meters[attr]
+        if attr in self.metrics:
+            return self.metrics[attr]
         if attr in self.__dict__:
             return self.__dict__[attr]
         raise AttributeError(f'"{type(self).__name__}" object has no attribute "{attr}"')
 
-    def meters_str(self, final=False, synced=True):
-        prior_meter_s = []
-        meters_s = []
-        for name, meter in self.meters.items():
-            if meter.no_print:  # skip no_print meters
+    def metrics_str(self, final=False, synced=True):
+        prior_metric_s = []
+        metrics_s = []
+        for name, metric in self.metrics.items():
+            if metric.no_print:  # skip no_print metrics
                 continue
-            if meter.prior:
-                prior_meter_s.append(
-                    f'{name}: {meter.get_str(final, synced)}'
+            if metric.prior:
+                prior_metric_s.append(
+                    f'{name}: {metric.get_str(final, synced)}'
                 )
             else:
-                meters_s.append(
-                    f'{name}: {meter.get_str(final, synced)}'
+                metrics_s.append(
+                    f'{name}: {metric.get_str(final, synced)}'
                 )
-        return self.delimiter.join(prior_meter_s + meters_s)
+        return self.delimiter.join(prior_metric_s + metrics_s)
     
     def _synchronize_all_processes(self):
         if not DistMisc.is_dist_avail_and_initialized():
             return
-        assert not self.synced, 'Meters have been synced.'
+        assert not self.synced, 'metrics have been synced.'
         self.synced = True
-        d_list = []
-        t_list = []
-        for meter in self.meters.values():
-            if meter.require_sync:
-                d, t = meter.prepare_sync_meters()
-                d_list.append(d)
-                t_list.append(t)
-        ds = torch.stack(d_list, dim=0)
-        ts = torch.stack(t_list, dim=0)
+        queue_list = []
+        summary_list = []
+        for metric in self.metrics.values():
+            if metric.require_sync:
+                queue, summary = metric.prepare_sync_metrics()
+                queue_list.append(queue)
+                summary_list.append(summary)
+        queue_stack = torch.stack(queue_list, dim=0)
+        summary_stack = torch.stack(summary_list, dim=0)
         dist.barrier()
-        dist.all_reduce(ts)
-        gathered_ds = [None] * DistMisc.get_world_size()
-        dist.all_gather_object(gathered_ds, ds)
-        ds = torch.cat(gathered_ds, dim=1)
-        line_idx = 0
-        for meter in self.meters.values():
-            if meter.require_sync:
-                meter.write_synced_meters(ds[line_idx], ts[line_idx])
-                line_idx += 1
+        dist.all_reduce(summary_stack)
+        gathered_queue_stack = [None] * DistMisc.get_world_size()
+        dist.all_gather_object(gathered_queue_stack, queue_stack)
+        queue_stack = torch.cat(gathered_queue_stack, dim=1)
+        require_sync_metric_idx = 0
+        for metric in self.metrics.values():
+            if metric.require_sync:
+                metric.write_synced_metrics(queue_stack[require_sync_metric_idx], summary_stack[require_sync_metric_idx])
+                require_sync_metric_idx += 1
 
     def log_every(self, iterable):
         self.iter_len = len(iterable)
 
-        iter_time = ValueMeter(format='{value:.4f} ({avg:.4f})')
-        data_time = ValueMeter(format='{value:.4f} ({avg:.4f})')
-        model_time = ValueMeter(format='{value:.4f} ({avg:.4f})')
+        iter_time = ValueMetric(format='{value:.4f} ({avg:.4f})')
+        data_time = ValueMetric(format='{value:.4f} ({avg:.4f})')
+        model_time = ValueMetric(format='{value:.4f} ({avg:.4f})')
         
         if self.pbar is not None:
             if self.global_tqdm:
@@ -190,8 +190,8 @@ class MetricLogger(object):
                 post_msg = '\033[30m' + ' t_data: {data_time}  t_model: {model_time}\033[0m'
                 self.pbar.set_description_str(self.header + ' ' + self.epoch_str, refresh=False)
             postlines_msg = self.delimiter.join([
-                # '\t{meters}',
-                '    \033[30m{meters}\033[0m',
+                # '\t{metrics}',
+                '    \033[30m{metrics}\033[0m',
                 # 'data_time: {data_time}',
                 # 'iter_time: {iter_time}',
             ])
@@ -214,7 +214,7 @@ class MetricLogger(object):
                         self.pbar.set_postfix_str(post_msg.format(data_time=data_time.get_str(), model_time=model_time.get_str()), refresh=False)
                         
                     last_infos = postlines_msg.format(
-                        meters=self.meters_str(),
+                        metrics=self.metrics_str(),
                         # data_time=data_time.get_str(), 
                         # iter_time=iter_time.get_str(),
                     )
@@ -243,20 +243,20 @@ class MetricLogger(object):
         if 'all' in no_avg_list:
             return_dict.update({
                 k: v.value
-                for k, v in self.meters.items()
+                for k, v in self.metrics.items()
                 })
         else:
             return_dict.update({
                 k: getattr(v, 'avg') if k not in no_avg_list else v.value
-                for k, v in self.meters.items()
+                for k, v in self.metrics.items()
                 })
         return return_dict
                      
     def _final_print(self, print_time=False, synced=True):       
         final_msg = self.delimiter.join([
             self.header + ' ' + self.epoch_str + ' finished. Summary of All Ranks:'
-            '\n    {meters}',
-        ]).format(meters=self.meters_str(final=True, synced=synced))
+            '\n    {metrics}',
+        ]).format(metrics=self.metrics_str(final=True, synced=synced))
         if print_time:
             total_time = self.timer.info['all']
             total_time_str = str(datetime.timedelta(seconds=int(total_time)))
