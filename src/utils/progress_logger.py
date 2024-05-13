@@ -152,6 +152,7 @@ class MetricLogger(object):
     def _synchronize_all_processes(self):
         if not DistMisc.is_dist_avail_and_initialized():
             return
+        
         assert not self.synced, 'metrics have been synced.'
         self.synced = True
         queue_list = []

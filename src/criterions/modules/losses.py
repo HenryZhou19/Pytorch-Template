@@ -176,14 +176,15 @@ class MulticlassFocalLoss(nn.Module):
     outputs: Tensor of shape (batch_size, classes, ...) type: float, output scores of classes
     targets: Tensor of shape (batch_size, ...) type: int, indicates the ground truth class
     """
-    def __init__(self, classes, alpha: Union[float, List[float]] = 0.25, gamma=2, weight=None, ignore_index=-100, reduction='mean', device='cuda'):
+    def __init__(self, classes, alpha: Union[float, List[float]] = 0.25, gamma=2, weight=None, ignore_index=-100, reduction='mean'):
         super().__init__()
         self.classes = classes
         if type(alpha) == list:
             assert len(alpha) == classes
         else:
             alpha = [alpha] * classes
-        self.alpha = torch.as_tensor(alpha, device=device)
+        alpha = torch.as_tensor(alpha)
+        self.register_buffer('alpha', self.alpha)
         self.gamma = gamma
         self.weight = weight
         self.ignore_index = ignore_index

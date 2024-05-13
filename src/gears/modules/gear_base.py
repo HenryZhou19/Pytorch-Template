@@ -7,9 +7,9 @@ from glob import glob
 
 import torch
 import torch.distributed as dist
-from torch.utils.data import DataLoader
 
 from src.criterions import CriterionBase
+from src.datasets.modules.data_module_base import DataLoaderX
 from src.models import ModelBase
 from src.utils.misc import *
 from src.utils.register import Register
@@ -25,8 +25,8 @@ class TrainerBase:
         model: ModelBase,
         ema_model: torch.nn.Module,
         criterion: CriterionBase,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
+        train_loader: DataLoaderX,
+        val_loader: DataLoaderX,
         optimizer: torch.optim.Optimizer,
         lr_scheduler: torch.optim.lr_scheduler._LRScheduler,
         scaler: torch.cuda.amp.GradScaler,
@@ -339,7 +339,7 @@ class TrainerBase:
             # shuffle data for each epoch (here needs epoch start from 0)
             self.train_loader.sampler_set_epoch(self.epoch - 1)  
         
-        dist.barrier()
+        DistMisc.barrier()
 
         if DistMisc.is_main_process():
             if self.cfg.info.global_tqdm:
@@ -361,7 +361,7 @@ class TrainerBase:
         self._save_checkpoint()
         
     def before_validation(self, **kwargs):
-        dist.barrier()
+        DistMisc.barrier()
 
         if DistMisc.is_main_process():
             self.val_pbar.unpause()
@@ -377,7 +377,7 @@ class TrainerBase:
         self._save_best_checkpoint()
     
     def after_all_epochs(self, **kwargs):
-        dist.barrier()
+        DistMisc.barrier()
 
         if DistMisc.is_main_process():
             self.train_pbar.close()
@@ -392,7 +392,7 @@ class TesterBase:
         model_without_ddp: ModelBase,
         ema_model: torch.nn.Module,
         criterion: CriterionBase,
-        test_loader: DataLoader,
+        test_loader: DataLoaderX,
         device: torch.device,
         ) -> None:
         super().__init__()

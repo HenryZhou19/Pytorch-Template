@@ -1,6 +1,6 @@
 import torch
 
-from src.utils.misc import LoggerMisc, ModelMisc, TensorMisc
+from src.utils.misc import DistMisc, LoggerMisc, ModelMisc, TensorMisc
 from src.utils.optimizer.modules.warmup_scheduler import \
     WarmupCosineAnnealingMultiCycleLR
 
@@ -51,7 +51,7 @@ class MultiCycleTrainer(TrainerBase):
 
         self.set_cycle_train_mode(self.model_without_ddp, self.cycle_type, self.cycle_modules_list)
 
-        if self.new_cycle:
+        if self.new_cycle and DistMisc.is_dist_avail_and_initialized():
             if hasattr(self, 'memory_tensor'):
                 del self.memory_tensor
             torch.cuda.empty_cache()
@@ -60,9 +60,9 @@ class MultiCycleTrainer(TrainerBase):
     def after_first_train_iter(self, **kwargs):
         super().after_first_train_iter(**kwargs)
         
-        if self.new_cycle:
+        if self.new_cycle and DistMisc.is_dist_avail_and_initialized():
             _, max_allocated_mb, reserved_mb, _ = TensorMisc.get_gpu_memory_usage(verbose=False)
-            print(LoggerMisc.block_wrapper(f'Epoch {self.epoch}\n\tMax allocated memory: {max_allocated_mb:.2f} MB\n\tReserved memory: {reserved_mb:.2f} MB\n'))
+            print(LoggerMisc.block_wrapper(f'Epoch {self.epoch}: Cycle Type {self.cycle_type}\n\tMax allocated memory: {max_allocated_mb:.2f} MB\n\tReserved memory: {reserved_mb:.2f} MB\n'))
             if reserved_mb < self.min_hold_memory_mb:
                 self.memory_tensor = TensorMisc.allocate_memory_to_tensor(self.min_hold_memory_mb - reserved_mb)
         

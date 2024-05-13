@@ -1,16 +1,3 @@
-env:
-  device: cuda
-  gpu: TBD
-  distributed: TBD
-  dist_url: env://
-  dist_backend: TBD
-  world_size: TBD
-  rank: TBD
-  num_workers: 4
-  prefetch_factor: 2
-  infinite_dataloader: False
-  pin_memory: True
-
 info:
   task_type: Infer  # Test, Infer, ...
   wandb:

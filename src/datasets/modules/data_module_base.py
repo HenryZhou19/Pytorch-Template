@@ -93,8 +93,8 @@ class DataModuleBase:
         
         DataloaderClass = InfiniteDataLoaderX if self.cfg.env.infinite_dataloader else DataLoaderX
         return DataloaderClass(
-            dataset,
-            self.cfg.data.batch_size_per_rank,
+            dataset=dataset,
+            batch_size=self.cfg.data.batch_size_per_rank,
             sampler=self.get_sampler(dataset, is_training, use_dist_sampler),
             pin_memory=self.cfg.env.pin_memory,
             collate_fn=self.collate_fn,
@@ -131,6 +131,18 @@ class DataModuleBase:
     
     
 class DataLoaderX(DataLoader):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.init_args = args
+        self.init_kwargs = kwargs
+        
+    def reinit_batch_size(self, batch_size):
+        if 'batch_size' in self.init_kwargs:
+            self.init_kwargs['batch_size'] = batch_size
+        else:
+            raise NotImplementedError('batch_size not in init_kwargs, so cannot reinit_batch_size')
+        return DataLoaderX(*self.init_args, **self.init_kwargs)
+    
     def sampler_set_epoch(self, epoch):
         if self.sampler is not None:
             self.sampler.set_epoch(epoch)

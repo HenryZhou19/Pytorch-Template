@@ -274,7 +274,6 @@ class PortalMisc:
 
     @staticmethod
     def seed_everything(cfg):
-        assert hasattr(cfg.env, 'distributed')
         if cfg.env.seed_with_rank:
             seed_rank = cfg.seed_base + DistMisc.get_rank()
         else:
@@ -286,13 +285,14 @@ class PortalMisc:
         np.random.seed(seed_rank)
         
         torch.manual_seed(seed_rank)
-        torch.cuda.manual_seed(seed_rank)
-        # torch.cuda.manual_seed_all(seed_rank)  # no need here as each process has a different seed
+        if cfg.env.device == 'cuda':
+            torch.cuda.manual_seed(seed_rank)
+            # torch.cuda.manual_seed_all(seed_rank)  # no need here as each process has a different seed
 
-        if cfg.env.cuda_deterministic:
-            os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
+            if cfg.env.cuda_deterministic:
+                os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+                torch.backends.cudnn.deterministic = True
+                torch.backends.cudnn.benchmark = False
             
     @staticmethod
     def special_config_adjustment(cfg):
@@ -463,6 +463,11 @@ class PortalMisc:
 
 class DistMisc:
     @staticmethod
+    def barrier():
+        if DistMisc.is_dist_avail_and_initialized():
+            dist.barrier()    
+    
+    @staticmethod
     def avoid_print_mess():
         if DistMisc.is_dist_avail_and_initialized():  # 
             dist.barrier()
@@ -539,34 +544,47 @@ class DistMisc:
 
     @staticmethod
     def init_distributed_mode(cfg):
-        if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-            cfg.env.rank = int(os.environ['RANK'])
-            cfg.env.world_size = int(os.environ['WORLD_SIZE'])
-            cfg.env.gpu = int(os.environ['LOCAL_RANK'])
-        elif 'SLURM_PROCID' in os.environ and 'SLURM_PTY_PORT' not in os.environ:
-            cfg.env.rank = int(os.environ['SLURM_PROCID'])
-            cfg.env.gpu = cfg.env.rank % torch.cuda.device_count()
+        if cfg.env.device == 'cuda':
+            if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:  # 
+                cfg.env.world_size = int(os.environ['WORLD_SIZE'])
+                cfg.env.rank = int(os.environ['RANK'])
+                cfg.env.local_rank = int(os.environ['LOCAL_RANK'])
+            # elif 'SLURM_PROCID' in os.environ and 'SLURM_PTY_PORT' not in os.environ:
+            #     cfg.env.rank = int(os.environ['SLURM_PROCID'])
+            #     cfg.env.local_rank = cfg.env.rank % torch.cuda.device_count()
+            else:
+                raise NotImplementedError('Must use "torchrun" when device is cuda')
+            
+            cfg.env.distributed = True
+            cfg.env.dist_backend = 'nccl'
+            cfg.env.dist_url = 'env://'
+            torch.cuda.set_device(cfg.env.local_rank)
+            
+            dist.distributed_c10d.logger.setLevel(logging.WARNING)
+            
+            dist.init_process_group(
+                backend=cfg.env.dist_backend, init_method=cfg.env.dist_url, world_size=cfg.env.world_size, rank=cfg.env.rank
+            )       
+            # DistMisc.avoid_print_mess()
+            # print(f'INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}')
+            # DistMisc.avoid_print_mess()
+            DistMisc.setup_for_distributed(cfg.env.rank == 0)
+        elif cfg.env.device == 'cpu':
+            cfg.env.distributed = False
+            cfg.env.world_size = 1
+            cfg.env.rank = 0
+            cfg.env.local_rank = 0
+            cfg.env.dist_backend = 'None'
+            cfg.env.dist_url = 'None'
+            
+            if getattr(cfg.env, 'amp', False):  # in train mode, check AMP
+                print(LoggerMisc.block_wrapper('AMP is not supported on CPU. Automatically turning off AMP by setting "cfg.env.amp = False".', '#'))
+                cfg.env.amp = False
+            if cfg.env.pin_memory:
+                print(LoggerMisc.block_wrapper('Pin memory is not supported on CPU. Automatically turning off pin_memory by setting "cfg.env.pin_memory = False".', '#'))
+                cfg.env.pin_memory = False
         else:
-            raise NotImplementedError('Must use distributed mode')
-            
-            # print('Not using distributed mode')
-            # cfg.env.distributed = False
-            # cfg.env.distributed = 1
-            # return
-            
-        cfg.env.distributed = True
-        cfg.env.dist_backend = 'nccl'
-        torch.cuda.set_device(cfg.env.gpu)
-        
-        dist.distributed_c10d.logger.setLevel(logging.WARNING)
-        
-        dist.init_process_group(
-            backend=cfg.env.dist_backend, init_method=cfg.env.dist_url, world_size=cfg.env.world_size, rank=cfg.env.rank
-        )       
-        # DistMisc.avoid_print_mess()
-        # print(f'INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}')
-        # DistMisc.avoid_print_mess()
-        DistMisc.setup_for_distributed(cfg.env.rank == 0)
+            raise ValueError('Invalid device type.')
 
 
 class ModelMisc:
@@ -662,7 +680,7 @@ class ModelMisc:
         if cfg.env.distributed:
             model_without_ddp = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model_without_ddp)
             
-            return torch.nn.parallel.DistributedDataParallel(model_without_ddp, device_ids=[cfg.env.gpu],
+            return torch.nn.parallel.DistributedDataParallel(model_without_ddp, device_ids=[cfg.env.local_rank],
                 find_unused_parameters=cfg.env.find_unused_parameters,
             )
         else:
