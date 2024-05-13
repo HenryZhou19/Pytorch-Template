@@ -1,19 +1,8 @@
 env:
-  device: cuda
-  gpu: TBD
-  distributed: TBD
-  dist_url: env://
-  dist_backend: TBD
-  world_size: TBD
-  rank: TBD
   seed_with_rank: True
   cuda_deterministic: False
   find_unused_parameters: True
   amp: True
-  num_workers: 4
-  prefetch_factor: 2
-  infinite_dataloader: False
-  pin_memory: True
 
 info: # info & wandb
   start_time : TBD

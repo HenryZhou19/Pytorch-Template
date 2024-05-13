@@ -1,5 +1,5 @@
 #!/bin/bash
-cuda_devices="6,7"
+devices="6,7"  # numbers with ',' or 'cpu'
 omp_num_threads=4
 mkl_num_threads=4
 numexpr_num_threads=4
@@ -9,16 +9,26 @@ params=()
 seconds_to_wait=0
 
 run_cmd() {
-    CUDA_VISIBLE_DEVICES=$cuda_devices \
-    OMP_NUM_THREADS=$omp_num_threads \
-    MKL_NUM_THREADS=$mkl_num_threads \
-    NUMEXPR_NUM_THREADS=$numexpr_num_threads \
-    WANDB_CACHE_DIR=~/.cache/wandb \
-    WANDB_CONFIG_DIR=~/.config/wandb \
-    torchrun \
-    --nproc_per_node=$nproc_per_node \
-    --master_port=$master_port \
-    train.py --loglevel=ERROR with ${params[@]}
+  CUDA_VISIBLE_DEVICES=$devices \
+  OMP_NUM_THREADS=$omp_num_threads \
+  MKL_NUM_THREADS=$mkl_num_threads \
+  NUMEXPR_NUM_THREADS=$numexpr_num_threads \
+  WANDB_CACHE_DIR=~/.cache/wandb \
+  WANDB_CONFIG_DIR=~/.config/wandb \
+  torchrun \
+  --nproc_per_node=$nproc_per_node \
+  --master_port=$master_port \
+  train.py --loglevel=ERROR with ${params[@]}
+}
+
+run_cpu_cmd() {
+  OMP_NUM_THREADS=$omp_num_threads \
+  MKL_NUM_THREADS=$mkl_num_threads \
+  NUMEXPR_NUM_THREADS=$numexpr_num_threads \
+  WANDB_CACHE_DIR=~/.cache/wandb \
+  WANDB_CONFIG_DIR=~/.config/wandb \
+  python \
+  train.py --loglevel=ERROR with ${params[@]}
 }
 
 args=("$@")
@@ -28,7 +38,7 @@ trap 'echo -e "\033[0m\033[?25h"' INT  # change color back and show cursor when 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -d|-devices)
-      cuda_devices="$2"
+      devices="$2"
       shift 2
       ;;
     -c|-config)
@@ -80,38 +90,48 @@ echo "waiting for ${seconds_to_wait} seconds..."
 echo -e "start at: ${formatted_new_time}\n"
 sleep $seconds_to_wait
 
-IFS=',' read -ra devices <<< $cuda_devices
-num_devices=${#devices[@]}
-nproc_per_node=$num_devices
-
-echo "CUDA_VISIBLE_DEVICES: $cuda_devices"
-echo "nproc_per_node: $nproc_per_node"
 echo "OMP_NUM_THREADS: $omp_num_threads"
 echo "MKL_NUM_THREADS: $mkl_num_threads"
 echo "NUMEXPR_NUM_THREADS: $numexpr_num_threads"
 
-start_port=25950
-end_port=25999
-master_port=$start_port
+if [[ $devices == "cpu" ]]; then
+  params+=" env.device=cpu"
+  echo -e "\nRunning this task in cpu mode"
 
-while [ $master_port -le $end_port ]; do
+  run_cpu_cmd
+else
+  # params+=" env.device=cuda"  # default
+  echo -e "\nRunning this task in cuda DDP mode\n"
+
+  IFS=',' read -ra cuda_devices <<< $devices
+  num_devices=${#cuda_devices[@]}
+  nproc_per_node=$num_devices
+  echo "CUDA_VISIBLE_DEVICES: $devices"
+  echo "nproc_per_node: $nproc_per_node"
+  start_port=25950
+  end_port=25999
+  master_port=$start_port
+
+  while [ $master_port -le $end_port ]; do
     if netstat -tuln | grep -q ":$master_port "; then
-        # echo "Port: $master_port is occupied."
-        ((master_port++))
+      # echo "Port: $master_port is occupied."
+      ((master_port++))
     else
-        echo -e "\nTrying DDP with a potentially free port: $master_port"
-        run_cmd
-        if [ $? -eq 0 ]; then
-            echo -e "\nDDP ran successfully with master_port: $master_port."
-        else
-            echo -e "\nDDP failed with master_port: $master_port. (Maybe triggered by other ERRORs)"
-        fi
-        break
+      echo -e "\nTrying DDP with a potentially free port: $master_port"
+      run_cmd
+      if [ $? -eq 0 ]; then
+          echo -e "\nDDP ran successfully with master_port: $master_port."
+      else
+          echo -e "\nDDP failed with master_port: $master_port. (Maybe triggered by other ERRORs)"
+      fi
+      break
     fi
     if [ $master_port -gt $end_port ]; then
-        echo -e "\nAll ports from $start_port to $end_port are occupied."
-        break
+      echo -e "\nAll ports from $start_port to $end_port are occupied."
+      break
     fi
-done
+  done
+fi
+
 echo -e "\n\"train.sh ${args[@]}\" ends."
 echo -e "\033[0m\033[?25h" # change color back and show cursor

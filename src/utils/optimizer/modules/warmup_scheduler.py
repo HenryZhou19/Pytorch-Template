@@ -283,7 +283,7 @@ class WarmupCosineAnnealingMultiCycleLR(_AmpStepLR):
                 self.cycle += 1
                 self.cycle_type = self.cycle % len(self.cycle_steps_list)
                 self.step_in_cycle = self.step_in_cycle - self.cur_cycle_steps
-                self.cur_cycle_steps = self.cur_cycle_steps = self.cycle_steps_list[self.cycle_type]  # first cycle step size
+                self.cur_cycle_steps = self.cur_cycle_steps = self.cycle_steps_list[self.cycle_type]  # current cycle step size
         else:
             if epoch >= self.cycle_steps_list[0]:
                 full_cycle_groups = epoch // sum(self.cycle_steps_list)
