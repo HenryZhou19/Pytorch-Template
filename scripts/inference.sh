@@ -107,7 +107,7 @@ else
   IFS=',' read -ra cuda_devices <<< $devices
   num_devices=${#cuda_devices[@]}
   nproc_per_node=$num_devices
-  echo "\]nCUDA_VISIBLE_DEVICES: $devices"
+  echo "CUDA_VISIBLE_DEVICES: $devices"
   echo "nproc_per_node: $nproc_per_node"
   start_port=25950
   end_port=25999
