@@ -1,5 +1,6 @@
 delete_and_new_branch="main"
 commit_message="first commit"
+remote_name="origin"
 do_sync_remote=true
 
 while [[ $# -gt 0 ]]; do
@@ -10,6 +11,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -m|-message)
       commit_message="$2"
+      shift 2
+      ;;
+    -r|-remote)
+      remote_name="$2"
       shift 2
       ;;
     -ns|-no_sync)
@@ -42,7 +47,7 @@ if [ "$confirmation" == "yes" ]; then
     git branch -D $delete_and_new_branch
     git branch -m $delete_and_new_branch
     if $do_sync_remote; then
-      git push -f origin $delete_and_new_branch
+      git push -f $remote_name $delete_and_new_branch
     fi
     exit
   elif [ "$confirmation_branch_name" != "" ]; then
@@ -58,8 +63,8 @@ if [ "$confirmation" == "yes" ]; then
     git commit -am "$commit_message"
     git branch -m $delete_and_new_branch
     if do_sync_remote; then
-      git push origin $confirmation_branch_name
-      git push -f origin $delete_and_new_branch
+      git push $remote_name $confirmation_branch_name
+      git push -f $remote_name $delete_and_new_branch
     fi
   fi
 fi
