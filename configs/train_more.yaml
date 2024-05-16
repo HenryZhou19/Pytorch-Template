@@ -1,0 +1,56 @@
+config:  # main config (in this file) overrides additional configs
+  additional: [default_shared, default_train]  # add additional config file names, e.g. [default_xxx] --- the order matters (later ones overwrite previous ones)
+
+special:
+  extra_name: template  # null for no extra name
+
+info:
+  output_dir: ./outputs/
+  project_name: template
+
+data:
+  dataset: mnist
+  batch_size_per_rank: 64
+  sync_lr_with_batch_size: 64  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks] / sync_lr_with_batch_size)
+  split_rate: 0.8
+
+architecture: mnist_lenet
+
+model:
+  backbone: default
+
+criterion:
+  loss: ce
+  primary_criterion: null  # null (None) to use loss as primary_criterion
+  primary_criterion_higher_better: False  # XXX: important for choosing best model
+
+trainer:
+  trainer_choice: default
+  resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
+  epochs: 20
+  optimizer:
+    optimizer_choice: sgd  # adamw, sgd
+    sgd_momentum: 0.9
+    lr_default: 1.0e-2
+    wd_default: 1.0e-2
+    param_groups:
+      lr_backbone: 4.0e-4
+      wd_backbone: 1.0e-2
+      lr_head: 1.0e-4
+      wd_head: 1.0e-4
+  scheduler:
+    scheduler_choice: multistep  # multistep, cosine, linear, cosine_restart
+    lr_milestones_epochs: [5, 10, 15]  # only for scheduler_choice == 'multistep' [50, 100]
+    lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
+    lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
+    warmup_epochs: 10
+    warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
+    # lr_min_factor: 0.0  # default
+    # warmup_type: linear  # default
+  max_grad_norm: 1.0  # <= 0 means no gradient clipping
+
+sweep:
+  sweep_enabled: True
+  sweep_params:  # use '//' as the connector for sub-params 
+    trainer//optimizer//lr_default: [2.0e-4, 4.0e-4]
+    trainer//scheduler//scheduler_choice: [linear, cosine]
