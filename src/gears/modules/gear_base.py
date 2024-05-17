@@ -246,8 +246,9 @@ class TrainerBase:
         inputs: dict = batch['inputs']
         targets: dict = batch['targets']
         
+        inputs['train_progress'] = self.trained_iters / self.total_iters
+        
         if self.training:
-            inputs['train_progress'] = self.trained_iters / self.total_iters
             with torch.cuda.amp.autocast(enabled=self.scaler is not None):
                 outputs = self.model(inputs)
                 loss, metrics_dict = self.criterion(outputs, targets)
