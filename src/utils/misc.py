@@ -410,7 +410,10 @@ class PortalMisc:
             else:
                 log_file_path = os.path.join(cfg.info.work_dir, f'logs_resume_{cfg.info.resume_start_time}.txt')       
             loggers.log_file = open(log_file_path, 'a')
-            LoggerMisc.print_all_pid(file=loggers.log_file)
+            if cfg.env.distributed:
+                LoggerMisc.print_all_pid(file=loggers.log_file)
+            else:
+                LoggerMisc.print_all_pid(get_parent=False, file=loggers.log_file)
         else:
             loggers.log_file = sys.stdout
         return loggers
