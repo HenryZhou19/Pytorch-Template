@@ -18,7 +18,7 @@ sacred==0.8.2
 tensorboard
 torchinfo
 tqdm
-wandb==0.15.9
+wandb==0.17.0
 
 ## project requirements
 scikit-image
