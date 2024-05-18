@@ -91,16 +91,15 @@ echo "waiting for ${seconds_to_wait} seconds..."
 echo -e "start at: ${formatted_new_time}\n"
 sleep $seconds_to_wait
 
-echo "OMP_NUM_THREADS: $omp_num_threads"
-echo "MKL_NUM_THREADS: $mkl_num_threads"
-echo "NUMEXPR_NUM_THREADS: $numexpr_num_threads"
-
 if [[ $devices == "cpu" ]]; then
   params+=" env.device=cpu"
   echo -e "\nRunning this task in cpu mode"
 
   run_cpu_cmd
 else
+  echo "OMP_NUM_THREADS: $omp_num_threads"
+  echo "MKL_NUM_THREADS: $mkl_num_threads"
+  echo "NUMEXPR_NUM_THREADS: $numexpr_num_threads"
   # params+=" env.device=cuda"  # default
   echo -e "\nRunning this task in cuda DDP mode\n"
 
