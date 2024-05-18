@@ -457,8 +457,12 @@ class PortalMisc:
         def signal_handler(sig, frame):
             if DistMisc.is_main_process():
                 print('Caught SIGINT signal, exiting gracefully...')
-                LoggerMisc.print_all_pid()
-                LoggerMisc.get_wandb_pid(kill_all=True)
+                if cfg.env.distributed:
+                    LoggerMisc.print_all_pid()
+                    LoggerMisc.get_wandb_pid(kill_all=True)
+                else:
+                    LoggerMisc.print_all_pid(get_parent=False)
+                    LoggerMisc.get_wandb_pid(get_parent=False, kill_all=True)
             sys.exit(0)
 
         signal.signal(signal.SIGINT, signal_handler)
