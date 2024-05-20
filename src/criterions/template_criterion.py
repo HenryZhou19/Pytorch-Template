@@ -51,7 +51,7 @@ class SimpleUnetCriterion(SimpleCriterion):
     pass
 
 
-@criterion_register('mnist_lenet')
+@criterion_register('lenet')
 class MnistCriterion(CriterionBase):
     def __init__(self, cfg):
         super().__init__(cfg)

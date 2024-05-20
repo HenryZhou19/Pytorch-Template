@@ -3,7 +3,7 @@ devices="6"  # numbers with ',' or 'cpu'
 omp_num_threads=4
 mkl_num_threads=4
 numexpr_num_threads=4
-main_config_file_name="inference"
+main_config_file_name="template_inference"
 params=()
 
 seconds_to_wait=0
@@ -66,6 +66,10 @@ while [[ $# -gt 0 ]]; do
       extra_name="$2"
       shift 2
       ;;
+    -p|-train_cfg_path)
+      train_cfg_path="$2"
+      shift 2
+      ;;
     *)
       if [[ $1 == config=* ]]; then
         value="${1#config=}"
@@ -80,6 +84,9 @@ done
 params="config.main=$main_config_file_name $params"
 if [[ $extra_name != "" ]]; then
   params+=" special.extra_name=$extra_name"
+fi
+if [[ $train_cfg_path != "" ]]; then
+  params+=" tester.train_cfg_path=$train_cfg_path"
 fi
 
 current_time=$(date +%s)

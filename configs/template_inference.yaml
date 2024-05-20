@@ -2,7 +2,7 @@ config:  # main config (in this file) overrides additional configs
   additional: [default_shared, default_inference]  # add additional config file names, e.g. [default_xxx] --- the order matters (later ones overwrite previous ones)
 
 data:
-  batch_size_per_rank: 1
+  batch_size_per_rank: 4
 
 tester:
   tester_choice: default

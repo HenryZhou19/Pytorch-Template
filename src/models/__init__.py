@@ -14,7 +14,7 @@ class ModelManager(object):
         self.device = torch.device(cfg.env.device)
 
     def build_model(self, verbose=True) -> ModelBase: 
-        model: ModelBase = model_register.get(self.cfg.architecture)(self.cfg).to(self.device)
+        model: ModelBase = model_register.get(self.cfg.model.model_choice)(self.cfg).to(self.device)
         
         if verbose:
             print('model built successfully.')
