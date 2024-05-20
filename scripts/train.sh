@@ -3,7 +3,7 @@ devices="6,7"  # numbers with ',' or 'cpu'
 omp_num_threads=4
 mkl_num_threads=4
 numexpr_num_threads=4
-main_config_file_name="train"
+main_config_file_name="template_train"
 params=()
 
 seconds_to_wait=0

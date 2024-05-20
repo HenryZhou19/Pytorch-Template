@@ -13,7 +13,9 @@ class CriterionManager(object):
         self.device = torch.device(cfg.env.device)
  
     def build_criterion(self) -> CriterionBase:
-        criterion: CriterionBase = criterion_register.get(self.cfg.architecture)(self.cfg).to(self.device)
+        criterion_choice = getattr(self.cfg.criterion, 'criterion_choice', 'default')
+        criterion_choice = self.cfg.model.model_choice if criterion_choice == 'default' else criterion_choice
+        criterion: CriterionBase = criterion_register.get(criterion_choice)(self.cfg).to(self.device)
         criterion.untrainable_check()
         print('criterion built successfully.')
         return criterion

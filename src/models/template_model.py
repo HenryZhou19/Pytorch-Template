@@ -24,7 +24,8 @@ class SimpleModel(ModelBase):
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
-        x = self._grad_checkpoint(self.backbone, x)
+        # x = self._grad_checkpoint(self.backbone, x)
+        x = self.backbone(x)
         x = self.head(x)
         return {
             'pred_y': x
@@ -69,7 +70,7 @@ class SimpleUNet3DModel(ModelBase):
         }
         
 
-@model_register('mnist_lenet')
+@model_register('lenet')
 class LeNet(ModelBase):
     def __init__(self, cfg):
         super().__init__(cfg)
