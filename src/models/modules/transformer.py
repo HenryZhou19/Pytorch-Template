@@ -10,7 +10,7 @@ class MHAttention(nn.MultiheadAttention):
         # self.num_heads = num_heads  # self.num_heads is already defined in nn.MultiheadAttention
         self.here_batch_first = batch_first
         self.mha_final_dropout = nn.Dropout(dropout)
-
+    
     def forward(self, query, key, value, key_padding_mask=None, need_weights=False, attn_mask=None):
         if self.here_batch_first:
             query, key, value = [x.transpose(1, 0) for x in (query, key, value)]
@@ -46,13 +46,16 @@ class TransformerEncoderLayer(nn.Module):
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.norm_first = norm_first
-
+        
+    def _forward_self_attn(self, x, key_padding_mask, need_weights, attn_mask):
+        return self.self_attn(x, x, x, key_padding_mask, need_weights, attn_mask)
+        
     def forward(self, x, key_padding_mask=None, need_weights=False, attn_mask=None):
         if self.norm_first:
-            x = x + self.self_attn(self.norm1(x), x, x, key_padding_mask, need_weights, attn_mask)
+            x = x + self._forward_self_attn(self.norm1(x), key_padding_mask, need_weights, attn_mask)
             x = x + self.ffn(self.norm2(x))
         else:
-            x = self.norm1(x + self.self_attn(x, x, x, key_padding_mask, need_weights, attn_mask))
+            x = self.norm1(x + self._forward_self_attn(x, key_padding_mask, need_weights, attn_mask))
             x = self.norm2(x + self.ffn(x))
         return x
 
@@ -68,16 +71,21 @@ class TransformerDecoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
         self.norm3 = nn.LayerNorm(d_model)
         self.norm_first = norm_first
-
+        
+    def _forward_self_attn(self, x, self_key_padding_mask, self_need_weights, self_attn_mask):
+        return self.self_attn(x, x, x, self_key_padding_mask, self_need_weights, self_attn_mask)
+    
+    def _forward_cross_attn(self, x, momery, cross_key_padding_mask, cross_need_weights, cross_attn_mask):
+        return self.cross_attn(x, momery, momery, cross_key_padding_mask, cross_need_weights, cross_attn_mask)
+    
     def forward(self, x, memory, self_key_padding_mask=None, cross_key_padding_mask=None, self_need_weights=False, cross_need_weights=False, self_attn_mask=None, cross_attn_mask=None):
         if self.norm_first:
-            x_normed = self.norm1(x)
-            x = x + self.self_attn(x_normed, x_normed, x_normed, self_key_padding_mask, self_need_weights, self_attn_mask)
-            x = x + self.cross_attn(self.norm2(x), memory, memory, cross_key_padding_mask, cross_need_weights, cross_attn_mask)
+            x = x + self._forward_self_attn(self.norm1(x), self_key_padding_mask, self_need_weights, self_attn_mask)
+            x = x + self._forward_cross_attn(self.norm2(x), memory, cross_key_padding_mask, cross_need_weights, cross_attn_mask)
             x = x + self.ffn(self.norm3(x))
         else:
-            x = self.norm1(x + self.self_attn(x, x, x, self_key_padding_mask, self_need_weights, self_attn_mask))
-            x = self.norm2(x + self.cross_attn(x, memory, memory, cross_key_padding_mask, cross_need_weights, cross_attn_mask))
+            x = self.norm1(x + self._forward_self_attn(x, self_key_padding_mask, self_need_weights, self_attn_mask))
+            x = self.norm2(x + self._forward_cross_attn(x, memory, cross_key_padding_mask, cross_need_weights, cross_attn_mask))
             x = self.norm3(x + self.ffn(x))
         return x
 
@@ -91,7 +99,7 @@ class TransformerEncoder(nn.Module):
             [TransformerEncoderLayer(d_model, num_heads, d_ffn, dropout, batch_first, norm_first) for _ in range(num_layers)]
             )
         self.norm = nn.LayerNorm(d_model) if norm_out else nn.Identity()
-
+    
     def forward(self, x, key_padding_mask=None, need_weights=False, attn_mask=None):
         for transformer_encoder_layer in self.transformer_encoder_layers:
             x = transformer_encoder_layer(x, key_padding_mask, need_weights, attn_mask)
