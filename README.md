@@ -11,46 +11,70 @@ A simple template for Pytorch projects.
  pip install -r requirements.txt
  ```
 ### Run the LeNet model to check if this template works well on your device
-Note: 
-* **Tensorboard** (offline logger) and **wandb** (online logger) are enabled by default.  
-    So you may pre-register a wandb account to log in when the task is starting.
+* Important notices: 
+    * **Tensorboard** (offline logger) and **wandb** (online logger) are enabled by default.  
+        So you may pre-register a wandb account to log in when the task is starting.
 
-* Loggers can be configured in 'yaml' config files, or you can disable all of them by running the bash command with:
+    * Loggers can be configured in 'yaml' config files, or you can disable all of them by running the bash command with:
+        ```
+        bash scripts/train.sh -d 0 -c template_train_lenet special.no_logger=True
+        ```
+    * Most of the configs can be modified in the bash command line by adding 'X.Y.Z...=...' intuitively.
+
+* run on CPU, GPU and multiple GPUs by standalone DDP
     ```
-    bash scripts/train.sh -d 0 -c template_train_lenet special.no_logger=True
+    # Example(s):
+    # CPU
+    bash scripts/train.sh -d cpu -c template_train_lenet
+
+    # GPU device_id=0
+    bash scripts/train.sh -d 0 -c template_train_lenet
+
+    # GPU device_id=0,1 (DDP)
+    bash scripts/train.sh -d 0,1 -c template_train_lenet
     ```
-* Most of the configs can be modified in the bash command line by adding 'X.Y.Z...=...' intuitively.
-```
-# cpu
-bash scripts/train.sh -d cpu -c template_train_lenet
 
-# gpu device_id=0
-bash scripts/train.sh -d 0 -c template_train_lenet
+* (optional) DDP across multiple machines 
+    * Firstly, make sure all nodes (machines) have the same code files and have access to the same data files.
+    * Secondly, enable password-free Secure Shell (ssh) communication between multiple machines which wilol be used later.
+    * Thirdly, get the IP address of the master node (machine) and a free port, and call them MASTER_ADDR and MASTER_PORT respectively.
+    ```
+    # Example(s):
+    # GPU device_id=0,1,2,3 on node 0 (master) and device_id=2,3 on node 1 (slave_1)
+    # i.e. 4+2 GPUs
 
-# gpu device_id=0,1 (DDP)
-bash scripts/train.sh -d 0,1 -c template_train_lenet
-```
+    # node 0 (master)
+    bash scripts/multi_machine_train.sh -d 0,1,2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 0 -c template_train_lenet
+
+    # node 1 (slave_1)
+    bash scripts/multi_machine_train.sh -d 2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 1 -c template_train_lenet
+
+    # '-a' means '--master_addr' in torchrun.
+    # '-p' means '--master_port' in torchrun.
+    # '-nn' means '--nnodes' in torchrun, which is 2 here for all nodes.
+    # '-n' means '--node_rank' in torchrun, 0 for master and 1 for slave_1.
+    ```
 
 ### outputs of the running task
-You can find the outputs where the path is defined in the corresponding 'yaml' file in './configs' (info.output_dir)
-* current_project files
-* checkpoints of the latest and the best model (the latest one includes the state of optimizer and scheduler etc., so it can be used to resume the task)
-* logs.txt with model's structure, summary...
-* ...
+* You can find the outputs where the path is defined in the corresponding 'yaml' file in './configs' (info.output_dir)
+    * current_project files
+    * checkpoints of the latest and the best model (the latest one includes the state of optimizer and scheduler etc., so it can be used to resume the task)
+    * logs.txt with model's structure, summary...
+    * ...
 
 ### Test the trained model if test_dataset exists
-get the absolute or relative (to the main path of this project) path of the cfg.yaml file in your training outputs as **TRAIN_CFG_PATH**
-```
-bash scripts/inference.sh -d (cpu; 0; 0,1 ...) -p TRAIN_CFG_PATH
-# or just the same
-bash scripts/inference.sh -d (cpu; 0; 0,1 ...) tester.train_cfg_path=TRAIN_CFG_PATH
-```
-Note: 
-* It will use 'template_inference.yaml' as configs for inference by default.
+* get the absolute or relative (to the main path of this project) path of the cfg.yaml file in your training outputs as **TRAIN_CFG_PATH**
+    ```
+    bash scripts/inference.sh -d (cpu; 0; 0,1 ...) -p TRAIN_CFG_PATH
+    # or just the same
+    bash scripts/inference.sh -d (cpu; 0; 0,1 ...) tester.train_cfg_path=TRAIN_CFG_PATH
+    ```
+* Notes: 
+    * It will use 'template_inference.yaml' as configs for inference by default.
 
-* The config 'tester.use_best' can control whether to use the best model or the latest model in the outputs folder.
+    * The config 'tester.use_best' can control whether to use the best model or the latest model in the outputs folder.
 
-* Other configs will be the same as in **TRAIN_CFG_PATH** if not specified in the bash command or the inference 'yaml' file.
+    * Other configs will be the same as in **TRAIN_CFG_PATH** if not specified in the bash command or the inference 'yaml' file.
 
 ### Migrate or create your datasets, models, and tasks
 
@@ -229,8 +253,8 @@ Note:
 * In your new file, do the following steps just as in **src/gears/default_gear.py**.
 
 2. Create a Trainer(TrainerBase) class for your Model like this:
-    * 'cfg.trainer.trainer_choice=TRAINER_NAME' chooses the Trainer as @trainer_register('TRAINER_NAME')
-    * Do not forget to **super** the corresponding method if you want to add some new features to existing methods
+    * 'cfg.trainer.trainer_choice=TRAINER_NAME' chooses the Trainer as @trainer_register('TRAINER_NAME').
+    * Do not forget to **super** the corresponding method if you want to add some new features to existing methods.
     ```
     @trainer_register('default')
     class MyTrainer(TrainerBase):
@@ -243,14 +267,14 @@ Note:
 1. Create a new 'yaml' file for your task (still named ResNet for example) in **configs** as **configs/train_resnet.yaml**.
 
 * In your new file, do the following steps just as in **src/models/template_model.py**.
-* Maybe just copying one of the 'template_train_XXX.yaml' files will help your work greatly
+* Maybe just copying one of the 'template_train_XXX.yaml' files will help your work greatly.
 
-2. 'config.additional' is the list of default config files in which all configs are inherited (and overridden by the latter one in the list **and this main yaml file**)
+2. 'config.additional' is the list of default config files in which all configs are inherited (and overridden by the latter one in the list **and this main yaml file**).
 
 3. Just change or add any configs you need. All of them can be accessed by nested namespace as 'cfg.A.B.C...' in Python files.
 
 4. Sweep the hyper-parameters
-    * for example:
+    * Example(s):
     ```
     sweep:
         sweep_enabled: True
@@ -268,12 +292,14 @@ Note:
         4. trainer.scheduler.scheduler_choice=cosine  
            trainer.optimizer.lr_default=4.0e-4
 
-5. You may explore the usage of other configs by reading the comments in 'default_xxx.yaml' and 'template_xxx.yaml' files
+5. You may explore the usage of other configs by reading the comments in 'default_xxx.yaml' and 'template_xxx.yaml' files.
 
-#### ⑦Just run the task using the 'yaml' file name
-```
-bash scripts/train.sh -d 0,1,2,3 -c train_resnet
-```
+#### ⑦Run the task:
+
+ * Just use the 'yaml' file name of your task and run it by any device configurations (CPU, GPU, GPUs) mentioned earlier.
+    ```
+    bash scripts/train.sh -d 0,1,2,3 -c train_resnet
+    ```
 
 ---
 -> Easy Start ends here. Following are some more hints.
