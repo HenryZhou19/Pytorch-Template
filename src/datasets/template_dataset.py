@@ -58,9 +58,9 @@ class SimpleDataModule(DataModuleBase):
         super().__init__(cfg)
         self.train_val_len = 10000
         self.test_len = 1000
-        if cfg.model.choice == 'simple_unet2d':
+        if cfg.model.model_choice == 'simple_unet2d':
             self.data_form = '2d'
-        elif cfg.model.choice == 'simple_unet3d':
+        elif cfg.model.model_choice == 'simple_unet3d':
             self.data_form = '3d'
         else:
             self.data_form = 'default'

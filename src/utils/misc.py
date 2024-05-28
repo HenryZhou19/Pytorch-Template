@@ -420,6 +420,9 @@ class PortalMisc:
 
     @staticmethod 
     def end_everything(cfg, loggers, end_with_printed_cfg=False, force=False):
+        
+        dist.destroy_process_group()
+        
         if end_with_printed_cfg:
             PortalMisc.print_config(cfg)
         seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_str(), cfg.info.start_time))
@@ -535,6 +538,10 @@ class DistMisc:
     @staticmethod
     def is_main_process():
         return DistMisc.get_rank() == 0
+    
+    @staticmethod
+    def is_node_first_rank():
+        return int(os.environ['LOCAL_RANK']) == 0
 
     @staticmethod
     def setup_for_distributed(is_master):
@@ -567,7 +574,7 @@ class DistMisc:
             cfg.env.dist_url = 'env://'
             torch.cuda.set_device(cfg.env.local_rank)
             
-            dist.distributed_c10d.logger.setLevel(logging.WARNING)
+            # dist.distributed_c10d.logger.setLevel(logging.WARNING)  # this line may cause the multi-machine ddp to hang
             
             dist.init_process_group(
                 backend=cfg.env.dist_backend, init_method=cfg.env.dist_url, world_size=cfg.env.world_size, rank=cfg.env.rank
@@ -576,6 +583,10 @@ class DistMisc:
             # print(f'INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}')
             # DistMisc.avoid_print_mess()
             DistMisc.setup_for_distributed(cfg.env.rank == 0)
+            
+            if cfg.env.rank != cfg.env.local_rank:
+                if DistMisc.is_node_first_rank():
+                    print(LoggerMisc.block_wrapper(f'This is not the main node, which is on {os.environ["MASTER_ADDR"]}:{os.environ["MASTER_PORT"]}'), force=True)
         elif cfg.env.device == 'cpu':
             cfg.env.distributed = False
             cfg.env.world_size = 1
