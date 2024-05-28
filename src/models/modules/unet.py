@@ -36,7 +36,7 @@ class ConvBlock(nn.Module):
 
 
 class DownSampling(nn.Module):
-    def __init__(self, in_channels, out_channels, dimension, padding_mode, no_down_dim=None, res_in_block=True):
+    def __init__(self, in_channels, out_channels, dimension, padding_mode='zeros', no_down_dim=None, res_in_block=True):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         MaxPoolXd = nn.MaxPool2d if dimension == 2 else nn.MaxPool3d
@@ -58,7 +58,7 @@ class DownSampling(nn.Module):
 
 
 class UpSampling(nn.Module):
-    def __init__(self, in_channels, cat_channels, out_channels, dimension, use_conv_transpose, padding_mode, no_up_dim=None, res_in_block=True):
+    def __init__(self, in_channels, cat_channels, out_channels, dimension, use_conv_transpose, padding_mode='zeros', no_up_dim=None, res_in_block=True):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         ConvTransposeXd = nn.ConvTranspose2d if dimension == 2 else nn.ConvTranspose3d
@@ -76,9 +76,10 @@ class UpSampling(nn.Module):
             self.up = nn.Upsample(scale_factor=kernel_size, mode='bilinear' if dimension == 2 else 'trilinear', align_corners=True)
         self.conv = ConvBlock(in_channels + cat_channels, out_channels, dimension, padding_mode=padding_mode, res_in_block=res_in_block)
 
-    def forward(self, x, cat_features):
+    def forward(self, x, cat_features=None):
         x = self.up(x)
-        x = torch.cat([x, cat_features], dim=1)
+        if cat_features is not None:
+            x = torch.cat([x, cat_features], dim=1)
         return self.conv(x)
 
 
