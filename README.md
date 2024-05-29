@@ -36,7 +36,7 @@ A simple template for Pytorch projects.
 
 * (optional) DDP across multiple machines 
     * Firstly, make sure all nodes (machines) have the same code files and have access to the same data files.
-    * Secondly, enable password-free Secure Shell (ssh) communication between multiple machines which wilol be used later.
+    * Secondly, enable password-free Secure Shell (ssh) communication between multiple machines which will be used later.
     * Thirdly, get the IP address of the master node (machine) and a free port, and call them MASTER_ADDR and MASTER_PORT respectively.
     ```
     # Example(s):
@@ -343,7 +343,7 @@ A simple template for Pytorch projects.
 * all inherit the DataModuleBase class (src/datasets/modules/data_module_base.py)
 * other useful functions for loading and saving multimedia data
 #### src/gears
-* Trainer and Tester providing all necessary features such as forward_one_iter, save_checkpoint, etc.
+* Trainer and Tester providing all necessary methods such as forward_one_iter, save_checkpoint, etc.
 * all inherit the TrainerBase and TesterBase class (src/gears/modules/gear_base.py)
 #### src/models
 * nn.Module as the main models and sub-modules
@@ -358,5 +358,3 @@ A simple template for Pytorch projects.
     * "TensorMisc.GradCollector(x)" collects the grad of Tensor x
     * "with TimeMisc.TimerContext(block_name):..." shows the time it takes to execute a particular block of code
     * ……
-#### engine.py
-* implementation of the main loop of the dataloader in train_one_epoch / evaluate / test
