@@ -16,7 +16,6 @@ run_cmd() {
   WANDB_CACHE_DIR=~/.cache/wandb \
   WANDB_CONFIG_DIR=~/.config/wandb \
   torchrun \
-  --standalone \
   --nproc_per_node=$nproc_per_node \
   --master_port=$master_port \
   train.py --loglevel=ERROR with ${params[@]}

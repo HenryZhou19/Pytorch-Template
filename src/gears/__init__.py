@@ -1,7 +1,7 @@
 from src.utils.misc import ImportMisc
 
-from .modules.gear_base import (TesterBase, TrainerBase, tester_register,
-                                trainer_register)
+from .modules.tester_base import TesterBase, tester_register
+from .modules.trainer_base import TrainerBase, trainer_register
 
 ImportMisc.import_current_dir_all(__file__, __name__)
 
