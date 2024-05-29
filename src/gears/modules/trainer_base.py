@@ -6,16 +6,15 @@ from copy import deepcopy
 from glob import glob
 
 import torch
-import torch.distributed as dist
 
 from src.criterions import CriterionBase
 from src.datasets.modules.data_module_base import DataLoaderX
 from src.models import ModelBase
 from src.utils.misc import *
+from src.utils.progress_logger import *
 from src.utils.register import Register
 
 trainer_register = Register('trainer')
-tester_register = Register('tester')
 
 class TrainerBase:
     def __init__(
@@ -53,6 +52,7 @@ class TrainerBase:
         self.train_pbar = None
         self.val_pbar = None
         self.val_epoch_list = self._get_val_epochs()
+        self.dist_eval = self.cfg.trainer.dist_eval
         
         assert self.cfg.trainer.grad_accumulation > 0 and isinstance(self.cfg.trainer.grad_accumulation, int), 'grad_accumulation should be a positive integer.'
         
@@ -78,7 +78,19 @@ class TrainerBase:
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
         self.checkpoint_save_interval = self.cfg.trainer.checkpoint_save_interval
         self.checkpoint_reserve_interval = self.cfg.trainer.checkpoint_save_interval * self.cfg.trainer.checkpoint_reserve_factor
-        
+    
+    @property
+    def epoch_loop(self):
+        return range(self.start_epoch, self.cfg.trainer.epochs + 1)
+    
+    @property
+    def lr_groups(self):
+        return {'lr_' + param_group['group_name']: param_group['lr'] for param_group in self.optimizer.param_groups}
+    
+    @property
+    def wd_groups(self):
+        return {'wd_' + param_group['group_name']: param_group['weight_decay'] for param_group in self.optimizer.param_groups}
+    
     def _get_val_epochs(self):
         if self.cfg.trainer.eval_freq <= 0:
             val_epochs = [self.cfg.trainer.epochs]
@@ -114,7 +126,7 @@ class TrainerBase:
             print('')
             self.train_pbar = train_pbar
             self.val_pbar = val_pbar
-
+    
     def _resume_training(self):
         # called in "before_all_epochs"
         if self.cfg.trainer.resume:
@@ -140,7 +152,6 @@ class TrainerBase:
         print(f'Start from epoch: {self.start_epoch}')
         return self.cfg.trainer.resume
     
-                        
     def _load_pretrained_models(self):
         def _load_pretrained_model(model_path, pretrain_model_name):
             if self.ema_model is not None:
@@ -169,7 +180,6 @@ class TrainerBase:
                 if pretrained_model_path is not None:
                     _load_pretrained_model(pretrained_model_path, pretrain_model_name)
     
-    
     def _save_checkpoint(self):
         # called in "after_one_epoch"
         if DistMisc.is_main_process():
@@ -196,7 +206,7 @@ class TrainerBase:
                     last_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{last_saved_epoch}.pth')
                     torch.save(save_files, last_path)
                     os.rename(last_path, os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
-            
+    
     def _save_best_checkpoint(self):
         # called in "after_validation"
         if DistMisc.is_main_process():
@@ -220,7 +230,7 @@ class TrainerBase:
                     os.rename(best[0], os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
                 else:
                     torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
-                    
+    
     def _train_mode(self):
         # called in "before_one_epoch"
         for nn_module in self.nn_module_list:
@@ -232,14 +242,78 @@ class TrainerBase:
             False,
         )
         self.training = True
-            
+    
     def _eval_mode(self):
         # called in "before_validation"
         for nn_module in self.nn_module_list:
             nn_module.eval()
         self.training = False
-                    
-    def forward(self, batch: dict):
+    
+    def _before_all_epochs(self, **kwargs):
+        is_resumed = self._resume_training()
+        if not is_resumed:
+            self._load_pretrained_models()
+            
+        ModelMisc.unfreeze_or_freeze_submodules(
+            self.model_without_ddp,
+            self.freeze_modules,
+            False,
+            )
+            
+        ModelMisc.show_model_info(self.cfg, self)
+        self._get_pbar()
+    
+    def _before_one_epoch(self, **kwargs):
+        self.epoch += 1
+        if self.cfg.env.distributed:
+            # shuffle data for each epoch (here needs epoch start from 0)
+            self.train_loader.sampler_set_epoch(self.epoch - 1)  
+        
+        DistMisc.barrier()
+
+        if DistMisc.is_main_process():
+            if self.cfg.info.global_tqdm:
+                self.train_pbar.unpause()
+            else :
+                self.train_pbar.reset()
+                self.val_pbar.reset()
+          
+        self.step_count = 0
+        self.optimizer.zero_grad()
+        self._train_mode()
+    
+    def _after_first_train_iter(self, **kwargs):
+        pass
+    
+    def _after_one_epoch(self, **kwargs):
+        LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.trained_iters)
+        
+        self._save_checkpoint()
+    
+    def _before_validation(self, **kwargs):
+        DistMisc.barrier()
+        
+        if DistMisc.is_main_process():
+            self.val_pbar.unpause()
+            
+        self._eval_mode()
+    
+    def _after_first_validation_iter(self, **kwargs):
+        pass
+    
+    def _after_validation(self, **kwargs):
+        LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.trained_iters)
+        
+        self._save_best_checkpoint()
+    
+    def _after_all_epochs(self, **kwargs):
+        DistMisc.barrier()
+        
+        if DistMisc.is_main_process():
+            self.train_pbar.close()
+            self.val_pbar.close() 
+    
+    def _forward(self, batch: dict):
         time.sleep(self.breath_time)
         
         batch: dict = TensorMisc.to(batch, self.device, non_blocking=self.cfg.env.pin_memory)
@@ -266,7 +340,7 @@ class TrainerBase:
             
         return outputs, loss, metrics_dict
     
-    def backward_and_step(self, loss: torch.Tensor):       
+    def _backward_and_step(self, loss: torch.Tensor):
         def _backward():
             if self.scaler is not None:
                 self.scaler.scale(loss).backward()
@@ -307,186 +381,112 @@ class TrainerBase:
         
         self.lr_scheduler.step()  # update special lr_scheduler after each iter
         self.trained_iters += 1
-    
-    @property
-    def epoch_loop(self):
-        return range(self.start_epoch, self.cfg.trainer.epochs + 1)
-    
-    @property
-    def lr_groups(self):
-        return {'lr_' + param_group['group_name']: param_group['lr'] for param_group in self.optimizer.param_groups}
-    
-    @property
-    def wd_groups(self):
-        return {'wd_' + param_group['group_name']: param_group['weight_decay'] for param_group in self.optimizer.param_groups}
-    
-    def before_all_epochs(self, **kwargs):
-        is_resumed = self._resume_training()
-        if not is_resumed:
-            self._load_pretrained_models()
+        
+    def _train_one_epoch(self):
+        cfg = self.cfg
+        loggers = self.loggers
+        
+        mlogger = MetricLogger(
+            cfg=cfg,
+            loggers=loggers,
+            pbar=self.train_pbar,  
+            header='Train',
+            epoch_str=f'epoch: [{self.epoch}/{cfg.trainer.epochs}]',
+            )
+        mlogger.add_metrics([{
+            'loss': ValueMetric(prior=True),
+            **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', no_sync=True) for lr_group in self.lr_groups.keys()},
+            'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True)
+            }])
+        first_iter = True
+        for batch in mlogger.log_every(self.train_loader):
             
-        ModelMisc.unfreeze_or_freeze_submodules(
-            self.model_without_ddp,
-            self.freeze_modules,
-            False,
+            _, loss, metrics_dict = self._forward(batch)
+            
+            mlogger.update_metrics(
+                sample_count=batch['batch_size'],
+                **self.lr_groups,
+                loss=loss,
+                **metrics_dict,
             )
             
-        ModelMisc.show_model_info(self.cfg, self)
-        self._get_pbar()
-    
-    def before_one_epoch(self, **kwargs):
-        self.epoch += 1
-        if self.cfg.env.distributed:
-            # shuffle data for each epoch (here needs epoch start from 0)
-            self.train_loader.sampler_set_epoch(self.epoch - 1)  
-        
-        DistMisc.barrier()
-
-        if DistMisc.is_main_process():
-            if self.cfg.info.global_tqdm:
-                self.train_pbar.unpause()
-            else :
-                self.train_pbar.reset()
-                self.val_pbar.reset()
-          
-        self.step_count = 0
-        self.optimizer.zero_grad()
-        self._train_mode()
-        
-    def after_first_train_iter(self, **kwargs):
-        pass
-
-    def after_one_epoch(self, **kwargs):
-        LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.trained_iters)
-        
-        self._save_checkpoint()
-        
-    def before_validation(self, **kwargs):
-        DistMisc.barrier()
-
-        if DistMisc.is_main_process():
-            self.val_pbar.unpause()
+            self._backward_and_step(loss)
             
-        self._eval_mode()
-    
-    def after_first_validation_iter(self, **kwargs):
-        pass
-
-    def after_validation(self, **kwargs):
-        LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.trained_iters)
-        
-        self._save_best_checkpoint()
-    
-    def after_all_epochs(self, **kwargs):
-        DistMisc.barrier()
-
-        if DistMisc.is_main_process():
-            self.train_pbar.close()
-            self.val_pbar.close()
-
-
-class TesterBase:
-    def __init__(
-        self,
-        cfg: Namespace,
-        loggers: Namespace,
-        model_without_ddp: ModelBase,
-        ema_model: torch.nn.Module,
-        criterion: CriterionBase,
-        test_loader: DataLoaderX,
-        device: torch.device,
-        ) -> None:
-        super().__init__()
-        self.cfg = cfg
-        self.loggers = loggers
-        self.model = model_without_ddp
-        self.ema_model = ema_model  # still in train mode (in ModelManager)
-        self.criterion = criterion
-        self.test_loader = test_loader
-        self.device = device
-        self.metrics = {}
-        self.test_pbar = None
-        
-        self.test_len = len(self.test_loader)
-        
-        self.nn_module_list = [self.model, self.criterion]
-        
-        if self.ema_model is not None:
-            print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
-            self.ema_model.eval()
-            self.ema_criterion = deepcopy(self.criterion)
-            self.ema_criterion.eval()
-            
-        self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
-
-    def _get_pbar(self):
-        # called in "before_inference"
-        if DistMisc.is_main_process():
-            test_pbar = LoggerMisc.MultiTQDM(
-                total=self.test_len,
-                dynamic_ncols=True,
-                colour='green',
-                position=0,
-                maxinterval=math.inf,
+            mlogger.update_metrics(
+                epoch=self.trained_iters / self.train_len,
             )
-            test_pbar.set_description_str('Test ')
-            print('')
-            self.test_pbar = test_pbar
-    
-    def _load_model(self):
-        # called in "before_inference"
-        checkpoint = torch.load(self.cfg.tester.checkpoint_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model'])
-        if self.ema_model is not None:
-            assert checkpoint['ema_model'] is not None, 'ema_model is None in the checkpoint.'
-            self.ema_model.load_state_dict(checkpoint['ema_model'])
-        # print(f'{config.mode} mode: Loading pth from', path)
-        print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_trainer_metrics {checkpoint.get("best_metrics", {})}\nlast_trainer_metrics {checkpoint.get("last_metrics", {})}', '>'))
-        if DistMisc.is_main_process():
-            if 'epoch' in checkpoint.keys():
-                print('Epoch:', checkpoint['epoch'])
-                if hasattr(self.loggers, 'wandb_run'):
-                    self.loggers.wandb_run.tags = self.loggers.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
-    
-    def _eval_mode(self):
-        # called in "before_inference"
-        for nn_module in self.nn_module_list:
-            nn_module.eval()
-        # self.training = False
-        
-    def forward(self, batch: dict):
-        time.sleep(self.breath_time)
-        
-        batch: dict = TensorMisc.to(batch, self.device, non_blocking=self.cfg.env.pin_memory)
-        inputs: dict = batch['inputs']
-        targets: dict = batch['targets']
-        
-        with torch.no_grad():
-            outputs = self.model(inputs)
-            loss, metrics_dict = self.criterion(outputs, targets, infer_mode=True)
             
-            if self.ema_model is not None:
-                ema_outputs = self.ema_model(inputs)
-                ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
-                # metrics_dict['ema_loss'] = ema_loss  # no need to show 'loss' & 'ema_loss' in inference
-                for key, value in ema_metrics_dict.items():
-                    metrics_dict[f'ema_{key}'] = value
+            if cfg.info.iter_log_freq > 0:
+                if self.trained_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
+                    LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), int(self.trained_iters / cfg.trainer.grad_accumulation))
             
-        return outputs, loss, metrics_dict
-
-    def before_inference(self, **kwargs):
-        self._load_model()
-        self._get_pbar()
+            if first_iter:
+                first_iter = False
+                self._after_first_train_iter()
         
-        self._eval_mode()
+        mlogger.add_epoch_metrics(**self.criterion.get_epoch_metrics_and_reset())
+        self.train_outputs = mlogger.output_dict(no_avg_list=[*self.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
     
-    def after_first_inference_iter(self, **kwargs):
-        pass
-
-    def after_inference(self, **kwargs):
-        LoggerMisc.logging(self.loggers,  'infer', self.metrics, None)
+    def _evaluate(self):
+        cfg = self.cfg
         
-        if DistMisc.is_main_process():          
-            self.test_pbar.close()
-
+        mlogger = MetricLogger(
+            cfg=cfg,
+            loggers=self.loggers,
+            pbar=self.val_pbar,  
+            header='Eval ',
+            epoch_str=f'epoch: [{self.epoch}/{cfg.trainer.epochs}]',
+            )
+        mlogger.add_metrics([{'loss': ValueMetric(prior=True)}])
+        first_iter = True
+        for batch in mlogger.log_every(self.val_loader):
+            
+            _, loss, metrics_dict = self._forward(batch)
+            
+            mlogger.update_metrics(
+                sample_count=batch['batch_size'],
+                loss=loss,
+                **metrics_dict,
+            )
+            
+            if first_iter:
+                first_iter = False
+                self._after_first_validation_iter()
         
+        mlogger.add_epoch_metrics(**self.criterion.get_epoch_metrics_and_reset())
+        if hasattr(self, 'ema_criterion'):
+            ema_epoch_metrics = {}
+            raw_epoch_metrics = self.ema_criterion.get_epoch_metrics_and_reset()
+            for k, v in raw_epoch_metrics.items():
+                ema_epoch_metrics[f'ema_{k}'] = v
+            mlogger.add_epoch_metrics(**ema_epoch_metrics)
+        self.metrics = mlogger.output_dict(sync=self.dist_eval, final_print=True)
+    
+    def run(self):
+        # train and val
+        # prepare for 1. resumed training if needed; 2. show model information; 3. progress bar;
+        self._before_all_epochs()
+        
+        for _ in self.epoch_loop:
+            self._before_one_epoch()
+            
+            self._train_one_epoch()
+            
+            self._after_one_epoch()
+            
+            if self.epoch in self.val_epoch_list:
+                
+                self._before_validation()
+                
+                if self.dist_eval or DistMisc.is_main_process():
+                    self._evaluate()
+                    
+                self._after_validation()
+                
+                if self.cfg.special.debug == 'one_val_epoch':
+                    PortalMisc.end_everything(self.cfg, self.loggers, force=True)
+                
+            if self.cfg.special.debug == 'one_epoch':
+                PortalMisc.end_everything(self.cfg, self.loggers, force=True)
+                
+        self._after_all_epochs()
