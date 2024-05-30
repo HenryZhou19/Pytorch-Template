@@ -85,11 +85,13 @@ class TrainerBase:
     
     @property
     def lr_groups(self):
-        return {'lr_' + param_group['group_name']: param_group['lr'] for param_group in self.optimizer.param_groups}
+        return {'lr_' + param_group['group_name']: param_group['lr']
+                for param_group in self.optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')}
     
     @property
     def wd_groups(self):
-        return {'wd_' + param_group['group_name']: param_group['weight_decay'] for param_group in self.optimizer.param_groups}
+        return {'wd_' + param_group['group_name']: param_group['weight_decay']
+                for param_group in self.optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')}
     
     def _get_val_epochs(self):
         if self.cfg.trainer.eval_freq <= 0:
