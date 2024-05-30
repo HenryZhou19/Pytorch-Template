@@ -420,9 +420,6 @@ class PortalMisc:
 
     @staticmethod 
     def end_everything(cfg, loggers, end_with_printed_cfg=False, force=False):
-        
-        dist.destroy_process_group()
-        
         if end_with_printed_cfg:
             PortalMisc.print_config(cfg)
         seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_str(), cfg.info.start_time))
@@ -434,6 +431,8 @@ class PortalMisc:
                     loggers.tensorboard_run.close()
                     print('tensorboard closed.')
                 if force:
+                    DistMisc.destroy_process_group()
+                    
                     if hasattr(loggers, 'wandb_run'):
                         loggers.wandb_run.finish(exit_code=-1)
                         print('wandb closed.')
@@ -603,6 +602,11 @@ class DistMisc:
                 cfg.env.pin_memory = False
         else:
             raise ValueError('Invalid device type.')
+        
+    @staticmethod
+    def destroy_process_group():
+        if dist.is_initialized():
+            dist.destroy_process_group()
 
 
 class ModelMisc:
