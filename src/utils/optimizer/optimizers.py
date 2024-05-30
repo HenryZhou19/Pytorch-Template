@@ -29,7 +29,7 @@ class OptimizerUtils:
                     'lr': cfg.trainer.optimizer.lr_default,
                     'weight_decay': cfg.trainer.optimizer.wd_default,
                 },
-                'default_no_decay': {
+                'default_no_wd': {
                     'params': [],
                     'lr': cfg.trainer.optimizer.lr_default,
                     'weight_decay': 0.,
@@ -46,7 +46,7 @@ class OptimizerUtils:
                             'lr': value,
                             'weight_decay': getattr(cfg.trainer.optimizer.param_groups, key.replace(lr_mark, wd_mark)),
                             }
-                        param_groups[param_group_name + '_no_decay'] = {
+                        param_groups[param_group_name + '_no_wd'] = {
                             'params': [],
                             'lr': value,
                             'weight_decay': 0.,
@@ -58,8 +58,8 @@ class OptimizerUtils:
         for param_name, param in model_without_ddp.named_parameters():
             if not param.requires_grad:
                 continue
-            if param.ndim <= 1 or param_name.endswith(".bias") or param_name in model_without_ddp.no_weight_decay_list:
-                param_groups[match_param_group(param_name, param_group_name_list) + '_no_decay']['params'].append(param)
+            if param.ndim <= 1 or param_name.endswith(".bias") or getattr(param, '_no_weight_decay', False):
+                param_groups[match_param_group(param_name, param_group_name_list) + '_no_wd']['params'].append(param)
             else:
                 param_groups[match_param_group(param_name, param_group_name_list)]['params'].append(param)
         

@@ -20,15 +20,14 @@ class SimpleModel(ModelBase):
             nn.Sigmoid()
             )
         
+        self.set_no_weight_decay_by_param_names([
+            'head.0.weight'
+        ])
+        self.set_no_reinit_by_param_names([
+            'head.0.bias'
+        ])
+
         self._custom_init_all(self._fn_vanilla_custom_init)
-    
-    @property
-    def no_weight_decay_list(self):
-        return ['head.0.weight']
-    
-    @property
-    def no_reinit_list(self):
-        return ['head.0.bias']
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
