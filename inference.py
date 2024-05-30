@@ -75,3 +75,5 @@ if __name__ == '__main__':
     DistMisc.init_distributed_mode(infer_cfg)
     
     SweepMisc.init_sweep_mode(infer_cfg, infer_portal)
+    
+    DistMisc.destroy_process_group()

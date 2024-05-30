@@ -87,3 +87,5 @@ if __name__ == '__main__':
     DistMisc.init_distributed_mode(cfg)
     
     SweepMisc.init_sweep_mode(cfg, train_portal)
+    
+    DistMisc.destroy_process_group()
