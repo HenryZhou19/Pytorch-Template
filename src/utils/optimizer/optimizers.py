@@ -1,23 +1,28 @@
 import torch
 
+from src.models.modules.model_base import ModelBase
+
 
 class OptimizerUtils:
     @staticmethod
-    def _get_param_dicts_with_specific_lr_wd(cfg, model_without_ddp: torch.nn.Module):
+    def _get_param_dicts_with_specific_lr_wd(cfg, model_without_ddp: ModelBase):
         
-        def match_param_groups(param_name, param_group_names):
+        def match_param_group(param_name, param_group_name_list):
+            matched_param_group_name = 'default'
+            if len(param_group_name_list) == 1:
+                return matched_param_group_name
             flag = False
-            param_group_name = 'default'
-            for lr_group_name in param_group_names:
-                if lr_group_name in param_name:
-                    assert not flag, f'Name {param_name} matches multiple param_group names in {param_group_names}.'
+            for param_group_name in param_group_name_list:
+                if param_group_name in param_name:
+                    assert not flag, f'Name {param_name} matches multiple param_group names in {param_group_name_list}.'
                     flag = True
-                    param_group_name = lr_group_name
-            return param_group_name
-
-        if hasattr(cfg.trainer.optimizer, 'param_groups'):
+                    matched_param_group_name = param_group_name
+            return matched_param_group_name
+        
+        def create_all_param_groups():
             lr_mark = 'lr_'
             wd_mark = 'wd_'
+            param_group_name_list = ['default']
             param_groups = {
                 'default': {
                     'params': [],
@@ -30,58 +35,41 @@ class OptimizerUtils:
                     'weight_decay': 0.,
                 }
             }
-            for k, v in vars(cfg.trainer.optimizer.param_groups).items():
-                assert k.startswith(lr_mark) or k.startswith(wd_mark), f'Unknown param_groups config: {k}'
-                if k.startswith(lr_mark): 
-                    param_groups[k[len(lr_mark):]] = {
-                        'params': [],
-                        'lr': v,
-                        'weight_decay': getattr(cfg.trainer.optimizer.param_groups, k.replace(lr_mark, wd_mark)),
-                        }
-                    param_groups[k[len(lr_mark):] + '_no_decay'] = {
-                        'params': [],
-                        'lr': v,
-                        'weight_decay': 0.,
-                        }
-            for name, param in model_without_ddp.named_parameters():
-                if not param.requires_grad:
-                    continue
-                if param.ndim <= 1 or name.endswith(".bias") or name in model_without_ddp.no_weight_decay_list:
-                    param_groups[match_param_groups(name, param_groups.keys()) + '_no_decay']['params'].append(param)
-                else:
-                    param_groups[match_param_groups(name, param_groups.keys())]['params'].append(param)
-            
-            # construct the final param_dicts_with_lr_wd
-            param_dicts_with_lr_wd = []
-            for k, v in param_groups.items():
-                param_dicts_with_lr_wd.append({
-                    **v,
-                    'group_name': k
-                    })
+            if hasattr(cfg.trainer.optimizer, 'param_groups'):
+                for key, value in vars(cfg.trainer.optimizer.param_groups).items():
+                    assert key.startswith(lr_mark) or key.startswith(wd_mark), f'Unknown param_groups config: {key}'
+                    if key.startswith(lr_mark):
+                        param_group_name = key[len(lr_mark):]
+                        param_group_name_list.append(param_group_name)
+                        param_groups[param_group_name] = {
+                            'params': [],
+                            'lr': value,
+                            'weight_decay': getattr(cfg.trainer.optimizer.param_groups, key.replace(lr_mark, wd_mark)),
+                            }
+                        param_groups[param_group_name + '_no_decay'] = {
+                            'params': [],
+                            'lr': value,
+                            'weight_decay': 0.,
+                            }
+            return param_groups, param_group_name_list
         
-        # if no cfg.optimizer.param_groups, then all params use 'default' config
-        else:
-            decay_params_list = []
-            no_decay_params_list = []
-            for name, param in model_without_ddp.named_parameters():
-                if not param.requires_grad:
-                    continue
-                if param.ndim <= 1 or name.endswith(".bias") or name in model_without_ddp.no_weight_decay_list:
-                    no_decay_params_list.append(param)
-                else:
-                    decay_params_list.append(param)
-            
-            param_dicts_with_lr_wd = [{
-                'params': decay_params_list,
-                'lr': cfg.trainer.optimizer.lr_default,
-                'weight_decay': cfg.trainer.optimizer.wd_default,
-                'group_name': 'default'
-                },{
-                'params': no_decay_params_list,
-                'lr': cfg.trainer.optimizer.lr_default,
-                'weight_decay': 0.,
-                'group_name': 'default_no_decay'
-                }]
+        param_groups, param_group_name_list = create_all_param_groups()
+        
+        for param_name, param in model_without_ddp.named_parameters():
+            if not param.requires_grad:
+                continue
+            if param.ndim <= 1 or param_name.endswith(".bias") or param_name in model_without_ddp.no_weight_decay_list:
+                param_groups[match_param_group(param_name, param_group_name_list) + '_no_decay']['params'].append(param)
+            else:
+                param_groups[match_param_group(param_name, param_group_name_list)]['params'].append(param)
+        
+        # construct the final param_dicts_with_lr_wd
+        param_dicts_with_lr_wd = []
+        for k, v in param_groups.items():
+            param_dicts_with_lr_wd.append({
+                'group_name': k,
+                **v
+                })            
         
         return param_dicts_with_lr_wd
     
