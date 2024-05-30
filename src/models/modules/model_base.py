@@ -54,6 +54,16 @@ class ModelBase(nn.Module):
             
     def _custom_init_all(self, std=0.02):
         self.apply(partial(self._custom_init, std=std))
+    
+    @property
+    def no_weight_decay_list():
+        '''
+        all param.ndim <= 1 or name.endswith(".bias") are not decayed by default
+        the list of params' names that are not decayed can be customized by overriding this property
+        
+        the name here must match the name in model_without_ddp.named_parameters()
+        '''
+        return []
         
     def forward(self, inputs: dict) -> dict:
         raise NotImplementedError

@@ -21,6 +21,10 @@ class SimpleModel(ModelBase):
             )
         
         # self._freeze_layers(['backbone'], verbose=True)
+    
+    @property
+    def no_weight_decay_list(self):
+        return ['head.0.weight']
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
