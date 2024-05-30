@@ -23,6 +23,11 @@ class OptimizerUtils:
                     'params': [],
                     'lr': cfg.trainer.optimizer.lr_default,
                     'weight_decay': cfg.trainer.optimizer.wd_default,
+                },
+                'default_no_decay': {
+                    'params': [],
+                    'lr': cfg.trainer.optimizer.lr_default,
+                    'weight_decay': 0.,
                 }
             }
             for k, v in vars(cfg.trainer.optimizer.param_groups).items():
@@ -33,23 +38,49 @@ class OptimizerUtils:
                         'lr': v,
                         'weight_decay': getattr(cfg.trainer.optimizer.param_groups, k.replace(lr_mark, wd_mark)),
                         }
-            for n, p in model_without_ddp.named_parameters():
-                if p.requires_grad:
-                    param_groups[match_param_groups(n, param_groups.keys())]['params'].append(p)
-
+                    param_groups[k[len(lr_mark):] + '_no_decay'] = {
+                        'params': [],
+                        'lr': v,
+                        'weight_decay': 0.,
+                        }
+            for name, param in model_without_ddp.named_parameters():
+                if not param.requires_grad:
+                    continue
+                if param.ndim <= 1 or name.endswith(".bias") or name in model_without_ddp.no_weight_decay_list:
+                    param_groups[match_param_groups(name, param_groups.keys()) + '_no_decay']['params'].append(param)
+                else:
+                    param_groups[match_param_groups(name, param_groups.keys())]['params'].append(param)
+            
+            # construct the final param_dicts_with_lr_wd
             param_dicts_with_lr_wd = []
             for k, v in param_groups.items():
                 param_dicts_with_lr_wd.append({
                     **v,
                     'group_name': k
                     })
-        else:  # if no cfg.optimizer.param_groups, then all params use 'default' config
+        
+        # if no cfg.optimizer.param_groups, then all params use 'default' config
+        else:
+            decay_params_list = []
+            no_decay_params_list = []
+            for name, param in model_without_ddp.named_parameters():
+                if not param.requires_grad:
+                    continue
+                if param.ndim <= 1 or name.endswith(".bias") or name in model_without_ddp.no_weight_decay_list:
+                    no_decay_params_list.append(param)
+                else:
+                    decay_params_list.append(param)
+            
             param_dicts_with_lr_wd = [{
-                'params': [p for _, p in model_without_ddp.named_parameters()
-                            if p.requires_grad],
+                'params': decay_params_list,
                 'lr': cfg.trainer.optimizer.lr_default,
                 'weight_decay': cfg.trainer.optimizer.wd_default,
                 'group_name': 'default'
+                },{
+                'params': no_decay_params_list,
+                'lr': cfg.trainer.optimizer.lr_default,
+                'weight_decay': 0.,
+                'group_name': 'default_no_decay'
                 }]
         
         return param_dicts_with_lr_wd
