@@ -849,6 +849,10 @@ class LoggerMisc:
         if not str_input.endswith('\n'):
             str_input += '\n'
         return '\n' + s * block_width + '\n' + str_input + s * block_width + '\n'
+
+    @staticmethod
+    def list_to_multiline_string(items: list, prefix='\t', suffix=''):
+        return '\n'.join([prefix + str(item) + suffix for item in items])
     
     @staticmethod
     def logging(loggers, group, output_dict, step):

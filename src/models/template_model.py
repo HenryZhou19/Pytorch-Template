@@ -20,11 +20,15 @@ class SimpleModel(ModelBase):
             nn.Sigmoid()
             )
         
-        # self._freeze_layers(['backbone'], verbose=True)
+        self._custom_init_all(self._fn_vanilla_custom_init)
     
     @property
     def no_weight_decay_list(self):
         return ['head.0.weight']
+    
+    @property
+    def no_reinit_list(self):
+        return ['head.0.bias']
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
@@ -45,8 +49,6 @@ class SimpleUNet2DModel(ModelBase):
         else:
             raise NotImplementedError(f'backbone "{cfg.model.backbone}" has not been implemented yet for {self.__class__}.')
         
-        # self._freeze_layers(['backbone'], verbose=True)
-
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
         x = self.backbone(x)
@@ -63,8 +65,6 @@ class SimpleUNet3DModel(ModelBase):
             self.backbone = UNetXd(in_channels=3, dimension=3)
         else:
             raise NotImplementedError(f'backbone "{cfg.model.backbone}" has not been implemented yet for {self.__class__}.')
-        
-        # self._freeze_layers(['backbone'], verbose=True)
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
