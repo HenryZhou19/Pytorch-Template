@@ -795,6 +795,14 @@ class ModelMisc:
                 submodule.train() if is_train else submodule.eval()
         if verbose and len(submodule_name_list) > 0:
             print(LoggerMisc.block_wrapper(verbose_string, '='))
+            
+    @staticmethod
+    def _re_init_check(module: nn.Module, param_name):
+        if hasattr(getattr(module, param_name, None), '_no_reinit'):
+            print(f'No re-init for {module}\'s {param_name}')
+            return False
+        return True
+
 
 class LoggerMisc:
     class MultiTQDM:
