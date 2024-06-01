@@ -7,6 +7,8 @@ from typing import Optional, Union
 import torch
 from torch import nn
 
+from src.models.modules.mamba.modules.utils import init_mamba_weights
+
 from .modules.mamba_block import MambaBlock
 from .modules.norm import RMSNorm
 
@@ -74,6 +76,8 @@ class Mamba(nn.Module):
         norm_epsilon=1e-5,
         final_norm=True,
         residual_in_fp32: bool=False,
+        custom_init=True,
+        initializer_cfg=None,
         device=None,
         dtype=None,
         ):
@@ -108,6 +112,15 @@ class Mamba(nn.Module):
         
         if final_norm:
             self.final_norm: Union[nn.LayerNorm, RMSNorm] = norm_cls()
+        
+        if custom_init:
+            self.apply(
+                partial(
+                    init_mamba_weights,
+                    n_layer=n_layer,
+                    **(initializer_cfg if initializer_cfg is not None else {}),
+                )
+            )
             
     def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
         return {
