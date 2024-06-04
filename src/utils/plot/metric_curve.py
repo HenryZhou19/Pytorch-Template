@@ -1,6 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+__all__ = [
+    'plot_curve_with_std',
+    'plot_curve_with_std_min_max',
+    'plot_curve_only_min_max',
+    'plot_curve'
+    ]
 
 def plot_curve_with_std_min_max(y_mean, y_std, y_min, y_max, x=None, metric_name='Curve', save_file_path=None):
     """
