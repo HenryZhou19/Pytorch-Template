@@ -6,6 +6,12 @@ import torch
 import torch.nn as nn
 from einops import repeat
 
+__all__ = [
+    "init_dt_proj",
+    "init_A_log",
+    "init_D",
+    "init_mamba_weights",
+    ]
 
 def init_dt_proj(dt_rank, d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, factory_kwargs):
     dt_proj = nn.Linear(dt_rank, d_inner, bias=True, **factory_kwargs)

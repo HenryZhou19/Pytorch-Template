@@ -1,5 +1,5 @@
 import importlib
-import logging
+# import logging
 import os
 import random
 import shutil
@@ -229,7 +229,7 @@ class PortalMisc:
             print(LoggerMisc.block_wrapper('Files and folders of currect project are copied successfully.'))
     
     @staticmethod
-    def combine_train_infer_configs(infer_cfg, use_train_seed=True):
+    def combine_train_infer_configs(infer_cfg, use_train_seed=True, custom_work_dir=None):
         cfg = ConfigMisc.read_from_yaml(infer_cfg.tester.train_cfg_path)  # config in training
         train_seed_base = cfg.seed_base
         ConfigMisc.update_nested_namespace(cfg, infer_cfg)
@@ -241,7 +241,10 @@ class PortalMisc:
         if os.path.abspath(cfg.info.train_work_dir) != os.path.abspath(cfg.info.work_dir):
             print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', '#'))
         
-        cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + cfg.info.infer_start_time
+        if custom_work_dir is not None:
+            cfg.info.work_dir = os.path.join(custom_work_dir, cfg.info.infer_start_time)
+        else:
+            cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + cfg.info.infer_start_time
         cfg.trainer.grad_accumulation = 1
         if DistMisc.is_main_process():
             if not os.path.exists(cfg.info.work_dir):

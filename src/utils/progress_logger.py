@@ -9,6 +9,10 @@ import torch.distributed as dist
 
 from .misc import ConfigMisc, DistMisc, LoggerMisc, TimeMisc
 
+__all__ = [
+    'MetricLogger',
+    'ValueMetric',
+    ]
 
 class ValueMetric(object):
     def __init__(self, window_size=None, format=None, final_format=None, prior=False, no_print=False, no_sync=False):

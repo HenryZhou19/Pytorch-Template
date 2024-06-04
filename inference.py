@@ -5,7 +5,7 @@ from src.models import ModelManager
 from src.utils.misc import *
 
 
-def test_run(cfg,loggers):
+def test_run(cfg, loggers):
     
     # prepare for data
     data_manager = DataManager(cfg, loggers)
