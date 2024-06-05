@@ -157,4 +157,16 @@ class TesterBase:
         self._test()
         
         self._after_inference()
+        
+    def get_best_model_for_practical_use(self, verbose=True):
+        self._load_model()
+        self._eval_mode()
+        if self.cfg.model.ema_enabled and self.model.ema_primary_criterion:
+            if verbose:
+                print(LoggerMisc.block_wrapper('using EMA model according to training config...'))
+            return self.ema_model.ema_model
+        else:
+            if verbose:
+                print(LoggerMisc.block_wrapper('NOT using EMA model according to training config...'))
+            return self.model
     
