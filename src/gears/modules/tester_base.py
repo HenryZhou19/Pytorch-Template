@@ -18,35 +18,39 @@ class TesterBase:
     def __init__(
         self,
         cfg: Namespace,
-        loggers: Namespace,
         model_without_ddp: ModelBase,
         ema_model: torch.nn.Module,
-        criterion: CriterionBase,
-        test_loader: DataLoaderX,
         device: torch.device,
+        loggers: Namespace=None,
+        criterion: CriterionBase=None,
+        test_loader: DataLoaderX=None,
+        model_only_mode=False,
         ) -> None:
         super().__init__()
         self.cfg = cfg
-        self.loggers = loggers
         self.model = model_without_ddp
         self.ema_model = ema_model  # still in train mode (in ModelManager)
-        self.criterion = criterion
-        self.test_loader = test_loader
         self.device = device
-        self.metrics = {}
-        self.test_pbar = None
-        
-        self.test_len = len(self.test_loader)
-        
-        self.nn_module_list = [self.model, self.criterion]
         
         if self.ema_model is not None:
-            print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
             self.ema_model.eval()
-            self.ema_criterion = deepcopy(self.criterion)
-            self.ema_criterion.eval()
+        
+        if not model_only_mode:
+            self.loggers = loggers
+            self.criterion = criterion
+            self.test_loader = test_loader
+            self.metrics = {}
+            self.test_pbar = None
+            self.test_len = len(self.test_loader)
             
-        self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
+            self.nn_module_list = [self.model, self.criterion]
+            
+            if self.ema_model is not None:
+                print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
+                self.ema_criterion = deepcopy(self.criterion)
+                self.ema_criterion.eval()
+                
+            self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
     
     def _get_pbar(self):
         # called in "before_inference"

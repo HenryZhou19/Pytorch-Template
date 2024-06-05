@@ -17,4 +17,8 @@ class GearManager(object):
     def build_tester(self, *args, **kwargs):
         tester: TesterBase = tester_register.get(self.cfg.tester.tester_choice)(self.cfg, self.loggers, *args, **kwargs)
         return tester
+    
+    def build_tester_model_only_mode(self, *args, **kwargs):
+        tester: TesterBase = tester_register.get(self.cfg.tester.tester_choice)(self.cfg, self.loggers, *args, **kwargs, model_only_mode=True)
+        return tester
         
