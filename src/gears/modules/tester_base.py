@@ -18,16 +18,17 @@ class TesterBase:
     def __init__(
         self,
         cfg: Namespace,
+        loggers: Namespace,
         model_without_ddp: ModelBase,
         ema_model: torch.nn.Module,
         device: torch.device,
-        loggers: Namespace=None,
         criterion: CriterionBase=None,
         test_loader: DataLoaderX=None,
         model_only_mode=False,
         ) -> None:
         super().__init__()
         self.cfg = cfg
+        self.loggers = loggers
         self.model = model_without_ddp
         self.ema_model = ema_model  # still in train mode (in ModelManager)
         self.device = device
@@ -35,8 +36,12 @@ class TesterBase:
         if self.ema_model is not None:
             self.ema_model.eval()
         
-        if not model_only_mode:
-            self.loggers = loggers
+        if model_only_mode:
+            self.nn_module_list = [self.model]
+            
+            if self.ema_model is not None:
+                self.ema_model.eval()
+        else:
             self.criterion = criterion
             self.test_loader = test_loader
             self.metrics = {}
@@ -46,6 +51,7 @@ class TesterBase:
             self.nn_module_list = [self.model, self.criterion]
             
             if self.ema_model is not None:
+                self.ema_model.eval()
                 print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
                 self.ema_criterion = deepcopy(self.criterion)
                 self.ema_criterion.eval()
@@ -165,7 +171,7 @@ class TesterBase:
     def get_best_model_for_practical_use(self, verbose=True):
         self._load_model()
         self._eval_mode()
-        if self.cfg.model.ema_enabled and self.model.ema_primary_criterion:
+        if self.cfg.model.ema.ema_enabled and self.cfg.model.ema.ema_primary_criterion:
             if verbose:
                 print(LoggerMisc.block_wrapper('using EMA model according to training config...'))
             return self.ema_model.ema_model
