@@ -113,6 +113,8 @@ class Mamba(nn.Module):
         
         if final_norm:
             self.final_norm: Union[nn.LayerNorm, RMSNorm] = norm_cls()
+        else:
+            self.final_norm = None
         
         if custom_init:
             self.apply(
@@ -143,7 +145,8 @@ class Mamba(nn.Module):
                     hidden_states, residual, inference_params=inference_params
                 )
             
-            residual = (hidden_states + residual) if residual is not None else hidden_states
-            hidden_states = self.final_norm(residual.to(dtype=self.final_norm.weight.dtype))
+            hidden_states = (hidden_states + residual) if residual is not None else hidden_states
+            if self.final_norm is not None:
+                hidden_states = self.final_norm(hidden_states.to(dtype=self.final_norm.weight.dtype))
         
         return hidden_states
