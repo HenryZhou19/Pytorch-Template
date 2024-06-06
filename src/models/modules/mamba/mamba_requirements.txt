@@ -1,2 +1,2 @@
 causal-conv1d>=1.2.0
-mamba-ssm
+mamba-ssm==2.0.3  # 1.2.2 could work
