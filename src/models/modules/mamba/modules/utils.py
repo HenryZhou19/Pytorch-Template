@@ -7,10 +7,11 @@ import torch.nn as nn
 from einops import repeat
 
 __all__ = [
-    "init_dt_proj",
-    "init_A_log",
-    "init_D",
-    "init_mamba_weights",
+    'init_dt_proj',
+    'init_A_log',
+    'init_D',
+    'init_mamba_weights',
+    'DummyContextManager',
     ]
 
 def init_dt_proj(dt_rank, d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, factory_kwargs):
@@ -18,9 +19,9 @@ def init_dt_proj(dt_rank, d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_fl
 
     # Initialize special dt projection to preserve variance at initialization
     dt_init_std = dt_rank**-0.5 * dt_scale
-    if dt_init == "constant":
+    if dt_init == 'constant':
         nn.init.constant_(dt_proj.weight, dt_init_std)
-    elif dt_init == "random":
+    elif dt_init == 'random':
         nn.init.uniform_(dt_proj.weight, -dt_init_std, dt_init_std)
     else:
         raise NotImplementedError
@@ -43,7 +44,7 @@ def init_dt_proj(dt_rank, d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_fl
 def init_A_log(d_state, d_inner, device):
     A = repeat(
         torch.arange(1, d_state + 1, dtype=torch.float32, device=device),
-        "n -> d n",
+        'n -> d n',
         d=d_inner,
         ).contiguous()
     A_log = torch.log(A)  # Keep A_log in fp32
@@ -69,11 +70,11 @@ def init_mamba_weights(
     ):
     if isinstance(module, nn.Linear):
         if module.bias is not None:
-            if not getattr(module.bias, "_no_reinit", False):
+            if not getattr(module.bias, '_no_reinit', False):
                 nn.init.zeros_(module.bias)
             else:
                 if verbose:
-                    print(f"Skipping reinitialization of {module}\'s bias")
+                    print(f'Skipping reinitialization of {module}\'s bias')
     elif isinstance(module, nn.Embedding):
         nn.init.normal_(module.weight, std=initializer_range)
 
@@ -85,7 +86,7 @@ def init_mamba_weights(
         #
         # Reference (Megatron-LM): https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/model/gpt_model.py
         for name, p in module.named_parameters():
-            if name in ["out_proj.weight", "fc2.weight"]:
+            if name in ['out_proj.weight', 'fc2.weight']:
                 # Special Scaled Initialization --> There are 2 Layer Norms per Transformer Block
                 # Following Pytorch init, except scale by 1/sqrt(2 * n_layer)
                 # We need to reinit p since this code could be called multiple times
@@ -93,3 +94,11 @@ def init_mamba_weights(
                 nn.init.kaiming_uniform_(p, a=math.sqrt(5))
                 with torch.no_grad():
                     p /= math.sqrt(n_residuals_per_layer * n_layer)
+                    
+
+class DummyContextManager:
+    def __enter__(self):
+        pass
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass

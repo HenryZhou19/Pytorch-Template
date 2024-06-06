@@ -7,10 +7,9 @@ from typing import Optional, Union
 import torch
 from torch import nn
 
-from src.models.modules.mamba.modules.utils import init_mamba_weights
-
 from .modules.mamba_block import MambaBlock
 from .modules.norm import RMSNorm
+from .modules.utils import DummyContextManager, init_mamba_weights
 
 
 class MambaLayer(nn.Module):
@@ -76,6 +75,7 @@ class Mamba(nn.Module):
         norm_epsilon=1e-5,
         final_norm=True,
         residual_in_fp32: bool=False,
+        no_amp=True,
         custom_init=True,
         initializer_cfg=None,
         device=None,
@@ -84,6 +84,7 @@ class Mamba(nn.Module):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.residual_in_fp32 = residual_in_fp32
+        self.no_amp = no_amp
         
         norm_cls = partial(
             nn.LayerNorm if not rms_norm else RMSNorm,
@@ -129,13 +130,20 @@ class Mamba(nn.Module):
         }
         
     def forward(self, hidden_states: torch.Tensor, inference_params=None) -> torch.Tensor:
-        residual = None
-        for layer in self.mamba_layers:
-            hidden_states, residual = layer(
-                hidden_states, residual, inference_params=inference_params
-            )
-        
-        residual = (hidden_states + residual) if residual is not None else hidden_states
-        hidden_states = self.final_norm(residual.to(dtype=self.final_norm.weight.dtype))
+        disable_amp = torch.is_autocast_enabled() and self.no_amp
+        if disable_amp:
+            hidden_states = hidden_states.float()
+            context = partial(torch.cuda.amp.autocast, enabled=False)
+        else:
+            context = DummyContextManager
+        with context():
+            residual = None
+            for layer in self.mamba_layers:
+                hidden_states, residual = layer(
+                    hidden_states, residual, inference_params=inference_params
+                )
+            
+            residual = (hidden_states + residual) if residual is not None else hidden_states
+            hidden_states = self.final_norm(residual.to(dtype=self.final_norm.weight.dtype))
         
         return hidden_states
