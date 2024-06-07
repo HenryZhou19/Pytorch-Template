@@ -6,6 +6,7 @@ from copy import deepcopy
 from glob import glob
 
 import torch
+from ema_pytorch import EMA
 
 from src.criterions import CriterionBase
 from src.datasets.modules.data_module_base import DataLoaderX
@@ -22,7 +23,7 @@ class TrainerBase:
         cfg: Namespace,
         loggers: Namespace,
         model: ModelBase,
-        ema_model: torch.nn.Module,
+        ema_model: EMA,
         criterion: CriterionBase,
         train_loader: DataLoaderX,
         val_loader: DataLoaderX,
@@ -156,7 +157,7 @@ class TrainerBase:
     
     def _load_pretrained_models(self):
         def _load_pretrained_model(model_path, pretrain_model_name):
-            if self.ema_model is not None:
+            if self.ema_model is not None and self.cfg.trainer.load_from_ema:
                 print(f'\nLoading {pretrain_model_name} (key="ema_model") from {model_path}')
                 state_dict = torch.load(model_path, map_location='cpu')['ema_model']
                 state_dict.pop('initted', None)
@@ -176,6 +177,7 @@ class TrainerBase:
                     strict=False,
                     print_keys_level=1,
                     )
+                self.ema_model.copy_params_from_model_to_ema()
         
         if getattr(self.cfg.trainer, 'pretrained_models', None) is not None:
             for pretrain_model_name, pretrained_model_path in ConfigMisc.nested_namespace_to_nested_dict(self.cfg.trainer.pretrained_models).items():
