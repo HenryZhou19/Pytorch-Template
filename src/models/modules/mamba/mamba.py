@@ -116,14 +116,19 @@ class Mamba(nn.Module):
         else:
             self.final_norm = None
         
+        self.n_layer = n_layer
+        self.initializer_cfg = initializer_cfg
         if custom_init:
-            self.apply(
-                partial(
-                    init_mamba_weights,
-                    n_layer=n_layer,
-                    **(initializer_cfg if initializer_cfg is not None else {}),
-                )
+            self._init_weights()
+            
+    def _init_weights(self):
+        self.apply(
+            partial(
+                init_mamba_weights,
+                n_layer=self.n_layer,
+                **(self.initializer_cfg if self.initializer_cfg is not None else {}),
             )
+        )
             
     def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
         return {
