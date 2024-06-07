@@ -30,6 +30,7 @@ trainer:
   trainer_choice: multi_cycle
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
   pretrained_models: null  # None or a dict of pretrained models {name1: path1, name2: path2, ...}
+  load_from_ema: True
   freeze_modules: []  # [submodule_name1, submodule_name2, ...]
   epochs: 30
   optimizer:
