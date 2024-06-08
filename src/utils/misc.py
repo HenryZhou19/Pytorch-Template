@@ -929,8 +929,12 @@ class SweepMisc:
             from itertools import product
             combinations = [dict(zip(sweep_cfg_dict.keys(), values)) for values in product(*sweep_cfg_dict.values())]
             
-            for idx, combination in enumerate(combinations):              
-                print(LoggerMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(combinations)}] combinations', s='#', block_width=80))
+            sweep_skip_indices = getattr(cfg.sweep,'sweep_skip_indices', [])
+            sweep_skip_indices = set([x for x in sweep_skip_indices if isinstance(x, int) and x < len(combinations)])
+            filtered_combinations = [combination for idx, combination in enumerate(combinations) if idx not in sweep_skip_indices]
+            
+            for idx, combination in enumerate(filtered_combinations):
+                print(LoggerMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(filtered_combinations)}] combinations', s='#', block_width=80))
                 
                 cfg_now = deepcopy(cfg)
                 for chained_k, v in combination.items():
