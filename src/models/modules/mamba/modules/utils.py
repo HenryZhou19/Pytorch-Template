@@ -11,7 +11,6 @@ __all__ = [
     'init_A_log',
     'init_D',
     'init_mamba_weights',
-    'DummyContextManager',
     ]
 
 def init_dt_proj(dt_rank, d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor, factory_kwargs):
@@ -95,10 +94,3 @@ def init_mamba_weights(
                 with torch.no_grad():
                     p /= math.sqrt(n_residuals_per_layer * n_layer)
                     
-
-class DummyContextManager:
-    def __enter__(self):
-        pass
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass

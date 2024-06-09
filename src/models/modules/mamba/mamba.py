@@ -7,9 +7,11 @@ from typing import Optional, Union
 import torch
 from torch import nn
 
+from src.utils.misc import DummyContextManager
+
 from .modules.mamba_block import MambaBlock
 from .modules.norm import RMSNorm
-from .modules.utils import DummyContextManager, init_mamba_weights
+from .modules.utils import init_mamba_weights
 
 
 class MambaLayer(nn.Module):

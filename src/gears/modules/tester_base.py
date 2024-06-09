@@ -2,6 +2,7 @@ import math
 import time
 from argparse import Namespace
 from copy import deepcopy
+from functools import partial
 
 import torch
 
@@ -32,6 +33,8 @@ class TesterBase:
         self.model = model_without_ddp
         self.ema_model = ema_model  # still in train mode (in ModelManager)
         self.device = device
+             
+        self._init_autocast()
         
         if self.ema_model is not None:
             self.ema_model.eval()
@@ -57,6 +60,16 @@ class TesterBase:
                 self.ema_criterion.eval()
                 
             self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
+            
+    def _init_autocast(self):
+        if self.cfg.env.amp.amp_mode == 'fp16':
+            dtype = torch.float16
+        elif self.cfg.env.amp.amp_mode == 'bf16':
+            dtype = torch.bfloat16
+        else:
+            raise ValueError(f'Unknown amp.amp_mode: {self.cfg.env.amp.amp_mode}')
+        inference_amp_enabled = self.cfg.env.amp.amp_enabled and self.cfg.env.amp.amp_inference
+        self.inference_autocast = partial(torch.cuda.amp.autocast, enabled=inference_amp_enabled, dtype=dtype)
     
     def _get_pbar(self):
         # called in "before_inference"
@@ -77,7 +90,7 @@ class TesterBase:
         checkpoint = torch.load(self.cfg.tester.checkpoint_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'])
         if self.ema_model is not None:
-            assert checkpoint['ema_model'] is not None, 'ema_model is None in the checkpoint.'
+            assert 'ema_model' in checkpoint, 'checkpoint does not contain "ema_model".'
             self.ema_model.load_state_dict(checkpoint['ema_model'])
         # print(f'{config.mode} mode: Loading pth from', path)
         print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_trainer_metrics {checkpoint.get("best_metrics", {})}\nlast_trainer_metrics {checkpoint.get("last_metrics", {})}', '>'))
@@ -116,15 +129,16 @@ class TesterBase:
         targets: dict = batch['targets']
         
         with torch.no_grad():
-            outputs = self.model(inputs)
-            loss, metrics_dict = self.criterion(outputs, targets, infer_mode=True)
-            
-            if self.ema_model is not None:
-                ema_outputs = self.ema_model(inputs)
-                ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
-                # metrics_dict['ema_loss'] = ema_loss  # no need to show 'loss' & 'ema_loss' in inference
-                for key, value in ema_metrics_dict.items():
-                    metrics_dict[f'ema_{key}'] = value
+            with self.inference_autocast():
+                outputs = self.model(inputs)
+                loss, metrics_dict = self.criterion(outputs, targets, infer_mode=True)
+                
+                if self.ema_model is not None:
+                    ema_outputs = self.ema_model(inputs)
+                    ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
+                    # metrics_dict['ema_loss'] = ema_loss  # no need to show 'loss' & 'ema_loss' in inference
+                    for key, value in ema_metrics_dict.items():
+                        metrics_dict[f'ema_{key}'] = value
             
         return outputs, loss, metrics_dict
     
