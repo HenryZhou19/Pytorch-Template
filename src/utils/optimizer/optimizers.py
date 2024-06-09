@@ -83,15 +83,8 @@ class OptimizerUtils:
         else:
             raise ValueError(f'Unknown optimizer choice: {cfg.trainer.optimizer.optimizer_choice}')
         
-        if cfg.env.amp.amp_enabled:
-            if cfg.env.amp.amp_mode == 'fp16':
-                scaler = torch.cuda.amp.GradScaler(enabled=True)
-                setattr(scaler, 'custom_dtype', torch.float16)
-            elif cfg.env.amp.amp_mode == 'bf16':
-                scaler = torch.cuda.amp.GradScaler(enabled=False)
-                setattr(scaler, 'custom_dtype', torch.bfloat16)
-            else:
-                raise ValueError(f'Unknown amp.amp_mode: {cfg.env.amp.amp_mode}')
+        if cfg.env.amp.amp_enabled and cfg.env.amp.amp_mode == 'fp16':
+            scaler = torch.cuda.amp.GradScaler(enabled=True)
         else:
             scaler = None
         

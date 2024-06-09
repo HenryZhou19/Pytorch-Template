@@ -3,6 +3,7 @@ import os
 import time
 from argparse import Namespace
 from copy import deepcopy
+from functools import partial
 from glob import glob
 
 import torch
@@ -79,6 +80,8 @@ class TrainerBase:
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
         self.checkpoint_save_interval = self.cfg.trainer.checkpoint_save_interval
         self.checkpoint_reserve_interval = self.cfg.trainer.checkpoint_save_interval * self.cfg.trainer.checkpoint_reserve_factor
+        
+        self._init_autocast()
     
     @property
     def epoch_loop(self):
@@ -93,6 +96,18 @@ class TrainerBase:
     def wd_groups(self):
         return {'wd_' + param_group['group_name']: param_group['weight_decay']
                 for param_group in self.optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')}
+        
+    def _init_autocast(self):
+        if self.cfg.env.amp.amp_mode == 'fp16':
+            dtype = torch.float16
+        elif self.cfg.env.amp.amp_mode == 'bf16':
+            dtype = torch.bfloat16
+        else:
+            raise ValueError(f'Unknown amp.amp_mode: {self.cfg.env.amp.amp_mode}')
+        train_amp_enabled = self.cfg.env.amp.amp_enabled
+        val_amp_enabled = self.cfg.env.amp.amp_enabled and self.cfg.env.amp.amp_val
+        self.train_autocast = partial(torch.cuda.amp.autocast, enabled=train_amp_enabled, dtype=dtype)
+        self.val_autocast = partial(torch.cuda.amp.autocast, enabled=val_amp_enabled, dtype=dtype)
     
     def _get_val_epochs(self):
         if self.cfg.trainer.eval_freq <= 0:
@@ -139,11 +154,12 @@ class TrainerBase:
             checkpoint = torch.load(checkpoint_path[0], map_location='cpu')
             self.model_without_ddp.load_state_dict(checkpoint['model'])
             if self.ema_model is not None:
-                assert checkpoint['ema_model'] is not None, 'ema_model is None in the checkpoint.'
+                assert 'ema_model' in checkpoint, 'checkpoint does not contain "ema_model".'
                 self.ema_model.load_state_dict(checkpoint['ema_model'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-            if self.cfg.env.amp.amp_enabled:
+            if self.scaler is not None:
+                assert 'scaler' in checkpoint, 'checkpoint does not contain "scaler".'
                 self.scaler.load_state_dict(checkpoint['scaler'])
             self.start_epoch = checkpoint['epoch'] + 1
             self.best_metrics = checkpoint.get('best_metrics', {})
@@ -198,7 +214,7 @@ class TrainerBase:
                     'last_metrics': self.metrics,
                     'epoch': epoch_finished,
                 }
-                if self.cfg.env.amp.amp_enabled:
+                if self.scaler is not None:
                     save_files.update({
                         'scaler': self.scaler.state_dict()
                     })
@@ -327,20 +343,21 @@ class TrainerBase:
         inputs['train_progress'] = self.trained_iters / self.total_iters
         
         if self.training:
-            with torch.cuda.amp.autocast(enabled=self.scaler is not None, dtype=getattr(self.scaler, 'custom_dtype', torch.float16)):
+            with self.train_autocast():
                 outputs = self.model(inputs)
                 loss, metrics_dict = self.criterion(outputs, targets)
         else:
             with torch.no_grad():
-                outputs = self.model(inputs)
-                loss, metrics_dict = self.criterion(outputs, targets)
-                
-                if self.ema_model is not None:
-                    ema_outputs = self.ema_model(inputs)
-                    ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
-                    metrics_dict['ema_loss'] = ema_loss
-                    for key, value in ema_metrics_dict.items():
-                        metrics_dict[f'ema_{key}'] = value
+                with self.val_autocast():
+                    outputs = self.model(inputs)
+                    loss, metrics_dict = self.criterion(outputs, targets)
+                    
+                    if self.ema_model is not None:
+                        ema_outputs = self.ema_model(inputs)
+                        ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
+                        metrics_dict['ema_loss'] = ema_loss
+                        for key, value in ema_metrics_dict.items():
+                            metrics_dict[f'ema_{key}'] = value
             
         return outputs, loss, metrics_dict
     

@@ -33,6 +33,7 @@ __all__ = [
     'TensorMisc',
     'ImportMisc',
     'TimeMisc',
+    'DummyContextManager',
     ]
 
 class ConfigMisc:
@@ -678,7 +679,7 @@ class ModelMisc:
                     def forward(self, **inputs):
                         return self.model(inputs)
                 
-                with torch.cuda.amp.autocast(enabled=trainer.scaler is not None, dtype=getattr(trainer.scaler, 'custom_dtype', torch.float16)):
+                with trainer.train_autocast():
                     print_str = torchinfo.summary(
                         TorchinfoWrappedModel(temp_model),
                         input_data=TensorMisc.expand_one_sample_to_batch(input_data_one_sample, cfg.data.batch_size_per_rank),
@@ -1092,3 +1093,11 @@ class TimeMisc:
                     if len(m_indent) < 38:
                             m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
                     print(f'{m_indent:40s}elapsed time: {self.timer.info["all"]:.4f}')
+
+
+class DummyContextManager:
+    def __enter__(self):
+        pass
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
