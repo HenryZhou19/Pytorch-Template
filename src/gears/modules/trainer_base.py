@@ -143,7 +143,7 @@ class TrainerBase:
                 self.ema_model.load_state_dict(checkpoint['ema_model'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-            if self.cfg.env.amp:
+            if self.cfg.env.amp.amp_enabled:
                 self.scaler.load_state_dict(checkpoint['scaler'])
             self.start_epoch = checkpoint['epoch'] + 1
             self.best_metrics = checkpoint.get('best_metrics', {})
@@ -198,7 +198,7 @@ class TrainerBase:
                     'last_metrics': self.metrics,
                     'epoch': epoch_finished,
                 }
-                if self.cfg.env.amp:
+                if self.cfg.env.amp.amp_enabled:
                     save_files.update({
                         'scaler': self.scaler.state_dict()
                     })
@@ -327,7 +327,7 @@ class TrainerBase:
         inputs['train_progress'] = self.trained_iters / self.total_iters
         
         if self.training:
-            with torch.cuda.amp.autocast(enabled=self.scaler is not None):
+            with torch.cuda.amp.autocast(enabled=self.scaler is not None, dtype=getattr(self.scaler, 'custom_dtype', torch.float16)):
                 outputs = self.model(inputs)
                 loss, metrics_dict = self.criterion(outputs, targets)
         else:
