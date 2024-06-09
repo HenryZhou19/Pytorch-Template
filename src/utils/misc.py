@@ -598,8 +598,8 @@ class DistMisc:
             cfg.env.dist_url = 'None'
             
             if getattr(cfg.env, 'amp', False):  # in train mode, check AMP
-                print(LoggerMisc.block_wrapper('AMP is not supported on CPU. Automatically turning off AMP by setting "cfg.env.amp = False".', '#'))
-                cfg.env.amp = False
+                print(LoggerMisc.block_wrapper('AMP is not supported on CPU. Automatically turning off AMP by setting "cfg.env.amp.amp_enabled = False".', '#'))
+                cfg.env.amp.amp_enabled = False
             if cfg.env.pin_memory:
                 print(LoggerMisc.block_wrapper('Pin memory is not supported on CPU. Automatically turning off pin_memory by setting "cfg.env.pin_memory = False".', '#'))
                 cfg.env.pin_memory = False
@@ -678,7 +678,7 @@ class ModelMisc:
                     def forward(self, **inputs):
                         return self.model(inputs)
                 
-                with torch.cuda.amp.autocast(enabled=trainer.scaler is not None):
+                with torch.cuda.amp.autocast(enabled=trainer.scaler is not None, dtype=getattr(trainer.scaler, 'custom_dtype', torch.float16)):
                     print_str = torchinfo.summary(
                         TorchinfoWrappedModel(temp_model),
                         input_data=TensorMisc.expand_one_sample_to_batch(input_data_one_sample, cfg.data.batch_size_per_rank),
