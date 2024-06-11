@@ -77,9 +77,9 @@ class OptimizerUtils:
     def get_optimizer(cfg, model_without_ddp) -> tuple[torch.optim.Optimizer, torch.cuda.amp.GradScaler]:
         param_dicts_with_lr_wd = OptimizerUtils._get_param_dicts_with_specific_lr_wd(cfg, model_without_ddp)
         if cfg.trainer.optimizer.optimizer_choice == 'adamw':
-            optimizer = torch.optim.AdamW(param_dicts_with_lr_wd)
+            optimizer = torch.optim.AdamW(param_dicts_with_lr_wd, eps=getattr(cfg.trainer.optimizer, 'adamw_eps', 1.0e-8))
         elif cfg.trainer.optimizer.optimizer_choice == 'sgd':
-            optimizer = torch.optim.SGD(param_dicts_with_lr_wd, momentum=cfg.trainer.optimizer.sgd_momentum)
+            optimizer = torch.optim.SGD(param_dicts_with_lr_wd, momentum=getattr(cfg.trainer.optimizer, 'sgd_momentum', 0))
         else:
             raise ValueError(f'Unknown optimizer choice: {cfg.trainer.optimizer.optimizer_choice}')
         
