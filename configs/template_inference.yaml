@@ -1,0 +1,16 @@
+config:  # main config (in this file) overrides additional configs
+  additional: [default_shared, default_inference]  # add additional config file names, e.g. [default_xxx] --- the order matters (later ones overwrite previous ones)
+
+data:
+  batch_size_per_rank: 4
+
+tester:
+  tester_choice: default
+  use_best: True
+  checkpoint_path: TBD
+  train_cfg_path: outputs/2024-04-11-12-20-02_template_simple_default_mse_32=32_1_1/cfg.yaml  # XXX: required
+
+sweep:
+  sweep_enabled: False
+  sweep_params:  # use '//' as the connector for sub-params 
+    data//batch_size_per_rank: [1, 2]

@@ -1,0 +1,6 @@
+## for torch==2.0.1+cu117
+# conda install cudatoolkit==11.7 -c nvidia
+# conda install -c "nvidia/label/cuda-11.7.0" cuda-nvcc
+
+causal-conv1d>=1.2.0
+mamba-ssm==2.0.3  # 1.2.2 could work
