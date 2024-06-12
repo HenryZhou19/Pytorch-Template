@@ -14,7 +14,7 @@ def test_run(cfg, loggers):
     # prepare for model, postprocessor
     model_manager = ModelManager(cfg, loggers)
     model_without_ddp = model_manager.build_model()
-    ema_model = model_manager.build_ema(model_without_ddp)
+    ema_container = model_manager.build_ema(model_without_ddp)
     # postprocessor = model_manager.build_postprocessor()
     
     # prepare for criterion
@@ -27,7 +27,7 @@ def test_run(cfg, loggers):
     # get Tester instance
     tester = GearManager(cfg, loggers).build_tester(
         model_without_ddp=model_without_ddp,
-        ema_model=ema_model,
+        ema_container=ema_container,
         criterion=criterion,
         test_loader=test_loader,
         device=model_manager.device,

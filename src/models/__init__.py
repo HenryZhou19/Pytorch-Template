@@ -36,13 +36,13 @@ class ModelManager(object):
                 'update_every': self.cfg.model.ema.ema_update_every,
                 'include_online_model': False,
                 }
-            ema_model = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
+            ema_container = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
             if verbose:
                 print('EMA_model built successfully.')
                 
         else:
-            ema_model = None
+            ema_container = None
             if verbose:
                 print('Not using EMA.')
 
-        return ema_model
+        return ema_container

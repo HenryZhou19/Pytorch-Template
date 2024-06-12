@@ -5,6 +5,7 @@ from copy import deepcopy
 from functools import partial
 
 import torch
+from ema_pytorch.ema_pytorch import EMA
 
 from src.criterions import CriterionBase
 from src.datasets.modules.data_module_base import DataLoaderX
@@ -21,7 +22,7 @@ class TesterBase:
         cfg: Namespace,
         loggers: Namespace,
         model_without_ddp: ModelBase,
-        ema_model: torch.nn.Module,
+        ema_container: EMA,
         device: torch.device,
         criterion: CriterionBase=None,
         test_loader: DataLoaderX=None,
@@ -31,19 +32,19 @@ class TesterBase:
         self.cfg = cfg
         self.loggers = loggers
         self.model = model_without_ddp
-        self.ema_model = ema_model  # still in train mode (in ModelManager)
+        self.ema_container = ema_container  # still in train mode (in ModelManager)
         self.device = device
              
         self._init_autocast()
         
-        if self.ema_model is not None:
-            self.ema_model.eval()
+        if self.ema_container is not None:
+            self.ema_container.eval()
         
         if model_only_mode:
             self.nn_module_list = [self.model]
             
-            if self.ema_model is not None:
-                self.ema_model.eval()
+            if self.ema_container is not None:
+                self.ema_container.eval()
         else:
             self.criterion = criterion
             self.test_loader = test_loader
@@ -53,8 +54,8 @@ class TesterBase:
             
             self.nn_module_list = [self.model, self.criterion]
             
-            if self.ema_model is not None:
-                self.ema_model.eval()
+            if self.ema_container is not None:
+                self.ema_container.eval()
                 print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
                 self.ema_criterion = deepcopy(self.criterion)
                 self.ema_criterion.eval()
@@ -89,9 +90,12 @@ class TesterBase:
         # called in "before_inference"
         checkpoint = torch.load(self.cfg.tester.checkpoint_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'])
-        if self.ema_model is not None:
-            assert 'ema_model' in checkpoint, 'checkpoint does not contain "ema_model".'
-            self.ema_model.load_state_dict(checkpoint['ema_model'])
+        if self.ema_container is not None:
+            assert 'ema_container' in checkpoint or 'ema_model' in checkpoint, 'checkpoint does not contain "ema_container" or "ema_model".'
+            if 'ema_container' in checkpoint:
+                self.ema_container.load_state_dict(checkpoint['ema_container'])
+            else:  # FIXME: deprecated
+                self.ema_container.load_state_dict(checkpoint['ema_model'])
         # print(f'{config.mode} mode: Loading pth from', path)
         print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_trainer_metrics {checkpoint.get("best_metrics", {})}\nlast_trainer_metrics {checkpoint.get("last_metrics", {})}', '>'))
         if DistMisc.is_main_process():
@@ -133,8 +137,8 @@ class TesterBase:
                 outputs = self.model(inputs)
                 loss, metrics_dict = self.criterion(outputs, targets, infer_mode=True)
                 
-                if self.ema_model is not None:
-                    ema_outputs = self.ema_model(inputs)
+                if self.ema_container is not None:
+                    ema_outputs = self.ema_container(inputs)
                     ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
                     # metrics_dict['ema_loss'] = ema_loss  # no need to show 'loss' & 'ema_loss' in inference
                     for key, value in ema_metrics_dict.items():
@@ -188,7 +192,7 @@ class TesterBase:
         if self.cfg.model.ema.ema_enabled and self.cfg.model.ema.ema_primary_criterion:
             if verbose:
                 print(LoggerMisc.block_wrapper('using EMA model according to training config...'))
-            return self.ema_model.ema_model
+            return self.ema_container.ema_model
         else:
             if verbose:
                 print(LoggerMisc.block_wrapper('NOT using EMA model according to training config...'))
