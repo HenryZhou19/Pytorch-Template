@@ -237,12 +237,13 @@ class TrainerBase:
     
     def _save_best_checkpoint(self):
         # called in "after_validation"
+        self.best_metrics, save_flag = self.criterion.choose_best(
+                self.metrics, self.best_metrics
+            )
+        
         if DistMisc.is_main_process():
             epoch_finished = self.epoch
             
-            self.best_metrics, save_flag = self.criterion.choose_best(
-                self.metrics, self.best_metrics
-            )
             if save_flag:
                 save_files = {
                     'model': self.model_without_ddp.state_dict(),
