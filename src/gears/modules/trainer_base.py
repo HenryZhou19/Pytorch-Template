@@ -24,7 +24,7 @@ class TrainerBase:
         cfg: Namespace,
         loggers: Namespace,
         model: ModelBase,
-        ema_model: EMA,
+        ema_container: EMA,
         criterion: CriterionBase,
         train_loader: DataLoaderX,
         val_loader: DataLoaderX,
@@ -38,7 +38,7 @@ class TrainerBase:
         self.loggers = loggers
         self.model = model
         self.model_without_ddp = model.module if cfg.env.distributed else model
-        self.ema_model = ema_model  # still in train mode (in ModelManager)
+        self.ema_container = ema_container  # still in train mode (in ModelManager)
         self.criterion = criterion
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -71,9 +71,9 @@ class TrainerBase:
         self.freeze_modules = getattr(self.cfg.trainer, 'freeze_modules', [])
         self.training = True
         
-        if self.ema_model is not None:
+        if self.ema_container is not None:
             print(LoggerMisc.block_wrapper('Using EMA model to evaluate. Setting EMA model and criterion to eval mode...', '='))
-            self.ema_model.eval()
+            self.ema_container.eval()
             self.ema_criterion = deepcopy(self.criterion)
             self.ema_criterion.eval()
         
@@ -153,9 +153,12 @@ class TrainerBase:
             assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
             checkpoint = torch.load(checkpoint_path[0], map_location='cpu')
             self.model_without_ddp.load_state_dict(checkpoint['model'])
-            if self.ema_model is not None:
-                assert 'ema_model' in checkpoint, 'checkpoint does not contain "ema_model".'
-                self.ema_model.load_state_dict(checkpoint['ema_model'])
+            if self.ema_container is not None:
+                assert 'ema_container' in checkpoint or 'ema_model' in checkpoint, 'checkpoint does not contain "ema_container" or "ema_model".'
+                if 'ema_container' in checkpoint:
+                    self.ema_container.load_state_dict(checkpoint['ema_container'])
+                else:  # FIXME: deprecated
+                    self.ema_container.load_state_dict(checkpoint['ema_model'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             if self.scaler is not None:
@@ -173,18 +176,23 @@ class TrainerBase:
     
     def _load_pretrained_models(self):
         def _load_pretrained_model(model_path, pretrain_model_name):
-            if self.ema_model is not None and self.cfg.trainer.load_from_ema:
-                print(f'\nLoading {pretrain_model_name} (key="ema_model") from {model_path}')
-                state_dict = torch.load(model_path, map_location='cpu')['ema_model']
+            if self.ema_container is not None and self.cfg.trainer.load_from_ema:
+                checkpoint = torch.load(model_path, map_location='cpu')
+                if 'ema_container' in checkpoint:
+                    key = 'ema_container'
+                else:  # FIXME: deprecated
+                    key = 'ema_model'
+                print(f'\nLoading {pretrain_model_name} (key="{key}") from {model_path}')
+                state_dict = checkpoint['key']
                 state_dict.pop('initted', None)
                 state_dict.pop('step', None)
                 ModelMisc.load_state_dict_with_more_info(
-                    self.ema_model,
+                    self.ema_container,
                     state_dict,
                     strict=False,
                     print_keys_level=2,
                     )
-                self.ema_model.copy_params_from_ema_to_model()
+                self.ema_container.copy_params_from_ema_to_model()
             else:
                 print(f'\nLoading {pretrain_model_name} (key="model") from {model_path}')
                 ModelMisc.load_state_dict_with_more_info(
@@ -193,7 +201,7 @@ class TrainerBase:
                     strict=False,
                     print_keys_level=1,
                     )
-                self.ema_model.copy_params_from_model_to_ema()
+                self.ema_container.copy_params_from_model_to_ema()
         
         if getattr(self.cfg.trainer, 'pretrained_models', None) is not None:
             for pretrain_model_name, pretrained_model_path in ConfigMisc.nested_namespace_to_nested_dict(self.cfg.trainer.pretrained_models).items():
@@ -208,7 +216,7 @@ class TrainerBase:
             if epoch_finished % self.checkpoint_save_interval == 0:
                 save_files = {
                     'model': self.model_without_ddp.state_dict(),
-                    'ema_model': self.ema_model.state_dict() if self.ema_model is not None else None,
+                    'ema_container': self.ema_container.state_dict() if self.ema_container is not None else None,
                     'optimizer': self.optimizer.state_dict(),
                     'lr_scheduler': self.lr_scheduler.state_dict(),
                     'last_metrics': self.metrics,
@@ -238,7 +246,7 @@ class TrainerBase:
             if save_flag:
                 save_files = {
                     'model': self.model_without_ddp.state_dict(),
-                    'ema_model': self.ema_model.state_dict() if self.ema_model is not None else None,
+                    'ema_container': self.ema_container.state_dict() if self.ema_container is not None else None,
                     'best_metrics': self.best_metrics,
                     'epoch': epoch_finished,
                 }
@@ -352,8 +360,8 @@ class TrainerBase:
                     outputs = self.model(inputs)
                     loss, metrics_dict = self.criterion(outputs, targets)
                     
-                    if self.ema_model is not None:
-                        ema_outputs = self.ema_model(inputs)
+                    if self.ema_container is not None:
+                        ema_outputs = self.ema_container(inputs)
                         ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
                         metrics_dict['ema_loss'] = ema_loss
                         for key, value in ema_metrics_dict.items():
@@ -380,8 +388,8 @@ class TrainerBase:
                     torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
             self.optimizer.zero_grad()
-            if self.ema_model is not None:
-                self.ema_model.update()
+            if self.ema_container is not None:
+                self.ema_container.update()
         
         if not math.isfinite(loss) and self.scaler is None:
             LoggerMisc.get_wandb_pid(kill_all=True)

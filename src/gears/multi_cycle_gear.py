@@ -37,8 +37,8 @@ class MultiCycleTrainer(TrainerBase):
         if self.cycle_type != self.lr_scheduler.cycle_type:
             self.cycle_type = self.lr_scheduler.cycle_type
             if self.cfg.trainer.copy_ema_after_each_cycle:
-                assert self.ema_model is not None, "EMA model is not initialized"
-                self.ema_model.copy_params_from_ema_to_model()
+                assert self.ema_container is not None, "EMA model is not initialized"
+                self.ema_container.copy_params_from_ema_to_model()
             
             self.new_cycle = True
 
