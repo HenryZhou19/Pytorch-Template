@@ -402,7 +402,8 @@ class TrainerBase:
         
         _backward()
         
-        if self.do_gradient_accumulation and (self.trained_iters % self.train_len != 0):
+        # if self.do_gradient_accumulation and (self.trained_iters % self.train_len != 0):  # not the last iter of the epoch
+        if self.do_gradient_accumulation:  # just drop the last few steps if not divisible
             if self.step_count % self.gradient_accumulation_steps == 0:
                 _optimize()
                 self.step_count = 0
@@ -448,7 +449,7 @@ class TrainerBase:
             
             if cfg.info.iter_log_freq > 0:
                 if self.trained_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
-                    LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), int(self.trained_iters / cfg.trainer.grad_accumulation))
+                    LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), self.trained_iters)
             
             if first_iter:
                 first_iter = False
