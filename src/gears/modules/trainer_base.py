@@ -183,7 +183,7 @@ class TrainerBase:
                 else:  # FIXME: deprecated
                     key = 'ema_model'
                 print(f'\nLoading {pretrain_model_name} (key="{key}") from {model_path}')
-                state_dict = checkpoint['key']
+                state_dict = checkpoint[key]
                 state_dict.pop('initted', None)
                 state_dict.pop('step', None)
                 ModelMisc.load_state_dict_with_more_info(
