@@ -7,6 +7,10 @@ env:
     amp_val: True
     amp_mode: fp16  # fp16, bf16
 
+data:
+  infinite_dataloader: False  # if True, the dataloader will be infinite, which means the worker will keep loading data until the main process stops(may speed up the process when new epoch starts). Not recommended
+  fixed_length_dataloader: 0  # if > 0, the dataloader will be set to the fixed length, i.e. update steps per training epoch (one epoch's data may be truncated or repeated). Not work with infinite_dataloader
+
 info: # info & wandb
   start_time : TBD
   work_dir: TBD

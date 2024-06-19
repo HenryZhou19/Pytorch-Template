@@ -91,7 +91,16 @@ class DataModuleBase:
         is_training = split=='train'
         use_dist_sampler = True if split == 'train' else self.cfg.trainer.dist_eval
         
-        DataloaderClass = InfiniteDataLoaderX if self.cfg.env.infinite_dataloader else DataLoaderX
+        if is_training and getattr(self.cfg.data, 'infinite_dataloader', False):
+            DataloaderClass = InfiniteDataLoaderX
+        elif is_training and getattr(self.cfg.data, 'fixed_length_dataloader', 0) > 0:
+            DataloaderClass = partial(
+                FixedLengthDataLoaderX,
+                total_batches_one_epoch=self.cfg.data.fixed_length_dataloader * self.cfg.trainer.grad_accumulation,
+                total_epochs=self.cfg.trainer.epochs,
+                )
+        else:
+            DataloaderClass = DataLoaderX
         return DataloaderClass(
             dataset=dataset,
             batch_size=self.cfg.data.batch_size_per_rank,
@@ -144,33 +153,68 @@ class DataLoaderX(DataLoader):
         return DataLoaderX(*self.init_args, **self.init_kwargs)
     
     def sampler_set_epoch(self, epoch):
+        self._current_epoch = epoch
+        
         if self.sampler is not None:
-            self.sampler.set_epoch(epoch)
+            self.sampler.set_epoch(self._current_epoch)
             
 
 class InfiniteDataLoaderX(DataLoaderX):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._DataLoader__initialized = False
-        if self.batch_sampler is None:
-            self.sampler = _RepeatSampler(self.sampler)
-        else:
-            self.batch_sampler = _RepeatSampler(self.batch_sampler)
+        
+        assert self.batch_sampler is not None, 'batch_sampler should not be None'
+        self.batch_sampler = _InfiniteSampler(self.batch_sampler)
+        
         self._DataLoader__initialized = True
         self.iterator = super().__iter__()
-
+        
     def __len__(self):
-        return len(self.sampler) if self.batch_sampler is None else len(self.batch_sampler.sampler)
-
+        return len(self.batch_sampler.sampler)
+        
     def __iter__(self):
         for _ in range(len(self)):
             yield next(self.iterator)
 
 
-class _RepeatSampler:
+class _InfiniteSampler:
     def __init__(self, sampler):
         self.sampler = sampler
-
+        
     def __iter__(self):
         while True:
             yield from iter(self.sampler)
+
+
+class FixedLengthDataLoaderX(DataLoaderX):
+    def __init__(self, total_batches_one_epoch, total_epochs, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._total_batches_one_epoch = total_batches_one_epoch
+        self._total_epochs = total_epochs
+        
+    def __len__(self):
+        return self._total_batches_one_epoch
+        
+    def __iter__(self):
+        for _ in range(len(self)):
+            yield next(self._get_repeated_iterator())
+        
+    def _get_repeated_iterator(self):
+        while True:
+            yield from self._get_iterator_with_sampler_set_epoch()
+        
+    def _get_iterator_with_sampler_set_epoch(self):
+        if self.persistent_workers and self.num_workers > 0:
+            if self._iterator is None:
+                self._iterator = self._get_iterator()
+            else:
+                # in one epoch, the dataloader will be reused until reaching the total_batches_one_epoch
+                # so we need to reset the sampler and the iterator
+                self._iterator._reset(self)
+            self.sampler_set_epoch(self._current_epoch + self._total_batches_one_epoch)
+            return self._iterator
+        else:
+            _iterator = self._get_iterator()
+            self.sampler_set_epoch(self._current_epoch + self._total_batches_one_epoch)
+            return _iterator

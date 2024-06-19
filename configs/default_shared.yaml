@@ -11,7 +11,6 @@ env:
   dist_url: TBD
   num_workers: 4
   prefetch_factor: 2
-  infinite_dataloader: False
   pin_memory: True
 
 special:
