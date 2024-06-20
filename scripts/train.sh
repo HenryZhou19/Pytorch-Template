@@ -1,5 +1,5 @@
 #!/bin/bash
-devices="6,7"  # numbers with ',' or 'cpu'
+devices="cpu"  # numbers with ',' or 'cpu'
 omp_num_threads=4
 mkl_num_threads=4
 numexpr_num_threads=4
@@ -7,6 +7,49 @@ main_config_file_name="template_train"
 params=()
 
 seconds_to_wait=0
+
+show_help() {
+cat << EOF
+discription:
+    Run the training and evaluation process with the given config file and other options.
+    Use 'train.py' as the entry.
+
+usage:
+    bash scripts/train.sh [options] [config1=value1] [config2=value2] ...
+
+options:
+    [-h], --help
+        Display this help and exit.
+
+    [-d value], --devices
+        Choose the device to use. Either "cpu" or "[gpu_num_1],[gpu_num_2],...".
+        Default: "cpu"
+
+    [-c value], --config
+        Set the main config file name to use in "./config/".
+        Default: "template_train"
+
+    [-w value], --wait
+        Set the seconds to wait before running the command.
+        Default: 0
+
+    [-ot value], --omp_threads
+        Set the OMP_NUM_THREADS.
+        Default: 4
+
+    [-mt value], --mkl_threads
+        Set the MKL_NUM_THREADS.
+        Default: 4
+
+    [-nt value], --numexpr_threads
+        Set the NUMEXPR_NUM_THREADS.
+        Default: 4
+
+    [-e value], --extra_name
+        Set the special extra name for the experiment. This equals to "special.extra_name=...".
+        Default: "" (keep the same as in the yaml config file)
+EOF
+}
 
 run_cmd() {
   CUDA_VISIBLE_DEVICES=$devices \
@@ -32,36 +75,38 @@ run_cpu_cmd() {
 }
 
 args=("$@")
-echo -e "\033[?25l"  # hide cursor
-trap 'echo -e "\033[0m\033[?25h"' INT  # change color back and show cursor when Ctrl-C
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -d|-devices)
+    -h|--help)
+      show_help
+      exit
+      ;;
+    -d|--devices)
       devices="$2"
       shift 2
       ;;
-    -c|-config)
+    -c|--config)
       main_config_file_name="$2"
       shift 2
       ;;
-    -w|-wait)
+    -w|--wait)
       seconds_to_wait="$2"
       shift 2
       ;;
-    -ot|-omp_threads)
+    -ot|--omp_threads)
       omp_num_threads="$2"
       shift 2
       ;;
-    -mt|-mkl_threads)
+    -mt|--mkl_threads)
       mkl_num_threads="$2"
       shift 2
       ;;
-    -nt|-numexpr_threads)
+    -nt|--numexpr_threads)
       numexpr_num_threads="$2"
       shift 2
       ;;
-    -e|-extra_name)
+    -e|--extra_name)
       extra_name="$2"
       shift 2
       ;;
@@ -76,6 +121,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+echo -e "\033[?25l"  # hide cursor
+trap 'echo -e "\033[0m\033[?25h"' INT  # change color back and show cursor when Ctrl-C
+
 params="config.main=$main_config_file_name $params"
 if [[ $extra_name != "" ]]; then
   params+=" special.extra_name=$extra_name"
