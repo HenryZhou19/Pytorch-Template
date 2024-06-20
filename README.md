@@ -7,19 +7,32 @@ A simple template for Pytorch projects.
 ## Easy Start
 ### Create a new Python environment and install the requirements
  ```
+ # use conda as an example
  conda create -n NEW_ENV_NAME python=3.9
  pip install -r requirements.txt
  ```
 ### Run the LeNet model to check if this template works well on your device
 * Important notices: 
+    * Main entry points are the shell scripts in the 'scripts' folder.  
+        All '.sh' files can be executed in Linux CLI by:
+        ```
+        bash scripts/xxx.sh [OPTIONS] [ADDITIONAL_CONFIGS]
+        ```
+        * 'bash scripts/xxx.sh -h' will show the short manual of this script.
     * **Tensorboard** (offline logger) and **wandb** (online logger) are enabled by default.  
         So you may pre-register a wandb account to log in when the task is starting.
 
-    * Loggers can be configured in 'yaml' config files, or you can disable all of them by running the bash command with:
+    * Loggers can be configured in 'yaml' config files, or you can disable all of them by running the bash command with 'special.no_logger=True':
         ```
         bash scripts/train.sh -d 0 -c template_train_lenet special.no_logger=True
         ```
-    * Most of the configs can be modified in the bash command line by adding 'X.Y.Z...=...' intuitively.
+        * '-c template_train_lenet' means using './config/template_train_lenet.yaml' as the main config file.
+    * Most of the configs can be modified or added in the bash command line by adding 'X.Y.Z=abc' intuitively, which equals to the following contents in the 'yaml' file:
+        ```
+        X:
+          Y:
+            Z: abc
+        ```
 
 * run on CPU, GPU and multiple GPUs by standalone DDP
     ```
@@ -325,7 +338,7 @@ A simple template for Pytorch projects.
 * the suffix may be used for distinguishing between different tasks, which can be set in "xxx.yaml" files as "info.output_dir"
 
 ### scripts
-* the folder for bash scripts, which are used for the entrance of all main functions of the code
+* the folder for bash scripts, which are used as the entry of the most main functions in this repository
 * common usage: "bash scripts/xxx.sh -args ..."
     * <u>"bash scripts/train.sh -d 0,1"</u> to train on GPU0 and GPU1 with config file "configs/template_train.yaml"
     * <u>"bash scripts/train.sh -c template_train_lenet -d 0"</u> to train on GPU0 with config file "configs/template_train_lenet.yaml"
