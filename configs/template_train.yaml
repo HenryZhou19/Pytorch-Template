@@ -10,8 +10,6 @@ info:
 
 data:
   dataset: simple
-  batch_size_per_rank: 32
-  sync_lr_with_batch_size: 0  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks] / sync_lr_with_batch_size)
   split_rate: 0.8
 
 model:
@@ -25,6 +23,10 @@ criterion:
   primary_criterion_higher_better: False  # XXX: important for choosing best model
 
 trainer:
+  ## batch_control
+  trainer_batch_size_per_rank: 32
+  sync_lr_with_batch_size: 0  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks, grad_accumulation] / sync_lr_with_batch_size)
+  ## batch_control ends
   trainer_choice: default
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
   pretrained_models: null  # None or a dict of pretrained models {name1: path1, name2: path2, ...}

@@ -342,7 +342,7 @@ A simple template for Pytorch projects.
 * common usage: "bash scripts/xxx.sh -args ..."
     * <u>"bash scripts/train.sh -d 0,1"</u> to train on GPU0 and GPU1 with config file "configs/template_train.yaml"
     * <u>"bash scripts/train.sh -c template_train_lenet -d 0"</u> to train on GPU0 with config file "configs/template_train_lenet.yaml"
-    * <u>"bash scripts/train.sh -d 0,1,2,3 data.batch_size_per_rank=16"</u> to train on GPU0~3 with config file "configs/template_train.yaml", in which the default "batch_size_per_rank" will be changed to 16
+    * <u>"bash scripts/train.sh -d 0,1,2,3 trainer.trainer_batch_size_per_rank=16"</u> to train on GPU 0~3 with config file "configs/template_train.yaml", in which the default "trainer_batch_size_per_rank" will be changed to 16
     * ……
 
 ### src

@@ -217,7 +217,7 @@ class PortalMisc:
             ] + main_py_files
             destination_dir = os.path.join(cfg.info.work_dir, 'current_project')
             if cfg.trainer.resume is not None:
-                destination_dir += f'_resume_{cfg.info.resume_start_time}.yaml'  
+                destination_dir += f'_resume_{cfg.info.resume_start_time}'  
             
             for source_path in source_paths:
                 if os.path.isdir(source_path):
@@ -302,25 +302,28 @@ class PortalMisc:
     def special_config_adjustment(cfg):
         if cfg.special.debug == 'one_iter':  # 'one_iter' debug mode
             cfg.env.num_workers = 0
-        
-        if cfg.trainer.grad_accumulation > 1:
-            warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
-        
-        cfg.data.batch_size_total = cfg.data.batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
-        cfg.info.batch_info = f'{cfg.data.batch_size_total}={cfg.data.batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
          
         if cfg.special.no_logger:
             cfg.info.wandb.wandb_enabled = False
             cfg.info.tensorboard.tensorboard_enabled = False
         
-        if not ConfigMisc.is_inference(cfg):  # only for train
-            if cfg.data.sync_lr_with_batch_size > 0:
-                cfg.trainer.optimizer.lr_default *= float(cfg.data.batch_size_total) / cfg.data.sync_lr_with_batch_size
+        if not ConfigMisc.is_inference(cfg):  # for train and val
+            if cfg.trainer.grad_accumulation > 1:
+                warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
+        
+            cfg.trainer.trainer_batch_size_total = cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
+            cfg.info.batch_info = f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
+            
+            if cfg.trainer.sync_lr_with_batch_size > 0:
+                cfg.trainer.optimizer.lr_default *= float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size
                 if hasattr(cfg.trainer.optimizer, 'param_groups'):
                     lr_mark = 'lr_'
                     for k, v in vars(cfg.trainer.optimizer.param_groups).items():
                         if k.startswith(lr_mark):
-                            setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.data.batch_size_total) / cfg.data.sync_lr_with_batch_size)
+                            setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
+        else: # for inference
+            cfg.tester.tester_batch_size_total = cfg.tester.tester_batch_size_per_rank * cfg.env.world_size
+            cfg.info.batch_info = f'{cfg.tester.tester_batch_size_total}={cfg.tester.tester_batch_size_per_rank}_{cfg.env.world_size}'
 
     @staticmethod
     def save_configs(cfg):
@@ -669,7 +672,7 @@ class ModelMisc:
                     'mult_adds',
                     'trainable',
                     ]
-                assert cfg.data.batch_size_per_rank == trainer.train_loader.batch_size
+                assert cfg.trainer.trainer_batch_size_per_rank == trainer.train_loader.batch_size
                 
                 class TorchinfoWrappedModel(torch.nn.Module):
                     def __init__(self, model):
@@ -682,7 +685,7 @@ class ModelMisc:
                 with trainer.train_autocast():
                     print_str = torchinfo.summary(
                         TorchinfoWrappedModel(temp_model),
-                        input_data=TensorMisc.expand_one_sample_to_batch(input_data_one_sample, cfg.data.batch_size_per_rank),
+                        input_data=TensorMisc.expand_one_sample_to_batch(input_data_one_sample, cfg.trainer.trainer_batch_size_per_rank),
                         col_names=torchinfo_columns,
                         depth=9,
                         verbose=0,
@@ -923,6 +926,7 @@ class SweepMisc:
                 if cfg.trainer.resume is not None:
                     print(LoggerMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', '$'))
                     portal_fn(cfg)
+                    exit()
             else:
                 assert hasattr(cfg, 'tester'), 'Sweep mode can only be used in phase of training or inference.'
             sweep_cfg_dict = ConfigMisc.nested_namespace_to_nested_dict(cfg.sweep.sweep_params)

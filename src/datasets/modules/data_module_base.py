@@ -88,23 +88,24 @@ class DataModuleBase:
         assert split in ['train', 'val', 'test'], f'Invalid split {split}'
         dataset = self.get_dataset(split)
         
-        is_training = split=='train'
+        is_train = split=='train'
+        is_train_or_val = split in ['train', 'val']
         use_dist_sampler = True if split == 'train' else self.cfg.trainer.dist_eval
         
-        if is_training and getattr(self.cfg.data, 'infinite_dataloader', False):
+        if is_train_or_val and getattr(self.cfg.trainer, 'infinite_dataloader', False):
             DataloaderClass = InfiniteDataLoaderX
-        elif is_training and getattr(self.cfg.data, 'fixed_length_dataloader', 0) > 0:
+        elif is_train and getattr(self.cfg.trainer, 'fixed_length_dataloader', 0) > 0:
             DataloaderClass = partial(
                 FixedLengthDataLoaderX,
-                total_batches_one_epoch=self.cfg.data.fixed_length_dataloader * self.cfg.trainer.grad_accumulation,
+                total_batches_one_epoch=self.cfg.trainer.fixed_length_dataloader * self.cfg.trainer.grad_accumulation,
                 total_epochs=self.cfg.trainer.epochs,
                 )
         else:
             DataloaderClass = DataLoaderX
         return DataloaderClass(
             dataset=dataset,
-            batch_size=self.cfg.data.batch_size_per_rank,
-            sampler=self.get_sampler(dataset, is_training, use_dist_sampler),
+            batch_size=self.cfg.trainer.trainer_batch_size_per_rank if is_train_or_val else self.cfg.tester.tester_batch_size_per_rank,
+            sampler=self.get_sampler(dataset, is_train, use_dist_sampler),
             pin_memory=self.cfg.env.pin_memory,
             collate_fn=self.collate_fn,
             num_workers=self.cfg.env.num_workers,
@@ -112,7 +113,7 @@ class DataModuleBase:
             generator=self.get_generator(),
             prefetch_factor=self.cfg.env.prefetch_factor if self.cfg.env.num_workers > 0 else None,
             persistent_workers=True if self.cfg.env.num_workers > 0 else False,
-            drop_last=is_training,
+            drop_last=is_train,
         )
     
     def get_worker_init_fn(self):
