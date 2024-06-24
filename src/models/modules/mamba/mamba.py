@@ -5,10 +5,14 @@ from functools import partial
 from typing import Optional, Union
 
 import torch
+from mamba_ssm.ops.triton.layer_norm import layer_norm_fn, rms_norm_fn
 from torch import nn
 
 from src.utils.misc import DummyContextManager
 
+from .modules.bimamba2_block import BiMamba2Block
+from .modules.bimamba_block import BiMambaBlock
+from .modules.mamba2_block import Mamba2Block
 from .modules.mamba_block import MambaBlock
 from .modules.norm import RMSNorm
 from .modules.utils import init_mamba_weights
@@ -20,6 +24,7 @@ class MambaLayer(nn.Module):
         layer_index : int,
         mamba_block_cls: MambaBlock,
         norm_cls: Union[nn.LayerNorm, RMSNorm],
+        fused_add_norm=False,
         residual_in_fp32=False,
         ):
         '''
@@ -36,6 +41,7 @@ class MambaLayer(nn.Module):
         '''
         super().__init__()
         self.layer_index = layer_index
+        self.fused_add_norm = fused_add_norm
         self.residual_in_fp32 = residual_in_fp32
         
         self.mamba_block: MambaBlock = mamba_block_cls(layer_index=layer_index)
@@ -54,10 +60,22 @@ class MambaLayer(nn.Module):
             residual: hidden_states = mamba_block(norm(residual))
         """
         
-        residual = (hidden_states + residual) if residual is not None else hidden_states
-        hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
-        if self.residual_in_fp32:
-            residual = residual.to(torch.float32)
+        if not self.fused_add_norm:
+            residual = (hidden_states + residual) if residual is not None else hidden_states
+            hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
+            if self.residual_in_fp32:
+                residual = residual.to(torch.float32)
+        else:
+            hidden_states, residual = layer_norm_fn(
+                hidden_states,
+                self.norm.weight,
+                self.norm.bias,
+                residual=residual,
+                prenorm=True,
+                residual_in_fp32=self.residual_in_fp32,
+                eps=self.norm.eps,
+                is_rms_norm=isinstance(self.norm, RMSNorm)
+            )
         
         hidden_states = self.mamba_block(hidden_states, inference_params=inference_params)
         return hidden_states, residual
@@ -71,7 +89,7 @@ class Mamba(nn.Module):
         self,
         n_layer: int,
         d_model: int,
-        mamba_block_cls: MambaBlock,
+        mamba_block_cls: Union[MambaBlock, BiMambaBlock, Mamba2Block, BiMamba2Block],
         mamba_block_config: dict,
         rms_norm=False,
         norm_epsilon=1e-5,
@@ -80,6 +98,7 @@ class Mamba(nn.Module):
         no_amp=True,
         custom_init=True,
         initializer_cfg=None,
+        fused_add_norm=False,
         device=None,
         dtype=None,
         ):
@@ -101,15 +120,21 @@ class Mamba(nn.Module):
             **factory_kwargs,
             )
         
+        self.fused_add_norm = fused_add_norm
+        if self.fused_add_norm:
+            if layer_norm_fn is None or rms_norm_fn is None:
+                raise ImportError("Failed to import Triton LayerNorm / RMSNorm kernels")
+        
         self.mamba_layers = nn.ModuleList(
             [
                 MambaLayer(
-                    layer_index=layer_idx,
+                    layer_index=layer_index,
                     mamba_block_cls=mamba_block_cls,
                     norm_cls=norm_cls,
+                    fused_add_norm=fused_add_norm,
                     residual_in_fp32=residual_in_fp32,
                 )
-                for layer_idx in range(n_layer)
+                for layer_index in range(n_layer)
             ]
         )
         
@@ -145,6 +170,7 @@ class Mamba(nn.Module):
             context = partial(torch.cuda.amp.autocast, enabled=False)
         else:
             context = DummyContextManager
+        
         with context():
             residual = None
             for layer in self.mamba_layers:
@@ -152,8 +178,23 @@ class Mamba(nn.Module):
                     hidden_states, residual, inference_params=inference_params
                 )
             
-            hidden_states = (hidden_states + residual) if residual is not None else hidden_states
             if self.final_norm is not None:
-                hidden_states = self.final_norm(hidden_states.to(dtype=self.final_norm.weight.dtype))
+                if not self.fused_add_norm:
+                    residual = (hidden_states + residual) if residual is not None else hidden_states
+                    hidden_states = self.final_norm(residual.to(dtype=self.final_norm.weight.dtype))
+                else:
+                    # Set prenorm=False here since we don't need the residual
+                    hidden_states = layer_norm_fn(
+                        hidden_states,
+                        self.final_norm.weight,
+                        self.final_norm.bias,
+                        eps=self.final_norm.eps,
+                        residual=residual,
+                        prenorm=False,
+                        residual_in_fp32=self.residual_in_fp32,
+                        is_rms_norm=isinstance(self.final_norm, RMSNorm)
+                    )
+            else:
+                hidden_states = (hidden_states + residual) if residual is not None else hidden_states
         
         return hidden_states

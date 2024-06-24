@@ -1,24 +1,18 @@
-# conda create -n pytorch-template python=3.9
+# conda create -n pytorch-template python=3.10
 
-# --extra-index-url https://download.pytorch.org/whl/cu113
-# torch==1.12.1+cu113
-# torchvision==0.13.1+cu113
-# torchaudio==0.12.1
+torch
+torchvision
 
---extra-index-url https://download.pytorch.org/whl/cu117
-torch==2.0.1+cu117
-torchvision==0.15.2+cu117
-torchaudio==2.0.2
-
-ema-pytorch==0.4.5
+wheel
 hjson
-numpy
+numpy<2.0.0
 opencv-python
-sacred==0.8.2
+sacred==0.8.5
 tensorboard
 torchinfo
 tqdm
-wandb==0.17.0
+wandb
+ema-pytorch==0.4.5
 
 ## project requirements
 scikit-image
