@@ -16,7 +16,7 @@ info:
     wandb_buffer_time: 300  # seconds
   tensorboard:
     tensorboard_enabled: True
-    # tensorboard_graph: True  # NO NEED
+    # tensorboard_graph: False  # NO NEED
   # iter_log_freq: 10  # NO NEED. only one epoch when inference
   cli_log_freq: 1
   # global_tqdm: True  # NO NEED. only one epoch
