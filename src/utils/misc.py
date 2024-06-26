@@ -421,6 +421,7 @@ class PortalMisc:
                 LoggerMisc.print_all_pid(file=loggers.log_file)
             else:
                 LoggerMisc.print_all_pid(get_parent=False, file=loggers.log_file)
+            loggers.log_file.flush()
         else:
             loggers.log_file = sys.stdout
         return loggers
@@ -890,10 +891,10 @@ class LoggerMisc:
                     # loggers.tensorboard_run.add_image('output_video', output_dict['output_video'], global_step=step)
                     
     @staticmethod
-    def print_all_pid(get_parent=True, specific_parent='torchrun', file=sys.stdout):
+    def print_all_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread'], file=sys.stdout):
         p = psutil.Process()
         if get_parent:
-            if specific_parent is not None and p.parent().name() != specific_parent:
+            if specific_parent is not None and p.parent().name() not in specific_parent:
                 return
             p = p.parent()
         p_children = p.children(recursive=True)
@@ -901,10 +902,10 @@ class LoggerMisc:
         print(LoggerMisc.block_wrapper(f'All sub-processes of {p.name()}:\n{all_processes}', s='#'), file=file)
     
     @staticmethod
-    def get_wandb_pid(get_parent=True, specific_parent='torchrun', kill_all=False, kill_wait_time=60):
+    def get_wandb_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread'], kill_all=False, kill_wait_time=60):
         p = psutil.Process()
         if get_parent:
-            if specific_parent is not None and p.parent().name() != specific_parent:
+            if specific_parent is not None and p.parent().name() not in specific_parent:
                 return
             p = p.parent()
         p_children = p.children(recursive=True)
