@@ -12,18 +12,13 @@ from collections import UserList
 from copy import deepcopy
 from glob import glob
 from math import inf
+from typing import TYPE_CHECKING
 
-import numpy as np
-import psutil
-import sacred
-import torch
-import torch.distributed as dist
-import yaml
-from torch import nn
 from tqdm import tqdm
 from tqdm.utils import disp_trim
 
 __all__ = [
+    'ImportMisc',
     'ConfigMisc',
     'PortalMisc',
     'DistMisc',
@@ -31,10 +26,54 @@ __all__ = [
     'LoggerMisc',
     'SweepMisc',
     'TensorMisc',
-    'ImportMisc',
     'TimeMisc',
     'DummyContextManager',
     ]
+
+
+class ImportMisc:
+    @staticmethod
+    def import_current_dir_all(current_file, current_module_name):
+        current_directory = os.path.dirname(current_file)
+        current_file_name = os.path.basename(current_file)
+        files = os.listdir(current_directory)
+        for file in files:
+            if file.endswith('.py') and file != current_file_name:
+                module_name = os.path.splitext(file)[0]
+                importlib.import_module(f'{current_module_name}.{module_name}')
+    
+    class LazyImporter:
+        def __init__(self, module_name: str):
+            self.module_name = module_name
+            self.module = None
+        
+        def _import(self):
+            if self.module is None:
+                self.module = importlib.import_module(self.module_name)
+            return self.module
+        
+        def __getattr__(self, name):
+            module = self._import()
+            return getattr(module, name)
+
+
+if TYPE_CHECKING:
+    import numpy as np
+    import psutil
+    import sacred
+    import torch
+    import yaml
+    from torch import distributed as dist
+    from torch import nn
+else:
+    np = ImportMisc.LazyImporter('numpy')
+    psutil = ImportMisc.LazyImporter('psutil')
+    sacred = ImportMisc.LazyImporter('sacred')
+    torch = ImportMisc.LazyImporter('torch')
+    yaml = ImportMisc.LazyImporter('yaml')
+    dist = ImportMisc.LazyImporter('torch.distributed')
+    nn = ImportMisc.LazyImporter('torch.nn')
+
 
 class ConfigMisc:
     @staticmethod
@@ -81,20 +120,20 @@ class ConfigMisc:
                 print(f'\nInitial configs read by sacred for ALL Ranks:')
                 print(sacred.commands._format_config(final_config, config_mods))
             return vars(config_mods)
-
+        
         @ex.main
         def get_init_configs(_config, _run):
             modified_configs = trim_sacred_configs(_run)
             return modified_configs
-
+        
         ex_run = ex.run_commandline()
         cfg = ConfigMisc.nested_dict_to_nested_namespace(ex_run.config)
         cfg.modified_cfg_dict = ex_run.result
         for k, v in cfg.modified_cfg_dict.items():
             cfg.modified_cfg_dict[k] = [cfg_name.split('.')[-1] for cfg_name in v]
-
+        
         return cfg
-
+    
     @staticmethod 
     def nested_dict_to_nested_namespace(dictionary, ignore_key_list=[]):
         namespace = dictionary
@@ -147,25 +186,25 @@ class ConfigMisc:
                 ConfigMisc.update_nested_namespace(getattr(cfg_base, name), value)
             else:
                 setattr(cfg_base, name, value)
-                
+    
     @staticmethod
     def setattr_for_nested_namespace(cfg, name_list, value):
         namespace_now = cfg
         for name in name_list[:-1]:
             namespace_now = getattr(namespace_now, name)
         setattr(namespace_now, name_list[-1], value)
-
+    
     @staticmethod
     def read_from_yaml(path):
         with open(path, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f.read())
         return ConfigMisc.nested_dict_to_nested_namespace(config)
-
+    
     @staticmethod
     def write_to_yaml(path, config, ignore_name_list):
         with open(path, 'w', encoding='utf-8') as f:
             yaml.safe_dump(ConfigMisc.nested_namespace_to_nested_dict(config, ignore_name_list), f)
-
+    
     @staticmethod
     def get_specific_list(cfg, cfg_keys):
         def get_nested_attr(cfg, key):
@@ -180,7 +219,7 @@ class ConfigMisc:
             if result is not None:
                 specific_list.append(str(result))
         return specific_list
-
+    
     @staticmethod
     def output_dir_extras(cfg):
         extras = '_'.join([cfg.info.start_time] + ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
@@ -191,6 +230,26 @@ class ConfigMisc:
     @staticmethod
     def is_inference(cfg):
         return hasattr(cfg, 'tester')
+    
+    @staticmethod
+    def set_real_batch_size_and_lr(cfg):
+        if not ConfigMisc.is_inference(cfg):  # for train and val
+            if cfg.trainer.grad_accumulation > 1:
+                warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
+        
+            cfg.trainer.trainer_batch_size_total = cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
+            cfg.info.batch_info = f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
+            
+            if cfg.trainer.sync_lr_with_batch_size > 0:
+                cfg.trainer.optimizer.lr_default *= float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size
+                if hasattr(cfg.trainer.optimizer, 'param_groups'):
+                    lr_mark = 'lr_'
+                    for k, v in vars(cfg.trainer.optimizer.param_groups).items():
+                        if k.startswith(lr_mark):
+                            setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
+        else: # for inference
+            cfg.tester.tester_batch_size_total = cfg.tester.tester_batch_size_per_rank * cfg.env.world_size
+            cfg.info.batch_info = f'{cfg.tester.tester_batch_size_total}={cfg.tester.tester_batch_size_per_rank}_{cfg.env.world_size}'
 
 
 class PortalMisc:
@@ -236,7 +295,7 @@ class PortalMisc:
         ConfigMisc.update_nested_namespace(cfg, infer_cfg)
         if use_train_seed:
             cfg.seed_base = train_seed_base
-
+        
         # cfg.info.train_work_dir = cfg.info.work_dir
         cfg.info.train_work_dir = '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1])
         if os.path.abspath(cfg.info.train_work_dir) != os.path.abspath(cfg.info.work_dir):
@@ -255,9 +314,9 @@ class PortalMisc:
             'checkpoint_best_epoch_*.pth' if cfg.tester.use_best else 'checkpoint_last_epoch_*.pth'))
         assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
         cfg.tester.checkpoint_path = checkpoint_path[0]
-
+        
         return cfg
-
+    
     @staticmethod 
     def resume_or_new_train_dir(cfg):  # only for train
         assert hasattr(cfg.env, 'distributed')
@@ -275,7 +334,7 @@ class PortalMisc:
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir)
         cfg.info.work_dir = work_dir
-
+    
     @staticmethod
     def seed_everything(cfg):
         if cfg.env.seed_with_rank:
@@ -284,7 +343,7 @@ class PortalMisc:
             seed_rank = cfg.seed_base
         
         os.environ['PYTHONHASHSEED'] = str(seed_rank)
-
+        
         random.seed(seed_rank)
         np.random.seed(seed_rank)
         
@@ -292,38 +351,24 @@ class PortalMisc:
         if cfg.env.device == 'cuda':
             torch.cuda.manual_seed(seed_rank)
             # torch.cuda.manual_seed_all(seed_rank)  # no need here as each process has a different seed
-
+            
             if cfg.env.cuda_deterministic:
                 os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
                 torch.backends.cudnn.deterministic = True
                 torch.backends.cudnn.benchmark = False
-            
+    
     @staticmethod
     def special_config_adjustment(cfg):
+        
+        ConfigMisc.set_real_batch_size_and_lr(cfg)
+        
         if cfg.special.debug == 'one_iter':  # 'one_iter' debug mode
             cfg.env.num_workers = 0
          
         if cfg.special.no_logger:
             cfg.info.wandb.wandb_enabled = False
             cfg.info.tensorboard.tensorboard_enabled = False
-        
-        if not ConfigMisc.is_inference(cfg):  # for train and val
-            if cfg.trainer.grad_accumulation > 1:
-                warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
-        
-            cfg.trainer.trainer_batch_size_total = cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
-            cfg.info.batch_info = f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
-            
-            if cfg.trainer.sync_lr_with_batch_size > 0:
-                cfg.trainer.optimizer.lr_default *= float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size
-                if hasattr(cfg.trainer.optimizer, 'param_groups'):
-                    lr_mark = 'lr_'
-                    for k, v in vars(cfg.trainer.optimizer.param_groups).items():
-                        if k.startswith(lr_mark):
-                            setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
-        else: # for inference
-            cfg.tester.tester_batch_size_total = cfg.tester.tester_batch_size_per_rank * cfg.env.world_size
-            cfg.info.batch_info = f'{cfg.tester.tester_batch_size_total}={cfg.tester.tester_batch_size_per_rank}_{cfg.env.world_size}'
+
 
     @staticmethod
     def save_configs(cfg):
@@ -339,7 +384,7 @@ class PortalMisc:
             
         if cfg.special.save_current_project:
             PortalMisc._save_currect_project(cfg)
-
+    
     @staticmethod
     def print_config(cfg, force_all_rank=False):
         modified_cfg_dict = cfg.modified_cfg_dict
@@ -368,17 +413,17 @@ class PortalMisc:
                         color_flag = '\033[30m'
                     msg_in += f'{color_flag}{m_indent:40}{v}\033[0m\n'
             return msg_in
-
+        
         msg = f'Rank {DistMisc.get_rank()} --- Parameters: (\033[34mmodified, \033[32madded, \033[31mtypechanged, \033[30mdoc)\033[0m\n'
         msg = LoggerMisc.block_wrapper(write_msg_lines(msg, cfg), s='=', block_width=80)
-
+        
         DistMisc.avoid_print_mess()
         if cfg.env.distributed:
             print(msg, force=force_all_rank)
         else:
             print(msg)
         DistMisc.avoid_print_mess()
-
+    
     @staticmethod 
     def init_loggers(cfg):
         loggers = Namespace()
@@ -425,7 +470,7 @@ class PortalMisc:
         else:
             loggers.log_file = sys.stdout
         return loggers
-
+    
     @staticmethod 
     def end_everything(cfg, loggers, end_with_printed_cfg=False, force=False):
         if end_with_printed_cfg:
@@ -460,7 +505,7 @@ class PortalMisc:
                 if seconds_remain > 0:
                     for _ in range(seconds_remain):
                         time.sleep(1)
-
+    
     @staticmethod 
     def interrupt_handler(cfg):
         """Handles SIGINT signal (Ctrl+C) by exiting the program gracefully."""
@@ -474,7 +519,7 @@ class PortalMisc:
                     LoggerMisc.print_all_pid(get_parent=False)
                     LoggerMisc.get_wandb_pid(get_parent=False, kill_all=True)
             sys.exit(0)
-
+        
         signal.signal(signal.SIGINT, signal_handler)
 
 
@@ -491,17 +536,17 @@ class DistMisc:
             time.sleep(DistMisc.get_rank() * 0.1)
     
     @staticmethod
-    def all_gather(x: torch.Tensor):
-
+    def all_gather(x):
+        x: torch.Tensor
         world_size = DistMisc.get_world_size()
         if world_size == 1:
             return [x]
             
         x_list = [torch.empty_like(x)] * world_size
         dist.all_gather(x_list, x)
-
+        
         return x_list
-
+    
     @staticmethod
     def reduce_dict(input_dict, average=True):
         world_size = DistMisc.get_world_size()
@@ -516,7 +561,7 @@ class DistMisc:
                 values /= world_size
             reduced_dict = {k: v for k, v in zip(names, values)}
         return reduced_dict
-
+    
     @staticmethod
     def reduce(tensor, op='mean'):
         world_size = DistMisc.get_world_size()
@@ -529,19 +574,19 @@ class DistMisc:
         elif op == 'sum':
             pass
         return tensor
-
+    
     @ staticmethod
     def is_dist_avail_and_initialized():
         return dist.is_available() and dist.is_initialized()
-
+    
     @staticmethod
     def get_world_size():
         return dist.get_world_size() if DistMisc.is_dist_avail_and_initialized() else 1
-
+    
     @staticmethod
     def get_rank():
         return dist.get_rank() if DistMisc.is_dist_avail_and_initialized() else 0
-
+    
     @staticmethod
     def is_main_process():
         return DistMisc.get_rank() == 0
@@ -549,20 +594,20 @@ class DistMisc:
     @staticmethod
     def is_node_first_rank():
         return int(os.environ['LOCAL_RANK']) == 0
-
+    
     @staticmethod
     def setup_for_distributed(is_master):
         # This function disables printing when not in master process
         import builtins as __builtin__
         builtin_print = __builtin__.print
-
+        
         def dist_print(*args, **kwargs):
             force = kwargs.pop('force', False)
             if is_master or force:
                 builtin_print(*args, **kwargs)
-
+        
         __builtin__.print = dist_print
-
+    
     @staticmethod
     def init_distributed_mode(cfg):
         if cfg.env.device == 'cuda':
@@ -610,7 +655,7 @@ class DistMisc:
                 cfg.env.pin_memory = False
         else:
             raise ValueError('Invalid device type.')
-        
+    
     @staticmethod
     def destroy_process_group():
         if dist.is_initialized():
@@ -715,7 +760,7 @@ class ModelMisc:
             )
         else:
             return model_without_ddp
-        
+    
     @staticmethod
     def load_state_dict_with_more_info(module, state_dict, strict=False, print_keys_level=1):
         missing_keys, unexpected_keys = module.load_state_dict(state_dict, strict=strict)
@@ -730,9 +775,10 @@ class ModelMisc:
                 + '\n\033[33m\nMISSING KEYS (only in model):\n\033[0m    ' + '\n    '.join(missing_keys) \
                 + '\n\033[34m\nUNEXPECTED KEYS (only in pth):\n\033[0m    ' + '\n    '.join(unexpected_keys)
             print(LoggerMisc.block_wrapper(print_info, '#'))
-        
+    
     @staticmethod
-    def toggle_batchnorm_track_running_stats(module: nn.Module, true_or_false: bool):
+    def toggle_batchnorm_track_running_stats(module, true_or_false: bool):
+        module: nn.Module
         for child in module.children():
             if isinstance(child, torch.nn.modules.batchnorm._BatchNorm):
                 child.track_running_stats = true_or_false
@@ -740,7 +786,8 @@ class ModelMisc:
                 ModelMisc.toggle_batchnorm_track_running_stats(child, true_or_false)
     
     @staticmethod
-    def convert_batchnorm_to_instancenorm(module: nn.Module):
+    def convert_batchnorm_to_instancenorm(module):
+        module: nn.Module
         for name, child in module.named_children():
             if isinstance(child, nn.BatchNorm3d):
                 setattr(module, name, nn.InstanceNorm3d(child.num_features))
@@ -750,9 +797,9 @@ class ModelMisc:
                 setattr(module, name, nn.InstanceNorm1d(child.num_features))
             else:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
-
+    
     @staticmethod
-    def unfreeze_or_freeze_submodules(module: nn.Module, submodule_name_list, is_trainable: bool, strict=False, verbose=True):  # whether to update the parameters of the submodules
+    def unfreeze_or_freeze_submodules(module, submodule_name_list, is_trainable: bool, strict=False, verbose=True):  # whether to update the parameters of the submodules
         """
         Just change the trainable property of submodules' parameters.
         
@@ -761,6 +808,7 @@ class ModelMisc:
         
         verbose: (default True) as this function is usually called only once --- before all epochs
         """
+        module: nn.Module
         named_modules = dict(module.named_modules())
         verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} parameters of the following submodules:'
         for submodule_name in submodule_name_list:
@@ -779,7 +827,7 @@ class ModelMisc:
             print(LoggerMisc.block_wrapper(verbose_string, '='))
     
     @staticmethod
-    def train_or_eval_submodules(module: nn.Module, submodule_name_list, is_train: bool, strict=False, verbose=False):
+    def train_or_eval_submodules(module, submodule_name_list, is_train: bool, strict=False, verbose=False):
         """
         Just change the behavior of some specific submodules (e.g. BatchNorm, Dropout).
         
@@ -788,6 +836,7 @@ class ModelMisc:
         
         verbose: (default False) as this function is usually called multiple times --- before one (each) epoch
         """
+        module: nn.Module
         named_modules = dict(module.named_modules())
         verbose_string = f'Set nn.Module mode of the following submodules to {"train" if is_train else "eval"}:'
         for submodule_name in submodule_name_list:
@@ -803,9 +852,10 @@ class ModelMisc:
                 submodule.train() if is_train else submodule.eval()
         if verbose and len(submodule_name_list) > 0:
             print(LoggerMisc.block_wrapper(verbose_string, '='))
-            
+    
     @staticmethod
-    def _re_init_check(module: nn.Module, param_name):
+    def _re_init_check(module, param_name):
+        module: nn.Module
         if hasattr(getattr(module, param_name, None), '_no_reinit'):
             print(f'No re-init for {module}\'s {param_name}')
             return False
@@ -824,32 +874,32 @@ class LoggerMisc:
                 maxinterval=inf,
                 bar_format='{desc}' 
             ) for i in range(postlines)]
-
+        
         def unpause(self):
             self.bar_main.unpause()
-
+        
         def update(self, n):
             self.bar_main.update(n)
-
+        
         def reset(self):
             self.bar_main.reset()
-
+        
         def close(self):
             self.bar_main.close()
             for bar_postline in self.bar_postlines:
                 bar_postline.close()
-
+        
         def refresh(self):
             self.bar_main.refresh()
             for bar_postline in self.bar_postlines:
                 bar_postline.refresh()
-
+        
         def set_description_str(self, desc, refresh=True):
             self.bar_main.set_description_str(desc, refresh)
         
         def set_postfix_str(self, desc, refresh=True):
             self.bar_main.set_postfix_str(desc, refresh)
-
+        
         def _trim(self, desc):
             desc = str(desc)
             return disp_trim(desc, self.bar_main.ncols)
@@ -858,14 +908,14 @@ class LoggerMisc:
             assert len(desc) == self.postlines
             for bar_postline, d in zip(self.bar_postlines, desc):
                 bar_postline.set_description_str(self._trim(d), refresh)
-
+    
     @staticmethod
     def block_wrapper(input_object, s='=', block_width=80):
         str_input = str(input_object)
         if not str_input.endswith('\n'):
             str_input += '\n'
         return '\n' + s * block_width + '\n' + str_input + s * block_width + '\n'
-
+    
     @staticmethod
     def list_to_multiline_string(items: list, prefix='\t', suffix=''):
         return '\n'.join([prefix + str(item) + suffix for item in items])
@@ -889,7 +939,7 @@ class LoggerMisc:
                         loggers.tensorboard_run.add_scalar(f'{group}/{k}', v, global_step=step)
                     # loggers.tensorboard_run.add_image('output_image', output_dict['output_image'], global_step=step)
                     # loggers.tensorboard_run.add_image('output_video', output_dict['output_video'], global_step=step)
-                    
+    
     @staticmethod
     def print_all_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread'], file=sys.stdout):
         p = psutil.Process()
@@ -971,11 +1021,12 @@ class TensorMisc:
         not_to_cuda = True
         
     class GradCollector:
-        def __init__(self, x: torch.Tensor):
+        def __init__(self, x):
+            x: torch.Tensor
             self.grad = None
             if x.requires_grad:
                 x.register_hook(self.hook())  
-
+        
         def hook(self):
             def _hook(grad):
                 self.grad = grad
@@ -992,7 +1043,7 @@ class TensorMisc:
             return {k: TensorMisc.get_one_sample_from_batch(v, index, keep_batch_dim) for k, v in data.items()}
         else:
             raise TypeError(f'Unknown type: {type(data)}')
-        
+    
     @staticmethod
     def expand_one_sample_to_batch(data, batch_size, have_batch_dim=True):
         assert have_batch_dim, 'Only support expanding one sample to batch when have_batch_dim is True.'
@@ -1008,14 +1059,14 @@ class TensorMisc:
             return {k: TensorMisc.expand_one_sample_to_batch(v, batch_size) for k, v in data.items()}
         else:
             raise TypeError(f'Unknown type: {type(data)}')
-        
+    
     @staticmethod
     def get_gpu_memory_usage(verbose=False, device='cuda'):
         allocated_bytes = torch.cuda.memory_allocated(device=device)
         max_allocated_bytes = torch.cuda.max_memory_allocated(device=device)
         reserved_bytes = torch.cuda.memory_reserved(device=device)
         total_bytes = torch.cuda.get_device_properties(device=device).total_memory
-
+        
         allocated_mb = allocated_bytes / 1048576
         max_allocated_mb = max_allocated_bytes / 1048576
         reserved_mb = reserved_bytes / 1048576
@@ -1035,18 +1086,6 @@ class TensorMisc:
         if verbose:
             print(f'Rank {DistMisc.get_rank()} --- Now allocated memory: {torch.cuda.memory_allocated() / 1048576:.2f} MB', force=True)
         return new_tensor
-        
-        
-class ImportMisc:
-    @staticmethod
-    def import_current_dir_all(current_file, current_module_name):
-        current_directory = os.path.dirname(current_file)
-        current_file_name = os.path.basename(current_file)
-        files = os.listdir(current_directory)
-        for file in files:
-            if file.endswith('.py') and file != current_file_name:
-                module_name = os.path.splitext(file)[0]
-                importlib.import_module(f'{current_module_name}.{module_name}')      
 
 
 class TimeMisc:
@@ -1065,13 +1104,13 @@ class TimeMisc:
         def __init__(self):
             self.t_start= time.time()
             self.t = self.t_start
-            
+        
         def press(self):
             self.t = time.time()
-
+        
         def restart(self):
             self.__init__()
-
+        
         @property
         def info(self):
             now = time.time()
@@ -1079,16 +1118,16 @@ class TimeMisc:
                 'all': now - self.t_start,
                 'last': now - self.t
                 }
-        
+    
     class TimerContext:
         def __init__(self, block_name, print_threshold=0.0, do_print=True):
             self.block_name = block_name
             self.print_threshold = print_threshold
             self.do_print = do_print
-            
+        
         def __enter__(self):
             self.timer = TimeMisc.Timer()
-
+        
         def __exit__(self, *_):
             if self.do_print:
                 if self.timer.info['all'] >= self.print_threshold:
