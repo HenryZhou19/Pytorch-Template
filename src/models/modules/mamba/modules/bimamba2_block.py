@@ -222,12 +222,7 @@ class BiMamba2Block(nn.Module):
                 norm_before_gate=self.norm_before_gate,
                 **dt_limit_kwargs,
             )
-            if seqlen_og is not None:
-                out = rearrange(out, "b l d -> (b l) d")
-            if self.process_group is not None:
-                reduce_fn = reduce_scatter if self.sequence_parallel else all_reduce
-                out = reduce_fn(out, self.process_group)
-                
+            
             out_rev = mamba_split_conv1d_scan_combined(
                 zxbcdt_rev.flip([-2]),
                 rearrange(self.conv1d_rev.weight, "d 1 w -> d w"),
