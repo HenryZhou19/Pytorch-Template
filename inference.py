@@ -37,8 +37,8 @@ def test_run(cfg, loggers):
 
 
 def infer_portal(infer_cfg):
-    assert hasattr(infer_cfg, 'info'), 'config field "infer_cfg.info" not found'
-    setattr(infer_cfg.info, 'infer_start_time', TimeMisc.get_time_str())
+    # set start_time and broadcast it to all ranks
+    PortalMisc.set_and_broadcast_start_time(infer_cfg)
     
     # combine train(read) inference(input) configs
     cfg = PortalMisc.combine_train_infer_configs(infer_cfg, use_train_seed=True)

@@ -49,8 +49,8 @@ def train_run(cfg, loggers):
 
 
 def train_portal(cfg):
-    assert hasattr(cfg, 'info'), 'config field "cfg.info" not found'
-    setattr(cfg.info, 'start_time', TimeMisc.get_time_str())
+    # set start_time and broadcast it to all ranks
+    PortalMisc.set_and_broadcast_start_time(cfg)
     
     # interrupt handler
     PortalMisc.interrupt_handler(cfg)

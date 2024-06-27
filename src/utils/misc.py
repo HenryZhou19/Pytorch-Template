@@ -254,6 +254,22 @@ class ConfigMisc:
 
 class PortalMisc:
     @staticmethod
+    def set_and_broadcast_start_time(cfg, string_length=19):
+        assert hasattr(cfg, 'info'), 'config field "cfg.info" not found'
+        if DistMisc.is_main_process():
+            time_string = TimeMisc.get_time_string()
+            time_bytes = time_string.encode('utf-8')
+            buffer = torch.ByteTensor(list(time_bytes)).to(device=cfg.env.device)
+        else:
+            buffer = torch.ByteTensor(string_length).to(device=cfg.env.device)
+        if DistMisc.is_dist_avail_and_initialized():
+            dist.broadcast(buffer, src=0)
+            dist.barrier()
+        time_string = buffer.cpu().numpy().tobytes().decode('utf-8')
+        print(f"Rank {DistMisc.get_rank()} has time string: {time_string}", force=True)
+        setattr(cfg.info, 'start_time', time_string)
+    
+    @staticmethod
     def _find_available_new_path(path, suffix=''):
         if os.path.exists(path):
             counter = 1
@@ -418,10 +434,7 @@ class PortalMisc:
         msg = LoggerMisc.block_wrapper(write_msg_lines(msg, cfg), s='=', block_width=80)
         
         DistMisc.avoid_print_mess()
-        if cfg.env.distributed:
-            print(msg, force=force_all_rank)
-        else:
-            print(msg)
+        print(msg, force=force_all_rank)
         DistMisc.avoid_print_mess()
     
     @staticmethod 
@@ -475,7 +488,7 @@ class PortalMisc:
     def end_everything(cfg, loggers, end_with_printed_cfg=False, force=False):
         if end_with_printed_cfg:
             PortalMisc.print_config(cfg)
-        seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_str(), cfg.info.start_time))
+        seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_string(), cfg.info.start_time))
         if DistMisc.is_main_process():
             loggers.log_file.close()
             print('log_file closed.')
@@ -646,6 +659,8 @@ class DistMisc:
             cfg.env.local_rank = 0
             cfg.env.dist_backend = 'None'
             cfg.env.dist_url = 'None'
+            
+            DistMisc.setup_for_distributed(True)
             
             if getattr(cfg.env, 'amp', False):  # in train mode, check AMP
                 print(LoggerMisc.block_wrapper('AMP is not supported on CPU. Automatically turning off AMP by setting "cfg.env.amp.amp_enabled = False".', '#'))
@@ -1090,7 +1105,7 @@ class TensorMisc:
 
 class TimeMisc:
     @staticmethod
-    def get_time_str():
+    def get_time_string():
         return time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time()))
     
     @staticmethod
