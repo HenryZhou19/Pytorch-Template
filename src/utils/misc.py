@@ -266,7 +266,7 @@ class PortalMisc:
             dist.broadcast(buffer, src=0)
             dist.barrier()
         time_string = buffer.cpu().numpy().tobytes().decode('utf-8')
-        print(f"Rank {DistMisc.get_rank()} has time string: {time_string}", force=True)
+        # print(f"Rank {DistMisc.get_rank()} has time string: {time_string}", force=True)
         setattr(cfg.info, 'start_time', time_string)
     
     @staticmethod
