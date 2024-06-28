@@ -48,11 +48,14 @@ class BiMamba2Block(nn.Module):
         dtype=None,
         # bimamba options
         # bimamba_type="v2",
-        # if_divide_out=True,
+        if_divide_out=False,
         # init_layer_scale=None,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
+        
+        self.if_divide_out = if_divide_out
+        
         self.d_model = d_model
         self.d_state = d_state
         self.d_conv = d_conv
@@ -242,7 +245,10 @@ class BiMamba2Block(nn.Module):
                 norm_before_gate=self.norm_before_gate,
                 **dt_limit_kwargs,
             )
-            out = out + out_rev.flip([-2])
+            if not self.if_divide_out:
+                out = out + out_rev.flip([-2])
+            else:
+                out = (out + out_rev.flip([-2])) / 2
             if seqlen_og is not None:
                 out = rearrange(out, "b l d -> (b l) d")
             if self.process_group is not None:

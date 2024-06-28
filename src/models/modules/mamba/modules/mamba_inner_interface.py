@@ -1,4 +1,5 @@
 # Mamba Copyright (c) 2023, Tri Dao, Albert Gu.
+# Modified by Jiaheng Zhou: https://github.com/HenryZhou19/Pytorch-Template
 
 import torch
 import torch.nn.functional as F
