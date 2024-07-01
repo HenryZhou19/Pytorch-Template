@@ -50,7 +50,7 @@ def train_run(cfg, loggers):
 
 def train_portal(cfg):
     # set start_time and broadcast it to all ranks
-    PortalMisc.set_and_broadcast_start_time(cfg)
+    PortalMisc.set_and_broadcast_start_time(cfg, 'start_time')
     
     # interrupt handler
     PortalMisc.interrupt_handler(cfg)

@@ -38,7 +38,7 @@ def test_run(cfg, loggers):
 
 def infer_portal(infer_cfg):
     # set start_time and broadcast it to all ranks
-    PortalMisc.set_and_broadcast_start_time(infer_cfg)
+    PortalMisc.set_and_broadcast_start_time(infer_cfg, 'infer_start_time')
     
     # combine train(read) inference(input) configs
     cfg = PortalMisc.combine_train_infer_configs(infer_cfg, use_train_seed=True)
