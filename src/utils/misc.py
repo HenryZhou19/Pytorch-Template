@@ -254,7 +254,7 @@ class ConfigMisc:
 
 class PortalMisc:
     @staticmethod
-    def set_and_broadcast_start_time(cfg, string_length=19):
+    def set_and_broadcast_start_time(cfg, config_name, string_length=19):
         assert hasattr(cfg, 'info'), 'config field "cfg.info" not found'
         if DistMisc.is_main_process():
             time_string = TimeMisc.get_time_string()
@@ -267,7 +267,7 @@ class PortalMisc:
             dist.barrier()
         time_string = buffer.cpu().numpy().tobytes().decode('utf-8')
         # print(f"Rank {DistMisc.get_rank()} has time string: {time_string}", force=True)
-        setattr(cfg.info, 'start_time', time_string)
+        setattr(cfg.info, config_name, time_string)
     
     @staticmethod
     def _find_available_new_path(path, suffix=''):
