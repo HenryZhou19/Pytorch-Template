@@ -5,7 +5,7 @@ special:
   extra_name: template  # null for no extra name
 
 info:
-  output_dir: ./outputs/
+  output_dir: ./outputs/template/
   project_name: template
 
 data:
