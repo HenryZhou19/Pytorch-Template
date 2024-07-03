@@ -64,15 +64,17 @@ class SimpleDataModule(DataModuleBase):
             self.data_form = '3d'
         else:
             self.data_form = 'default'
-        
-        self.X_train_and_val = np.random.rand(self.train_val_len, 2)
-        self.y_train_and_val = np.random.rand(self.train_val_len, 1)
-        self.X_test = np.random.rand(self.test_len, 2)
-        self.y_test = np.random.rand(self.test_len, 1)
+            
+    def _get_random_X_y(self, length):
+        seed_used = np.random.get_state()[1][0]
+        np.random.seed(0)
+        X = np.random.rand(length, 2)
+        y = np.random.rand(length, 1)
+        np.random.seed(seed_used)
+        return X, y
         
     def build_train_dataset(self):
-        X = np.random.rand(self.train_val_len, 2)
-        y = np.random.rand(self.train_val_len, 1)
+        X, y = self._get_random_X_y(self.train_val_len)
         
         n = int(len(y) * self.cfg.data.split_rate)
         X_train = X[:n]
@@ -81,8 +83,7 @@ class SimpleDataModule(DataModuleBase):
         return SimpleDataset(X_train, y_train, self.data_form)
         
     def build_val_dataset(self):
-        X = np.random.rand(self.train_val_len, 2)
-        y = np.random.rand(self.train_val_len, 1)
+        X, y = self._get_random_X_y(self.train_val_len)
         
         n = int(len(y) * self.cfg.data.split_rate)
         X_val = X[n:]
@@ -90,9 +91,8 @@ class SimpleDataModule(DataModuleBase):
         
         return SimpleDataset(X_val, y_val, self.data_form)
         
-    def build_test_dataset(self):            
-        X = np.random.rand(self.test_len, 2)
-        y = np.random.rand(self.test_len, 1)
+    def build_test_dataset(self):
+        X, y = self._get_random_X_y(self.test_len)
         
         return SimpleDataset(X, y, self.data_form)
     
