@@ -20,8 +20,6 @@ try:
 except ImportError:
     selective_state_update = None
 
-from dataclasses import dataclass, field
-
 from .mamba_inner_interface import *
 from .selective_scan_interface import *
 from .utils import *

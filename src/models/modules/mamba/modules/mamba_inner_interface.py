@@ -15,6 +15,7 @@ import selective_scan_cuda
 
 __all__ = [
     'mamba_inner_fn',
+    'mamba_split_conv1d_scan_combined_no_triton',
     ]
 
 def _prepare_delta_B_C_D(x_dbl, delta_proj_weight, delta_rank, d_state, A, B, C, D, B_proj_bias, C_proj_bias, L):
@@ -180,3 +181,64 @@ def mamba_inner_fn(
 ):
     return MambaInnerFn.apply(xz, conv1d_weight, conv1d_bias, x_proj_weight, delta_proj_weight,
                               A, B, C, D, delta_bias, B_proj_bias, C_proj_bias, delta_softplus)
+
+
+# for mamba2
+from causal_conv1d import causal_conv1d_fn
+from mamba_ssm.ops.triton.ssd_combined import ssd_selective_scan
+
+
+def mamba_split_conv1d_scan_combined_no_triton(zxbcdt, conv1d_weight, conv1d_bias, dt_bias, A, D, chunk_size, dt_limit=(0.0, float("inf")), activation="silu", rmsnorm_weight=None, rmsnorm_eps=1e-6, outproj_weight=None, outproj_bias=None, headdim=None, ngroups=1, norm_before_gate=True):
+    """
+    Argument:
+        zxbcdt: (batch, seqlen, 2 * dim + 2 * ngroups * dstate + nheads) where dim == nheads * headdim
+        conv1d_weight: (dim + 2 * ngroups * dstate, width)
+        conv1d_bias: (dim + 2 * ngroups * dstate,)
+        dt_bias: (nheads,)
+        A: (nheads)
+        D: (nheads, headdim) or (nheads,)
+        rmsnorm_weight: (dim,)
+        outproj_weight: (out_dim, dim)
+        outproj_bias: (out_dim,)
+        headdim: if D is 1D, headdim must be passed in
+        norm_before_gate: if True, we do RMSNorm(x) * F.silu(z). If False, we do RMSNorm(x * F.silu(z))
+    Return:
+        out: (batch, seqlen, dim)
+    """
+    if D.dim() == 1:
+        assert headdim is not None
+        nheads, = D.shape
+    else:
+        nheads, headdim = D.shape
+    assert nheads % ngroups == 0
+    batch, seqlen, _ = zxbcdt.shape
+    dim = nheads * headdim
+    dstate = (zxbcdt.shape[-1] - 2 * dim - nheads) // ngroups // 2
+    assert zxbcdt.shape == (batch, seqlen, 2 * dim + 2 * ngroups * dstate + nheads)
+    assert dt_bias.shape == (nheads,)
+    assert A.shape == (nheads,)
+    if rmsnorm_weight is not None:
+        assert rmsnorm_weight.shape == (dim,)
+    z, xBC, dt = torch.split(zxbcdt, [dim, dim + 2 * ngroups * dstate, nheads], dim=-1)
+    xBC = rearrange(causal_conv1d_fn(rearrange(xBC, "b s d -> b d s"), conv1d_weight, conv1d_bias, activation=activation),
+                    "b d s -> b s d")
+    x, B, C = torch.split(xBC, [dim, ngroups * dstate, ngroups * dstate], dim=-1)
+    x = rearrange(x, "b l (h p) -> b l h p", h=nheads)
+    B = rearrange(B, "b l (g n) -> b l g n", g=ngroups)
+    C = rearrange(C, "b l (g n) -> b l g n", g=ngroups)
+    z = rearrange(z, "b l (h p) -> b l h p", h=nheads)
+    out = ssd_selective_scan(x, dt.to(x.dtype), A, B, C, D=D.float(),
+                             z=z if rmsnorm_weight is None else None, dt_bias=dt_bias, dt_softplus=True, dt_limit=dt_limit)
+    out: torch.Tensor = rearrange(out, "b s h p -> b s (h p)")
+    if rmsnorm_weight is not None:
+        z = rearrange(z, "b l h p -> b l (h p)")
+        z = z * torch.sigmoid(z)
+        if norm_before_gate:
+            out = out * torch.rsqrt(out.pow(2).mean(-1, keepdim=True) + rmsnorm_eps) * rmsnorm_weight
+            out = out * z
+        else:
+            out = out * z
+            out = out * torch.rsqrt(out.pow(2).mean(-1, keepdim=True) + rmsnorm_eps) * rmsnorm_weight
+    if outproj_weight is not None:
+        out = F.linear(out, outproj_weight, outproj_bias)
+    return out

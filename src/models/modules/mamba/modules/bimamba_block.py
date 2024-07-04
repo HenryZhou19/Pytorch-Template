@@ -34,7 +34,7 @@ class BiMambaBlock(MambaBlock):
         device=None,
         dtype=None,
         bimamba_type="none",
-        if_divide_out=False,
+        if_divide_out=True,
         # init_layer_scale=None,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
