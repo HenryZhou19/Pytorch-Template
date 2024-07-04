@@ -5,16 +5,14 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
-from einops import rearrange, repeat
+from einops import rearrange
 from mamba_ssm.distributed.distributed_utils import all_reduce, reduce_scatter
 from mamba_ssm.distributed.tensor_parallel import (ColumnParallelLinear,
                                                    RowParallelLinear)
 from mamba_ssm.ops.triton.layernorm_gated import RMSNorm as RMSNormGated
-from mamba_ssm.ops.triton.selective_state_update import selective_state_update
-from mamba_ssm.ops.triton.ssd_combined import (
-    mamba_chunk_scan_combined, mamba_split_conv1d_scan_combined)
+from mamba_ssm.ops.triton.ssd_combined import mamba_split_conv1d_scan_combined
+
+from .mamba_inner_interface import mamba_split_conv1d_scan_combined_no_triton
 
 
 class BiMamba2Block(nn.Module):
@@ -48,12 +46,14 @@ class BiMamba2Block(nn.Module):
         dtype=None,
         # bimamba options
         # bimamba_type="v2",
-        if_divide_out=False,
+        if_divide_out=True,
         # init_layer_scale=None,
+        no_triton=True,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         
+        self.ssd_conbined_fn = mamba_split_conv1d_scan_combined_no_triton if no_triton else mamba_split_conv1d_scan_combined
         self.if_divide_out = if_divide_out
         
         self.d_model = d_model
@@ -206,7 +206,7 @@ class BiMamba2Block(nn.Module):
         A_rev = -torch.exp(self.A_log_rev.float())  # (nheads) or (d_inner, d_state)
         dt_limit_kwargs = {} if self.dt_limit == (0.0, float("inf")) else dict(dt_limit=self.dt_limit)
         if self.use_mem_eff_path and inference_params is None:
-            out = mamba_split_conv1d_scan_combined(
+            out = self.ssd_conbined_fn(
                 zxbcdt,
                 rearrange(self.conv1d.weight, "d 1 w -> d w"),
                 self.conv1d.bias,
@@ -214,7 +214,7 @@ class BiMamba2Block(nn.Module):
                 A,
                 D=rearrange(self.D, "(h p) -> h p", p=self.headdim) if self.D_has_hdim else self.D,
                 chunk_size=self.chunk_size,
-                seq_idx=seq_idx,
+                # seq_idx=seq_idx,  # None
                 activation=self.activation,
                 rmsnorm_weight=self.norm.weight if self.rmsnorm else None,
                 rmsnorm_eps=self.norm.eps if self.rmsnorm else 1e-6,
@@ -226,7 +226,7 @@ class BiMamba2Block(nn.Module):
                 **dt_limit_kwargs,
             )
             
-            out_rev = mamba_split_conv1d_scan_combined(
+            out_rev = self.ssd_conbined_fn(
                 zxbcdt_rev.flip([-2]),
                 rearrange(self.conv1d_rev.weight, "d 1 w -> d w"),
                 self.conv1d_rev.bias,
@@ -234,7 +234,7 @@ class BiMamba2Block(nn.Module):
                 A_rev,
                 D=rearrange(self.D, "(h p) -> h p", p=self.headdim) if self.D_has_hdim else self.D,
                 chunk_size=self.chunk_size,
-                seq_idx=seq_idx,
+                # seq_idx=seq_idx,  # None
                 activation=self.activation,
                 rmsnorm_weight=self.norm.weight if self.rmsnorm else None,
                 rmsnorm_eps=self.norm.eps if self.rmsnorm else 1e-6,

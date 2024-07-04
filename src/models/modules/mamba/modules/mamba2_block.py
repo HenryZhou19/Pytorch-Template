@@ -15,6 +15,8 @@ from mamba_ssm.ops.triton.selective_state_update import selective_state_update
 from mamba_ssm.ops.triton.ssd_combined import (
     mamba_chunk_scan_combined, mamba_split_conv1d_scan_combined)
 
+from .mamba_inner_interface import mamba_split_conv1d_scan_combined_no_triton
+
 
 class Mamba2Block(nn.Module):
     def __init__(
@@ -45,9 +47,13 @@ class Mamba2Block(nn.Module):
         sequence_parallel=True,
         device=None,
         dtype=None,
+        no_triton=True,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
+        
+        self.ssd_conbined_fn = mamba_split_conv1d_scan_combined_no_triton if no_triton else mamba_split_conv1d_scan_combined
+        
         self.d_model = d_model
         self.d_state = d_state
         self.d_conv = d_conv
@@ -163,7 +169,7 @@ class Mamba2Block(nn.Module):
         A = -torch.exp(self.A_log.float())  # (nheads) or (d_inner, d_state)
         dt_limit_kwargs = {} if self.dt_limit == (0.0, float("inf")) else dict(dt_limit=self.dt_limit)
         if self.use_mem_eff_path and inference_params is None:
-            out = mamba_split_conv1d_scan_combined(
+            out = self.ssd_conbined_fn(
                 zxbcdt,
                 rearrange(self.conv1d.weight, "d 1 w -> d w"),
                 self.conv1d.bias,
@@ -171,7 +177,7 @@ class Mamba2Block(nn.Module):
                 A,
                 D=rearrange(self.D, "(h p) -> h p", p=self.headdim) if self.D_has_hdim else self.D,
                 chunk_size=self.chunk_size,
-                seq_idx=seq_idx,
+                # seq_idx=seq_idx,  # None
                 activation=self.activation,
                 rmsnorm_weight=self.norm.weight if self.rmsnorm else None,
                 rmsnorm_eps=self.norm.eps if self.rmsnorm else 1e-6,
