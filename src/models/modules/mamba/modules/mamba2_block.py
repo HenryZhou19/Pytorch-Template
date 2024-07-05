@@ -16,6 +16,7 @@ from mamba_ssm.ops.triton.ssd_combined import (
     mamba_chunk_scan_combined, mamba_split_conv1d_scan_combined)
 
 from .mamba_inner_interface import mamba_split_conv1d_scan_combined_no_triton
+from .norm import RMSNormGated as RMSNormGatedNoTriton
 
 
 class Mamba2Block(nn.Module):
@@ -128,9 +129,14 @@ class Mamba2Block(nn.Module):
         self.D._no_weight_decay = True
 
         if self.rmsnorm:
-            assert RMSNormGated is not None
-            self.norm = RMSNormGated(self.d_ssm, eps=1e-5, norm_before_gate=self.norm_before_gate,
-                                     group_size=self.d_ssm // ngroups, **factory_kwargs)
+            if no_triton:
+                assert RMSNormGatedNoTriton is not None
+                self.norm = RMSNormGatedNoTriton(self.d_ssm, eps=1e-5,
+                                                 norm_before_gate=self.norm_before_gate, **factory_kwargs)
+            else:
+                assert RMSNormGated is not None
+                self.norm = RMSNormGated(self.d_ssm, eps=1e-5, norm_before_gate=self.norm_before_gate,
+                                        group_size=self.d_ssm // ngroups, **factory_kwargs)
 
         if self.process_group is None:
             self.out_proj = nn.Linear(self.d_inner, self.d_model, bias=bias, **factory_kwargs)
