@@ -371,6 +371,7 @@ class TrainerBase:
         return outputs, loss, metrics_dict
     
     def _backward_and_step(self, loss: torch.Tensor):
+        grad_norm = None
         def _backward():
             if self.scaler is not None:
                 self.scaler.scale(loss).backward()
@@ -378,19 +379,21 @@ class TrainerBase:
                 loss.backward()
             
         def _optimize():
+            grad_norm = None
             if self.scaler is not None:
                 if self.max_grad_norm > 0:
                     self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
                 if self.max_grad_norm > 0:
-                    torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
             self.optimizer.zero_grad()
             if self.ema_container is not None:
                 self.ema_container.update()
+            return grad_norm
         
         if not math.isfinite(loss) and self.scaler is None:
             LoggerMisc.get_wandb_pid(kill_all=True)
@@ -405,13 +408,14 @@ class TrainerBase:
         # if self.do_gradient_accumulation and (self.trained_iters % self.train_len != 0):  # not the last iter of the epoch
         if self.do_gradient_accumulation:  # just drop the last few steps if not divisible
             if self.step_count % self.gradient_accumulation_steps == 0:
-                _optimize()
+                grad_norm = _optimize()
                 self.step_count = 0
         else:
-            _optimize()
+            grad_norm = _optimize()
         
         self.lr_scheduler.step()  # update special lr_scheduler after each iter
         self.trained_iters += 1
+        return grad_norm
         
     def _train_one_epoch(self):
         cfg = self.cfg
@@ -425,9 +429,10 @@ class TrainerBase:
             epoch_str=f'epoch: [{self.epoch}/{cfg.trainer.epochs}]',
             )
         mlogger.add_metrics([{
-            'loss': ValueMetric(prior=True),
-            **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', no_sync=True) for lr_group in self.lr_groups.keys()},
-            'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True)
+            'loss': ValueMetric(high_prior=True),
+            'grad_norm': ValueMetric(high_prior=True, no_sync=True),
+            **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for lr_group in self.lr_groups.keys()},
+            'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True),
             }])
         first_iter = True
         for batch in mlogger.log_every(self.train_loader):
@@ -441,11 +446,15 @@ class TrainerBase:
                 **metrics_dict,
             )
             
-            self._backward_and_step(loss)
+            grad_norm = self._backward_and_step(loss)
             
             mlogger.update_metrics(
                 epoch=self.trained_iters / self.train_len,
             )
+            if grad_norm is not None:
+                mlogger.update_metrics(
+                    grad_norm=grad_norm,
+                )
             
             if cfg.info.iter_log_freq > 0:
                 if self.trained_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
@@ -468,7 +477,7 @@ class TrainerBase:
             header='Eval ',
             epoch_str=f'epoch: [{self.epoch}/{cfg.trainer.epochs}]',
             )
-        mlogger.add_metrics([{'loss': ValueMetric(prior=True)}])
+        mlogger.add_metrics([{'loss': ValueMetric(high_prior=True)}])
         first_iter = True
         for batch in mlogger.log_every(self.val_loader):
             
