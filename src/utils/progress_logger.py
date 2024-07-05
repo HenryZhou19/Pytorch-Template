@@ -15,7 +15,7 @@ __all__ = [
     ]
 
 class ValueMetric(object):
-    def __init__(self, window_size=None, format=None, final_format=None, prior=False, no_print=False, no_sync=False):
+    def __init__(self, window_size=None, format=None, final_format=None, high_prior=False, low_prior=False, no_print=False, no_sync=False):
         if format is None:  # show current value and average when running
             format = '{value:.4f} ({avg:.4f})'
         if final_format is None:  # show average, min, max, std when one epoch finished
@@ -26,7 +26,9 @@ class ValueMetric(object):
         self.total = 0.0
         self.format = format
         self.final_format = final_format
-        self.prior = prior
+        self.high_prior = high_prior
+        self.low_prior = low_prior
+        assert not (high_prior and low_prior), 'high_prior and low_prior cannot be True at the same time.'
         self.no_print = no_print
         self.require_sync = not no_sync
         self.synced = False
@@ -54,7 +56,10 @@ class ValueMetric(object):
     
     @property
     def std(self):
-        return statistics.stdev(self.deque) if len(self.deque) > 1 else nan
+        try:
+            return statistics.stdev(self.deque) if len(self.deque) > 1 else nan
+        except:
+            return nan
     
     @property
     def avg(self):
@@ -78,11 +83,11 @@ class ValueMetric(object):
         else:
             f = self.format
         return f.format(
-            value=self.value,
-            avg=self.avg,
-            min=self.min,
-            max=self.max,
-            std=self.std,
+            value=self.value if 'value' in f else None,
+            avg=self.avg if 'avg' in f else None,
+            min=self.min if 'min' in f else None,
+            max=self.max if 'max' in f else None,
+            std=self.std if 'std' in f else None,
         )
 
 
@@ -138,20 +143,20 @@ class MetricLogger(object):
         raise AttributeError(f'"{type(self).__name__}" object has no attribute "{attr}"')
 
     def metrics_str(self, final=False, synced=True):
-        prior_metric_s = []
+        high_prior_metric_s = []
         metrics_s = []
+        low_prior_metrics_s = []
         for name, metric in self.metrics.items():
             if metric.no_print:  # skip no_print metrics
                 continue
-            if metric.prior:
-                prior_metric_s.append(
-                    f'{name}: {metric.get_str(final, synced)}'
-                )
+            metric_str = f'{name}: {metric.get_str(final, synced)}'
+            if metric.high_prior:
+                high_prior_metric_s.append(metric_str)
+            elif metric.low_prior:
+                low_prior_metrics_s.append(metric_str)
             else:
-                metrics_s.append(
-                    f'{name}: {metric.get_str(final, synced)}'
-                )
-        return self.delimiter.join(prior_metric_s + metrics_s)
+                metrics_s.append(metric_str)
+        return self.delimiter.join(high_prior_metric_s + metrics_s + low_prior_metrics_s)
     
     def _synchronize_all_processes(self):
         if not DistMisc.is_dist_avail_and_initialized():

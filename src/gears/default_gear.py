@@ -40,7 +40,7 @@ class Trainer(TrainerBase):
         return super()._forward(batch)
     
     def _backward_and_step(self, loss: torch.Tensor):
-        super()._backward_and_step(loss)
+        return super()._backward_and_step(loss)
     
     def _train_one_epoch(self):
         super()._train_one_epoch()
