@@ -474,7 +474,7 @@ class PortalMisc:
             if cfg.trainer.resume is None:
                 log_file_path = os.path.join(cfg.info.work_dir, 'logs.log')
             else:
-                log_file_path = os.path.join(cfg.info.work_dir, f'logs_resume_{cfg.info.resume_start_time}.txt')       
+                log_file_path = os.path.join(cfg.info.work_dir, f'logs_resume_{cfg.info.resume_start_time}.log')       
             loggers.log_file = open(log_file_path, 'a')
             if cfg.env.distributed:
                 LoggerMisc.print_all_pid(file=loggers.log_file)

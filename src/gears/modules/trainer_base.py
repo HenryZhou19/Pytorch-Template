@@ -1,6 +1,7 @@
 import math
 import os
 import time
+import warnings
 from argparse import Namespace
 from copy import deepcopy
 from functools import partial
@@ -49,8 +50,8 @@ class TrainerBase:
         self.start_epoch = 1
         self.epoch = self.start_epoch - 1
         self.train_outputs = {}
-        self.metrics = {}
-        self.best_metrics = {}
+        self.last_val_metrics = {}
+        self.best_val_metrics = {}
         self.train_pbar = None
         self.val_pbar = None
         self.val_epoch_list = self._get_val_epochs()
@@ -78,9 +79,11 @@ class TrainerBase:
             self.ema_criterion.eval()
         
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
-        self.checkpoint_save_interval = self.cfg.trainer.checkpoint_save_interval
-        self.checkpoint_reserve_interval = self.cfg.trainer.checkpoint_save_interval * self.cfg.trainer.checkpoint_reserve_factor
-        
+        self.checkpoint_last_interval = self.cfg.trainer.checkpoint_last_interval  # save the last checkpoint every {checkpoint_last_interval} epochs (keep latest)
+        assert self.checkpoint_last_interval > 0, 'checkpoint_last_interval should be a positive integer.'
+        self.checkpoint_keep_interval = self.cfg.trainer.checkpoint_keep_interval  # save the checkpoint every {checkpoint_keep_interval} epochs (keep all)
+        if self.checkpoint_keep_interval > 0:
+            os.makedirs(os.path.join(self.cfg.info.work_dir, 'checkpoint_keep_storage'), exist_ok=True)
         self._init_autocast()
     
     @property
@@ -165,8 +168,8 @@ class TrainerBase:
                 assert 'scaler' in checkpoint, 'checkpoint does not contain "scaler".'
                 self.scaler.load_state_dict(checkpoint['scaler'])
             self.start_epoch = checkpoint['epoch'] + 1
-            self.best_metrics = checkpoint.get('best_metrics', {})
-            self.metrics = checkpoint.get('last_metrics', {})
+            self.best_val_metrics = checkpoint.get('best_val_metrics', {})
+            self.last_val_metrics = checkpoint.get('last_val_metrics', {})
             self.trained_iters = checkpoint['epoch'] * self.train_len
             self.epoch = self.start_epoch - 1  # will be the same as {checkpoint['epoch'] + 1} by doing '+1' in "before_one_epoch"
         else:
@@ -208,57 +211,61 @@ class TrainerBase:
                 if pretrained_model_path is not None:
                     _load_pretrained_model(pretrained_model_path, pretrain_model_name)
     
+    @staticmethod
+    def __save_or_update_checkpoint(save_files, work_dir, epoch_finished, label):
+        # label: 'last' or 'best'
+        checkpoint_path_list = glob(os.path.join(work_dir, f'checkpoint_{label}_epoch_*.pth'))
+        if len(checkpoint_path_list) > 1:
+            warnings.warn(f'Found {len(checkpoint_path_list)} {label} checkpoints, please check.')
+        max_saved_temp_epoch = max([int(os.path.basename(checkpoint_path).split('_')[-1].split('.')[0]) for checkpoint_path in checkpoint_path_list] + [0])
+        new_path = os.path.join(work_dir, f'checkpoint_{label}_epoch_{epoch_finished}.pth')
+        if max_saved_temp_epoch == 0:
+            torch.save(save_files, new_path)
+        else:
+            old_path = os.path.join(work_dir, f'checkpoint_{label}_epoch_{max_saved_temp_epoch}.pth')
+            torch.save(save_files, old_path)
+            os.rename(old_path, new_path)
+    
     def _save_checkpoint(self):
         # called in "after_one_epoch"
         if DistMisc.is_main_process():
             epoch_finished = self.epoch
+            save_last = epoch_finished % self.checkpoint_last_interval == 0
+            save_keep = epoch_finished % self.checkpoint_keep_interval == 0 if self.checkpoint_keep_interval > 0 else False
             
-            if epoch_finished % self.checkpoint_save_interval == 0:
+            if save_last or save_keep:
                 save_files = {
                     'model': self.model_without_ddp.state_dict(),
                     'ema_container': self.ema_container.state_dict() if self.ema_container is not None else None,
+                    'scaler': self.scaler.state_dict() if self.scaler is not None else None,
                     'optimizer': self.optimizer.state_dict(),
                     'lr_scheduler': self.lr_scheduler.state_dict(),
-                    'last_metrics': self.metrics,
+                    'last_val_metrics': self.last_val_metrics,
                     'epoch': epoch_finished,
                 }
-                if self.scaler is not None:
-                    save_files.update({
-                        'scaler': self.scaler.state_dict()
-                    })
-                last = glob(os.path.join(self.cfg.info.work_dir, 'checkpoint_last_epoch_*.pth'))
-                last_saved_epoch = max([int(os.path.basename(path).split('_')[-1].split('.')[0]) for path in last] + [0])
-                if last_saved_epoch == 0 or (self.checkpoint_reserve_interval > 0 and last_saved_epoch % self.checkpoint_reserve_interval == 0):
-                    torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
-                else:
-                    last_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{last_saved_epoch}.pth')
-                    torch.save(save_files, last_path)
-                    os.rename(last_path, os.path.join(self.cfg.info.work_dir, f'checkpoint_last_epoch_{epoch_finished}.pth'))
+            if save_last:
+                self.__save_or_update_checkpoint(save_files, self.cfg.info.work_dir, epoch_finished, 'last')
+            if save_keep:
+                keep_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_keep_storage/checkpoint_keep_epoch_{epoch_finished}.pth')
+                torch.save(save_files, keep_path)
     
-    def _save_best_checkpoint(self):
+    def _save_best_only_model_checkpoint(self):
         # called in "after_validation"
-        self.best_metrics, save_flag = self.criterion.choose_best(
-                self.metrics, self.best_metrics
+        self.best_val_metrics, last_is_best = self.criterion.choose_best(
+            self.last_val_metrics, self.best_val_metrics
             )
         
         if DistMisc.is_main_process():
             epoch_finished = self.epoch
             
-            if save_flag:
+            if last_is_best:
                 save_files = {
                     'model': self.model_without_ddp.state_dict(),
                     'ema_container': self.ema_container.state_dict() if self.ema_container is not None else None,
-                    'best_metrics': self.best_metrics,
+                    'best_val_metrics': self.best_val_metrics,
                     'epoch': epoch_finished,
                 }
-                
-                best = glob(os.path.join(self.cfg.info.work_dir, 'checkpoint_best_epoch_*.pth'))
-                assert len(best) <= 1
-                if len(best) == 1:
-                    torch.save(save_files, best[0])
-                    os.rename(best[0], os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
-                else:
-                    torch.save(save_files, os.path.join(self.cfg.info.work_dir, f'checkpoint_best_epoch_{epoch_finished}.pth'))
+                self.__save_or_update_checkpoint(save_files, self.cfg.info.work_dir, epoch_finished, 'best')
     
     def _train_mode(self):
         # called in "before_one_epoch"
@@ -331,9 +338,9 @@ class TrainerBase:
         pass
     
     def _after_validation(self, **kwargs):
-        LoggerMisc.logging(self.loggers, 'val_epoch', self.metrics, self.trained_iters)
+        LoggerMisc.logging(self.loggers, 'val_epoch', self.last_val_metrics, self.trained_iters)
         
-        self._save_best_checkpoint()
+        self._save_best_only_model_checkpoint()
     
     def _after_all_epochs(self, **kwargs):
         DistMisc.barrier()
@@ -500,7 +507,7 @@ class TrainerBase:
             for k, v in raw_epoch_metrics.items():
                 ema_epoch_metrics[f'ema_{k}'] = v
             mlogger.add_epoch_metrics(**ema_epoch_metrics)
-        self.metrics = mlogger.output_dict(sync=self.dist_eval, final_print=True)
+        self.last_val_metrics = mlogger.output_dict(sync=self.dist_eval, final_print=True)
     
     def run(self):
         # train and val

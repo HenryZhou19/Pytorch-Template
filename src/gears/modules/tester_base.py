@@ -48,7 +48,7 @@ class TesterBase:
         else:
             self.criterion = criterion
             self.test_loader = test_loader
-            self.metrics = {}
+            self.test_metrics = {}
             self.test_pbar = None
             self.test_len = len(self.test_loader)
             
@@ -97,7 +97,7 @@ class TesterBase:
             else:  # FIXME: deprecated
                 self.ema_container.load_state_dict(checkpoint['ema_model'])
         # print(f'{config.mode} mode: Loading pth from', path)
-        print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_trainer_metrics {checkpoint.get("best_metrics", {})}\nlast_trainer_metrics {checkpoint.get("last_metrics", {})}', '>'))
+        print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_val_metrics {checkpoint.get("best_val_metrics", {})}\nlast_val_metrics {checkpoint.get("last_val_metrics", {})}', '>'))
         if DistMisc.is_main_process():
             if 'epoch' in checkpoint.keys():
                 print('Epoch:', checkpoint['epoch'])
@@ -120,7 +120,7 @@ class TesterBase:
         pass
     
     def _after_inference(self, **kwargs):
-        LoggerMisc.logging(self.loggers,  'infer', self.metrics, None)
+        LoggerMisc.logging(self.loggers,  'infer', self.test_metrics, None)
         
         if DistMisc.is_main_process():          
             self.test_pbar.close()
@@ -176,7 +176,7 @@ class TesterBase:
             for k, v in raw_epoch_metrics.items():
                 ema_epoch_metrics[f'ema_{k}'] = v
             mlogger.add_epoch_metrics(**ema_epoch_metrics)
-        self.metrics = mlogger.output_dict(sync=True, final_print=True)
+        self.test_metrics = mlogger.output_dict(sync=True, final_print=True)
     
     def run(self):
         # prepare for 1. loading model; 2. progress bar
