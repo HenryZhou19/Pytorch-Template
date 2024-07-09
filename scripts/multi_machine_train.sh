@@ -76,7 +76,7 @@ run_cmd() {
   --node_rank=$node_rank \
   --master_addr=$master_addr \
   --master_port=$master_port \
-  train.py --loglevel=ERROR with ${params[@]}
+  train.py with ${params[@]}
 }
 
 args=("$@")

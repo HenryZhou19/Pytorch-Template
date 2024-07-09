@@ -93,7 +93,7 @@ A simple template for Pytorch projects.
 
 ### Migrate or create your datasets, models, and tasks
 
-#### ①These files and folders may not require any changes in most cases:
+#### ① These files and folders may not require any changes in most cases:
 * **scripts/\***
 * **train.py**; **inference.py**
 * **src/engine.py**
@@ -103,7 +103,7 @@ A simple template for Pytorch projects.
 * **src/criterions/modules/\*** (you may add some new files); **src/criterions/\_\_init\_\_.py**
 * **src/gears/modules/\*** (you may add some new files); **src/gears/\_\_init\_\_.py**
 
-#### ②Prepare for datasets:
+#### ② Prepare for datasets:
 1. Create a new 'py' file for your dataset (named ImageNet for example) in **src/datasets** as **src/datasets/imagenet_dataset.py**.
 
 * In your new file, do the following steps just as in **src/datasets/template_dataset.py**.
@@ -165,7 +165,7 @@ A simple template for Pytorch projects.
         ...
     ```
 
-#### ③Prepare for models:
+#### ③ Prepare for models:
 1. Create a new 'py' file for your model (named ResNet for example) in **src/models** as **src/models/resnet_model.py**.
 
 * In your new file, do the following steps just as in **src/models/template_model.py**.
@@ -195,7 +195,7 @@ A simple template for Pytorch projects.
         ...
     ```
 
-#### ④Prepare for criterions (losses and metrics):
+#### ④ Prepare for criterions (losses and metrics):
 1. Create a new 'py' file for your criterion (still named ResNet for example) in **src/criterions** as **src/criterions/resnet_criterion.py**.
 
 * In your new file, do the following steps just as in **src/criterions/template_criterion.py**.
@@ -260,7 +260,7 @@ A simple template for Pytorch projects.
         ...
     ```
 
-#### ⑤(Optional) Prepare for gears (trainers and testers):
+#### ⑤ (Optional) Prepare for gears (trainers and testers):
 * You may not need to create your trainers or testers in most easy tasks.
 * But if you want to control training, validation, and testing procedures better:
 1. Create a new 'py' file for your task (still named ResNet for example) in **src/gears** as **src/gears/resnet_gear.yaml**.
@@ -278,7 +278,7 @@ A simple template for Pytorch projects.
 
 3. (Further optional) Create a TesterBase class...
 
-#### ⑥Prepare for config files:
+#### ⑥ Prepare for config files:
 1. Create a new 'yaml' file for your task (still named ResNet for example) in **configs** as **configs/train_resnet.yaml**.
 
 * In your new file, do the following steps just as in **src/models/template_model.py**.
@@ -309,7 +309,7 @@ A simple template for Pytorch projects.
 
 5. You may explore the usage of other configs by reading the comments in 'default_xxx.yaml' and 'template_xxx.yaml' files.
 
-#### ⑦Run the task:
+#### ⑦ Run the task:
 
  * Just use the 'yaml' file name of your task and run it by any device configurations (CPU, GPU, GPUs) mentioned earlier.
     ```

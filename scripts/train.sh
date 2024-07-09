@@ -61,7 +61,7 @@ run_cmd() {
   torchrun \
   --nproc_per_node=$nproc_per_node \
   --master_port=$master_port \
-  train.py --loglevel=ERROR with ${params[@]}
+  train.py with ${params[@]}
 }
 
 run_cpu_cmd() {
@@ -71,7 +71,7 @@ run_cpu_cmd() {
   WANDB_CACHE_DIR=~/.cache/wandb \
   WANDB_CONFIG_DIR=~/.config/wandb \
   python \
-  train.py --loglevel=ERROR with ${params[@]}
+  train.py with ${params[@]}
 }
 
 args=("$@")

@@ -102,6 +102,7 @@ class ConfigMisc:
     
     @staticmethod
     def _get_configs_from_sacred(main_config_path, additional_config_paths, do_print=False):
+        sys.argv.extend(['--loglevel=ERROR'])
         ex = sacred.Experiment('Config Collector', save_git_info=False)
         
         for additional_config_path in additional_config_paths:
