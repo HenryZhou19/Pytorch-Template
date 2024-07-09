@@ -24,19 +24,20 @@ class CriterionBase(nn.Module):
         trainable_params = [p for p in self.parameters() if p.requires_grad]
         assert len(trainable_params) == 0, f'Criterion {self.__class__} has trainable parameters.'
 
-    def choose_best(self, metric: dict, best_metric: dict):
-          
-        def compare_primary_criterion(m, b_m):
-            assert self.primary_criterion in m, f'best_criterion "{self.primary_criterion}" not in metric {m}'
-            if self.choose_better_fn(m[self.primary_criterion], b_m[self.primary_criterion]):
-                return m, True
+    def choose_best(self, last_metric: dict, best_metric: dict):
+        # return: new_best_metric, FLAG[last_is_better]
+        def compare_primary_criterion(l_m, b_m):
+            assert self.primary_criterion in l_m, f'best_criterion "{self.primary_criterion}" not in metric {l_m}'
+            if self.choose_better_fn(l_m[self.primary_criterion], b_m[self.primary_criterion]):
+                return l_m, True
             else:
                 return b_m, False
 
-        if metric == {} or best_metric == {}:
-            return metric, True
+        assert last_metric != {}, f'last_metric is empty.'
+        if best_metric == {}:
+            return last_metric, True
         
-        return compare_primary_criterion(metric, best_metric)
+        return compare_primary_criterion(last_metric, best_metric)
         
     def forward(self, outputs, targets, infer_mode=False):
         """
