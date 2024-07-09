@@ -20,7 +20,7 @@ info:
   # iter_log_freq: 10  # NO NEED. only one epoch when inference
   cli_log_freq: 1
   # global_tqdm: True  # NO NEED. only one epoch
-  # torchinfo: True  # NO NEED. print model info to log.txt
+  # torchinfo: True  # NO NEED. print model info to logs.log
   # print_param_names: True  # NO NEED.
 
 tester:
