@@ -2,9 +2,11 @@
 
 
 # Pytorch Template
-A simple template for Pytorch projects.
 
-## Easy Start
+A simple template for Pytorch projects.
+## 👉 [GitHub Repository](https://github.com/HenryZhou19/Pytorch-Template)
+
+## 🚀 Easy Start
 ### Create a new Python environment and install the requirements
  ```
  # use conda as an example
@@ -317,12 +319,13 @@ A simple template for Pytorch projects.
 ---
 -> Easy Start ends here. Following are some more hints.
 
-## Requirements
+## 📑 Brief introduction to files & folders in this repo
+
+### requirements
 * './requirements.txt' is only an imperfect recommendation for the packages (especially the versions of Python and Pytorch) you need to install.
 * Some common packages are not listed in the file.
 * You may try different versions of the packages.
 
-## Introduction to files & folders in this repo
 ### configs
 * the folder for "xxx.yaml" files
     * some contain main configs for train or inference in a certain setting
