@@ -49,7 +49,7 @@ trainer:
     warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
     # lr_min_factor: 0.0  # default
     # warmup_type: linear  # default
-  max_grad_norm: 1.0  # <= 0 means no gradient clipping
+  max_grad_norm: 1.0  # .inf means no gradient clipping (setting to 0.0 is the same in training procedure, but grad_norm will not be logged)
 
 sweep:
   sweep_enabled: True
