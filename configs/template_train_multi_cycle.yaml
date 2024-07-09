@@ -40,7 +40,7 @@ trainer:
     sgd_momentum: 0.9
     lr_default: 4.0e-4
     wd_default: 1.0e-2
-    # param_groups:  # xx_name means if string 'name' in named_parameters, use this xx settings
+    # param_groups:  # xx_name means if string 'name' in named_parameters, use these xx settings
     #   lr_backbone: 4.0e-4
     #   wd_backbone: 1.0e-2
     #   lr_head: 1.0e-4

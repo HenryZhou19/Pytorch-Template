@@ -1,7 +1,9 @@
 import re
 
 
-def get_metrics_from_log(log_file_path):
+def get_metrics_from_log(log_file_path: str):
+    assert log_file_path.endswith(('txt', 'log')), f'log_file_path should be a .txt or .log file, but got {log_file_path}'
+    
     with open(log_file_path, 'r') as file:
         log_content = file.read()
 

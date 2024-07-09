@@ -471,7 +471,7 @@ class PortalMisc:
                 #     )  # tensorboard's hparams logging strategy is not very useful in this case.
             
             if cfg.trainer.resume is None:
-                log_file_path = os.path.join(cfg.info.work_dir, 'logs.txt')
+                log_file_path = os.path.join(cfg.info.work_dir, 'logs.log')
             else:
                 log_file_path = os.path.join(cfg.info.work_dir, f'logs_resume_{cfg.info.resume_start_time}.txt')       
             loggers.log_file = open(log_file_path, 'a')
@@ -751,7 +751,7 @@ class ModelMisc:
                         depth=9,
                         verbose=0,
                         )
-                # Check model info in OUTPUT_PATH/logs.txt
+                # Check model info in OUTPUT_PATH/logs.log
                 print(print_str, file=trainer.loggers.log_file)    
                 print(LoggerMisc.block_wrapper(f'torchinfo: Model structure and summary have been saved.'))
             

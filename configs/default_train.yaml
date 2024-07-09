@@ -26,7 +26,7 @@ info: # info & wandb
   iter_log_freq: 10  # <= 0 means only log when an epoch ends
   cli_log_freq: 1
   global_tqdm: True
-  torchinfo: True  # print model info to log.txt
+  torchinfo: True  # print model info to logs.log
   print_param_names: True
 
 model:
