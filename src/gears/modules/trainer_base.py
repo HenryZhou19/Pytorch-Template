@@ -212,7 +212,7 @@ class TrainerBase:
                     _load_pretrained_model(pretrained_model_path, pretrain_model_name)
     
     @staticmethod
-    def __save_or_update_checkpoint(save_files, work_dir, epoch_finished, label):
+    def _save_or_update_checkpoint(save_files, work_dir, epoch_finished, label):
         # label: 'last' or 'best'
         checkpoint_path_list = glob(os.path.join(work_dir, f'checkpoint_{label}_epoch_*.pth'))
         if len(checkpoint_path_list) > 1:
@@ -244,7 +244,7 @@ class TrainerBase:
                     'epoch': epoch_finished,
                 }
             if save_last:
-                self.__save_or_update_checkpoint(save_files, self.cfg.info.work_dir, epoch_finished, 'last')
+                self._save_or_update_checkpoint(save_files, self.cfg.info.work_dir, epoch_finished, 'last')
             if save_keep:
                 keep_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_keep_storage/checkpoint_keep_epoch_{epoch_finished}.pth')
                 torch.save(save_files, keep_path)
@@ -265,7 +265,7 @@ class TrainerBase:
                     'best_val_metrics': self.best_val_metrics,
                     'epoch': epoch_finished,
                 }
-                self.__save_or_update_checkpoint(save_files, self.cfg.info.work_dir, epoch_finished, 'best')
+                self._save_or_update_checkpoint(save_files, self.cfg.info.work_dir, epoch_finished, 'best')
     
     def _train_mode(self):
         # called in "before_one_epoch"
