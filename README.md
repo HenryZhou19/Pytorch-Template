@@ -71,7 +71,7 @@ A simple template for Pytorch projects.
     ```
 
 ### outputs of the running task
-* You can find the outputs where the path is defined in the corresponding 'yaml' file in './configs' (info.output_dir)
+* You can find the outputs where the path is defined in the corresponding 'yaml' file in './configs' (info.output_dir):
     * current_project files
     * checkpoints of the latest and the best model (the latest one includes the state of optimizer and scheduler etc., so it can be used to resume the task)
     * logs.log with model's structure, summary...
@@ -96,7 +96,6 @@ A simple template for Pytorch projects.
 #### ① These files and folders may not require any changes in most cases:
 * **scripts/\***
 * **train.py**; **inference.py**
-* **src/engine.py**
 * **src/utils/\*** (except for **src/utils/optimizer/\***, if you need some special optimizers and lr_schedulers)
 * **src/datasets/modules/\*** (you may add some new files); **src/datasets/\_\_init\_\_.py**
 * **src/models/modules/\*** (you may add some new files); **src/models/\_\_init\_\_.py**
@@ -332,7 +331,7 @@ A simple template for Pytorch projects.
     * others are used as inheritances specified by "config.additional" in main yaml files
 * most of the things can be configured easily in "xxx.yaml" files
 
-### data
+### data or datasets
 * the folder for data (images, videos, texts, etc.) files, which will not be included by git
 
 ### outputs*
@@ -346,7 +345,7 @@ A simple template for Pytorch projects.
     * <u>"bash scripts/train.sh -d 0,1"</u> to train on GPU0 and GPU1 with config file "configs/template_train.yaml"
     * <u>"bash scripts/train.sh -c template_train_lenet -d 0"</u> to train on GPU0 with config file "configs/template_train_lenet.yaml"
     * <u>"bash scripts/train.sh -d 0,1,2,3 trainer.trainer_batch_size_per_rank=16"</u> to train on GPU 0~3 with config file "configs/template_train.yaml", in which the default "trainer_batch_size_per_rank" will be changed to 16
-    * ……
+    * ......
 
 ### src
 * the folder for all Python scripts except for train.py and inference.py
@@ -373,4 +372,4 @@ A simple template for Pytorch projects.
     * "LoggerMisc.block_wrapper(input)" prints the input with decorations
     * "TensorMisc.GradCollector(x)" collects the grad of Tensor x
     * "with TimeMisc.TimerContext(block_name):..." shows the time it takes to execute a particular block of code
-    * ……
+    * ......
