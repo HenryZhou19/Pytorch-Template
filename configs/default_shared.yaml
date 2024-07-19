@@ -1,0 +1,24 @@
+config:
+  main: TBD  # name of the main config file, will be overwritten by sacred (specified in .sh file, no need to name it here) 
+
+env:
+  device: cuda  # cuda or cpu (if 'cpu', specified in .sh file) 
+  distributed: TBD
+  world_size: TBD
+  rank: TBD
+  local_rank: TBD
+  dist_backend: TBD
+  dist_url: TBD
+  num_workers: 4
+  prefetch_factor: 2
+  pin_memory: True
+
+special:
+  debug: null  # 'normal', 'one_iter', 'one_epoch', 'one_val_epoch', null for no debug
+  no_logger: False  # if True, no loggers will be used
+  save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
+  print_save_config_ignore: [sweep]
+  logger_config_ignore: [config, env, info, sweep, special]
+  extra_name: null  # null for no extra name
+
+seed_base: 42

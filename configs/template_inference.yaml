@@ -1,0 +1,16 @@
+config:  # main config (in this file) overrides additional configs
+  additional: [default_shared, default_inference]  # add additional config file names, e.g. [default_xxx] --- the order matters (later ones overwrite previous ones)
+
+tester:
+  ## batch_control
+  tester_batch_size_per_rank: 4
+  ## batch_control ends
+  tester_choice: default
+  use_best: True
+  checkpoint_path: TBD
+  train_cfg_path: to_be_specified  # XXX: required
+
+sweep:
+  sweep_enabled: False
+  sweep_params:  # use '//' as the connector for sub-params 
+    tester//tester_batch_size_per_rank: [1, 2]

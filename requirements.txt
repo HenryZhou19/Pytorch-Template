@@ -1,0 +1,21 @@
+# conda create -n pytorch-template python=3.10
+
+torch
+torchvision
+
+wheel
+hjson
+numpy<2.0.0
+opencv-python
+sacred==0.8.5
+tensorboard
+torchinfo
+tqdm
+wandb
+ema-pytorch==0.4.5
+
+## project requirements
+scikit-image
+matplotlib
+pandas
+torchmetrics

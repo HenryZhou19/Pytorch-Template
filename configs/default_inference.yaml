@@ -1,0 +1,31 @@
+env:
+  amp:
+    amp_enabled: True
+    amp_inference: True
+    amp_mode: fp16  # fp16, bf16
+  
+info:
+  task_type: Infer  # Test, Infer, ...
+  batch_info: TBD
+  name_tags: [special.extra_name, model.model_choice, data.dataset, info.batch_info]
+  wandb:
+    wandb_enabled: True
+    wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
+    wandb_watch_model: False  # do not use if it's unnecessary
+    wandb_watch_freq: 100
+    wandb_buffer_time: 300  # seconds
+  tensorboard:
+    tensorboard_enabled: True
+    # tensorboard_graph: False  # NO NEED
+  # iter_log_freq: 10  # NO NEED. only one epoch when inference
+  cli_log_freq: 1
+  # global_tqdm: True  # NO NEED. only one epoch
+  # torchinfo: True  # NO NEED. print model info to logs.log
+  # print_param_names: True  # NO NEED.
+
+tester:
+  ## batch_control
+  tester_batch_size_per_rank: null  # override this in main config
+  ## batch_control ends
+  tester_breath_time: 0.0
+  tester_choice: default
