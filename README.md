@@ -3,7 +3,12 @@
 
 # Pytorch Template
 
-A simple template for Pytorch projects.
+***A simple template for Pytorch projects.***  
+⭐Prepare for datasets, models, criterions, and it will work.  
+⭐Help focusing on the main tasks in your research.  
+⭐Various common operations and tools are intergrated and simplified.  
+⭐Easy to use, easy to extend, easy to maintain.  
+
 ## 👉 [GitHub Repository](https://github.com/HenryZhou19/Pytorch-Template)
 
 ## 🚀 Easy Start
