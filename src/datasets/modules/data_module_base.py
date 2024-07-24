@@ -1,3 +1,4 @@
+import itertools
 import random
 from functools import partial
 
@@ -186,6 +187,23 @@ class _InfiniteSampler:
     def __iter__(self):
         while True:
             yield from iter(self.sampler)
+            
+
+class FixedLengthSampler:
+    def __init__(self, raw_sampler_list, required_length):
+        self.raw_sampler_list = raw_sampler_list
+        self.required_length = required_length
+        self._check_length()
+        
+    def _check_length(self):
+        total_length = sum(map(len, self.raw_sampler_list))
+        assert total_length >= self.required_length, f'total_length {total_length} < required_length {self.required_length}'
+        
+    def __iter__(self):
+        return itertools.islice(itertools.chain(*self.raw_sampler_list), self.required_length)
+    
+    def __len__(self):
+        return self.required_length
 
 
 class FixedLengthDataLoaderX(DataLoaderX):
@@ -196,26 +214,25 @@ class FixedLengthDataLoaderX(DataLoaderX):
         
     def __len__(self):
         return self._total_batches_one_epoch
-        
-    def __iter__(self):
-        for _ in range(len(self)):
-            yield next(self._get_repeated_iterator())
-        
-    def _get_repeated_iterator(self):
-        while True:
-            yield from self._get_iterator_with_sampler_set_epoch()
-        
-    def _get_iterator_with_sampler_set_epoch(self):
-        if self.persistent_workers and self.num_workers > 0:
-            if self._iterator is None:
-                self._iterator = self._get_iterator()
-            else:
-                # in one epoch, the dataloader will be reused until reaching the total_batches_one_epoch
-                # so we need to reset the sampler and the iterator
-                self._iterator._reset(self)
-            self.sampler_set_epoch(self._current_epoch + self._total_batches_one_epoch)
-            return self._iterator
+    
+    @property
+    def _raw_index_sampler(self):
+        if self._auto_collation:
+            return self.batch_sampler
         else:
-            _iterator = self._get_iterator()
-            self.sampler_set_epoch(self._current_epoch + self._total_batches_one_epoch)
-            return _iterator
+            return self.sampler
+    
+    @property
+    def _index_sampler(self):
+        raw_index_sampler = self._raw_index_sampler
+        len_raw_index_sampler = len(raw_index_sampler)
+        
+        raw_index_sampler_list = [raw_index_sampler]
+        now_length = len_raw_index_sampler
+        
+        while now_length < self._total_batches_one_epoch:
+            self.sampler_set_epoch(self._current_epoch + self._total_epochs)
+            raw_index_sampler_list.append(self._raw_index_sampler)
+            now_length += len_raw_index_sampler
+    
+        return FixedLengthSampler(raw_index_sampler_list, self._total_batches_one_epoch)
