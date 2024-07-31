@@ -559,14 +559,14 @@ class DistMisc:
         x: torch.Tensor
         world_size = DistMisc.get_world_size()
         if world_size == 1:
-            return [x]
-        
-        N = torch.tensor(x.shape[0], dtype=torch.int, device=x.device)
-        N_list = [torch.zeros(1, dtype=torch.int, device=x.device) for _ in range(world_size)]
-        dist.all_gather(N_list, N)
-            
-        x_list = [torch.empty(N.item(), *x.shape[1:], dtype=x.dtype, device=x.device) for N in N_list]
-        dist.all_gather(x_list, x)
+            x_list = [x]
+        else:
+            N = torch.tensor(x.shape[0], dtype=torch.int, device=x.device)
+            N_list = [torch.zeros(1, dtype=torch.int, device=x.device) for _ in range(world_size)]
+            dist.all_gather(N_list, N)
+                
+            x_list = [torch.empty(N.item(), *x.shape[1:], dtype=x.dtype, device=x.device) for N in N_list]
+            dist.all_gather(x_list, x)
         
         if concat_out:
             return torch.cat(x_list, dim=0)

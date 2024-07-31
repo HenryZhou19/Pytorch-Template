@@ -124,7 +124,7 @@ class MetricLogger(object):
             
     def add_epoch_metrics(self, **kwargs):
         for k, v in kwargs.items():
-            if isinstance(v, (torch.Tensor, np.ndarray)):
+            if isinstance(v, (torch.Tensor, np.ndarray, np.number)):
                 v = v.item()
             assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
             self.metrics[k] = ValueMetric(
