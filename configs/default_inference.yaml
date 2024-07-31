@@ -7,7 +7,7 @@ env:
 info:
   task_type: Infer  # Test, Infer, ...
   batch_info: TBD
-  name_tags: [special.extra_name, model.model_choice, data.dataset, info.batch_info]
+  name_tags: [special.extra_name]
   wandb:
     wandb_enabled: True
     wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
