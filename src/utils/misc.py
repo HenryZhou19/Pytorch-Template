@@ -550,16 +550,28 @@ class DistMisc:
             time.sleep(DistMisc.get_rank() * 0.1)
     
     @staticmethod
-    def all_gather(x):
+    def all_gather(x, concat_out=False):
+        '''
+        x: [N, *]
+        N can be different on different processes
+        Make sure (*) is the same shape on all processes
+        '''
         x: torch.Tensor
         world_size = DistMisc.get_world_size()
         if world_size == 1:
             return [x]
+        
+        N = torch.tensor(x.shape[0], dtype=torch.int, device=x.device)
+        N_list = [torch.zeros(1, dtype=torch.int, device=x.device) for _ in range(world_size)]
+        dist.all_gather(N_list, N)
             
-        x_list = [torch.empty_like(x)] * world_size
+        x_list = [torch.empty(N.item(), *x.shape[1:], dtype=x.dtype, device=x.device) for N in N_list]
         dist.all_gather(x_list, x)
         
-        return x_list
+        if concat_out:
+            return torch.cat(x_list, dim=0)
+        else:
+            return x_list
     
     @staticmethod
     def reduce_dict(input_dict, average=True):
