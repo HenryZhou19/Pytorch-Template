@@ -222,8 +222,8 @@ class ConfigMisc:
         return specific_list
     
     @staticmethod
-    def output_dir_extras(cfg):
-        extras = '_'.join([cfg.info.start_time] + ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
+    def output_dir_extras(cfg, is_infer=False):
+        extras = '_'.join([cfg.info.infer_start_time if is_infer else cfg.info.start_time] + ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
         if cfg.special.debug is not None:
             extras = 'debug_' + extras
         return extras
@@ -319,9 +319,9 @@ class PortalMisc:
             print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', '#'))
         
         if custom_work_dir is not None:
-            cfg.info.work_dir = os.path.join(custom_work_dir, cfg.info.infer_start_time)
+            cfg.info.work_dir = os.path.join(custom_work_dir, ConfigMisc.output_dir_extras(cfg, is_infer=True))
         else:
-            cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + cfg.info.infer_start_time
+            cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + ConfigMisc.output_dir_extras(cfg, is_infer=True)
         cfg.trainer.grad_accumulation = 1
         if DistMisc.is_main_process():
             if not os.path.exists(cfg.info.work_dir):
