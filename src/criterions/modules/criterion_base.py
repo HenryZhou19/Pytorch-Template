@@ -45,7 +45,7 @@ class CriterionBase(nn.Module):
         
         return compare_primary_criterion(last_metric, best_metric)
         
-    def forward(self, outputs, targets):
+    def forward(self, outputs, targets, *args, **kwargs):
         """
         outputs: dict
         targets: dict
@@ -65,7 +65,7 @@ class CriterionBase(nn.Module):
         if self.infer_mode:
             assert self.training == False, f'CriterionModule {self.__class__} is in training mode while infer_mode is True.'
             
-        loss, metrics_dict = self._get_iter_loss_and_metrics(outputs, targets)
+        loss, metrics_dict = self._get_iter_loss_and_metrics(outputs, targets, *args, **kwargs)
         
         if self.ema_mode:
             ema_metrics_dict = metrics_dict
@@ -82,7 +82,7 @@ class CriterionBase(nn.Module):
             
         return epoch_metrics_dict
         
-    def _get_iter_loss_and_metrics(self, outputs, targets):
+    def _get_iter_loss_and_metrics(self, outputs, targets, *args, **kwargs):
         """
         calculate loss and metrics for one iteration
         """
