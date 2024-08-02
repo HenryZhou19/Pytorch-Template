@@ -401,9 +401,12 @@ class PortalMisc:
             
         if cfg.special.save_current_project:
             PortalMisc._save_currect_project(cfg)
+            
+        if cfg.special.print_config_start:
+            PortalMisc._print_config(cfg, force_all_rank=cfg.special.print_config_all_rank)
     
     @staticmethod
-    def print_config(cfg, force_all_rank=False):
+    def _print_config(cfg, force_all_rank=False):
         modified_cfg_dict = cfg.modified_cfg_dict
         
         def write_msg_lines(msg_in, cfg_in, indent=1):
@@ -486,9 +489,9 @@ class PortalMisc:
         return loggers
     
     @staticmethod 
-    def end_everything(cfg, loggers, end_with_printed_cfg=False, force=False):
-        if end_with_printed_cfg:
-            PortalMisc.print_config(cfg)
+    def end_everything(cfg, loggers, force=False):
+        if cfg.special.print_config_end:
+            PortalMisc._print_config(cfg, force_all_rank=cfg.special.print_config_all_rank)
         seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_string(), cfg.info.start_time))
         if DistMisc.is_main_process():
             loggers.log_file.close()
