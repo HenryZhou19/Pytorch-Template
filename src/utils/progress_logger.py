@@ -175,7 +175,7 @@ class MetricLogger(object):
         summary_stack = torch.stack(summary_list, dim=0)
         dist.barrier()
         dist.all_reduce(summary_stack)
-        gathered_queue_stack = [None] * DistMisc.get_world_size()
+        gathered_queue_stack = [None for _ in range(DistMisc.get_world_size())]
         dist.all_gather_object(gathered_queue_stack, queue_stack)
         queue_stack = torch.cat(gathered_queue_stack, dim=1)
         require_sync_metric_idx = 0

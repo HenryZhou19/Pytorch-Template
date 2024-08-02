@@ -9,8 +9,11 @@ from src.utils.register import Register
 model_register = Register('model')
 
 class ModelBase(nn.Module):
+    registered_name: str
+    
     def __init__(self, cfg):
         super().__init__()
+        self.ema_mode = False
         self.cfg = cfg
         self.do_grad_checkpoint = cfg.trainer.grad_checkpoint
         

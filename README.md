@@ -220,9 +220,8 @@
             self.epoch_correct_count = 0  # init
             self.epoch_sample_count = 0  # init
             
-        def forward(self, outputs, targets, infer_mode=False):
-            super().forward(outputs, targets, infer_mode)
-
+        def _get_iter_loss_and_metrics(self, outputs, targets):
+            # this method will be called in the forward method of the CriterionBase
             output_1 = outputs['OUTPUT_1_NAME']
             ...
             target_1 = targets['TARGET_1_NAME']   
@@ -243,7 +242,8 @@
             }  # loss, metrics_dict
 
         # if some metrics can not be calculated by averaging the metrics of one sample (called automatically when an epoch ends)
-        def get_epoch_metrics_and_reset(self):
+        def _get_epoch_metrics_and_reset(self):
+            # this method will be called in the forward_epoch_metrics method of the CriterionBase
             import torch.distributed as dist
             from src.utils.misc import DistMisc
 

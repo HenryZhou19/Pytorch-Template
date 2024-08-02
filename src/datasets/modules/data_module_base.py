@@ -13,6 +13,8 @@ from src.utils.register import Register
 data_module_register = Register('data_module')
 
 class DataModuleBase:
+    registered_name: str
+    
     def __init__(self, cfg):
         self.cfg = cfg
         self.train_dataset = None

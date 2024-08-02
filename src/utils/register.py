@@ -6,6 +6,7 @@ class Register:
     def __call__(self, class_name):
         def decorator(_class):
             self.registered_classes[class_name] = _class
+            _class.registered_name = class_name
             return _class
         return decorator
 

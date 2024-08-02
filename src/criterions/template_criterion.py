@@ -11,9 +11,7 @@ class SimpleCriterion(CriterionBase):
         self.mse_loss = nn.MSELoss()
         self.l1_loss = nn.L1Loss()
         
-    def forward(self, outputs, targets, infer_mode=False):
-        super().forward(outputs, targets, infer_mode)
-        
+    def _get_iter_loss_and_metrics(self, outputs, targets):
         pred_y = outputs['pred_y']
         gt_y = targets['gt_y']   
 
@@ -29,7 +27,7 @@ class SimpleCriterion(CriterionBase):
         gt_y = gt_y.detach()
         l1_loss = self.l1_loss(pred_y, gt_y.reshape_as(pred_y))
 
-        # if infer_mode:
+        # if self.infer_mode:
         #     return None, {
         #         'mse_loss': mse_loss,
         #         'L1_loss': l1_loss,
@@ -59,9 +57,7 @@ class MnistCriterion(CriterionBase):
         self.epoch_sample_count = 0
         self.epoch_correct_count = 0
         
-    def forward(self, outputs, targets, infer_mode=False):
-        super().forward(outputs, targets, infer_mode)
-        
+    def _get_iter_loss_and_metrics(self, outputs, targets):
         pred_scores = outputs['pred_scores']
         gt_y = targets['gt_y']   
 
@@ -81,7 +77,7 @@ class MnistCriterion(CriterionBase):
             'ce_loss': ce_loss,
             }
 
-    def get_epoch_metrics_and_reset(self):
+    def _get_epoch_metrics_and_reset(self):
         import torch.distributed as dist
 
         from src.utils.misc import DistMisc

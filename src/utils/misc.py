@@ -948,6 +948,12 @@ class LoggerMisc:
         return '\n' + s * block_width + '\n' + str_input + s * block_width + '\n'
     
     @staticmethod
+    def set_dict_key_prefix(input_dict: dict, prefix):
+        return {
+            f'{prefix}{k}': v for k, v in input_dict.items()
+            }
+    
+    @staticmethod
     def list_to_multiline_string(items: list, prefix='\t', suffix=''):
         return '\n'.join([prefix + str(item) + suffix for item in items])
     
