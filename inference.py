@@ -52,11 +52,8 @@ def infer_portal(infer_cfg):
     # seed everything
     PortalMisc.seed_everything(cfg)
     
-    # save configs to work_dir as .yaml file (and save current project files if needed)
+    # save configs to work_dir as .yaml file (and save current project files, print config to CLI if needed)
     PortalMisc.save_configs(cfg)
-    
-    # choose whether to print configs of each rank
-    PortalMisc.print_config(cfg, force_all_rank=False)
     
     # init loggers (wandb/tensorboard and local:log_file)
     loggers = PortalMisc.init_loggers(cfg)
@@ -65,7 +62,7 @@ def infer_portal(infer_cfg):
     test_run(cfg, loggers)
     
     # end everything
-    PortalMisc.end_everything(cfg, loggers, end_with_printed_cfg=True)
+    PortalMisc.end_everything(cfg, loggers)
 
 
 if __name__ == '__main__':

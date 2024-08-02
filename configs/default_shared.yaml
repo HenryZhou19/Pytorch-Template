@@ -17,6 +17,9 @@ special:
   debug: null  # 'normal', 'one_iter', 'one_epoch', 'one_val_epoch', null for no debug
   no_logger: False  # if True, no loggers will be used
   save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
+  print_config_start: False  # if True, print config at the start of the run
+  print_config_end: False  # if True, print config at the end of the run
+  print_config_all_rank: False  # if True, print config for all ranks when "print_config_start" or "print_config_end" is True
   print_save_config_ignore: [sweep]
   logger_config_ignore: [config, env, info, sweep, special]
   extra_name: null  # null for no extra name
