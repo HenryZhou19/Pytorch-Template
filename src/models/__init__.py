@@ -1,5 +1,6 @@
 import ema_pytorch
 import torch
+from ema_pytorch.ema_pytorch import EMA
 
 from src.utils.misc import ImportMisc
 
@@ -36,7 +37,9 @@ class ModelManager(object):
                 'update_every': self.cfg.model.ema.ema_update_every,
                 'include_online_model': False,
                 }
-            ema_container = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
+            ema_container: EMA = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
+            assert hasattr(ema_container.ema_model, 'ema_mode'), 'ema_container.ema_model doesn\'t have ema_mode attribute, which means the model is not a ModelBase instance.'
+            ema_container.ema_model.ema_mode = True
             if verbose:
                 print('EMA_model built successfully.')
                 

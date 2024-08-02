@@ -17,6 +17,8 @@ from src.utils.register import Register
 tester_register = Register('tester')
 
 class TesterBase:
+    registered_name: str
+    
     def __init__(
         self,
         cfg: Namespace,
@@ -47,6 +49,8 @@ class TesterBase:
                 self.ema_container.eval()
         else:
             self.criterion = criterion
+            assert hasattr(self.criterion, 'infer_mode'), 'criterion doesn\'t have infer_mode attribute, which means the criterion is not a CriterionBase instance.'
+            self.criterion.infer_mode = True
             self.test_loader = test_loader
             self.test_metrics = {}
             self.test_pbar = None
@@ -58,6 +62,10 @@ class TesterBase:
                 self.ema_container.eval()
                 print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
                 self.ema_criterion = deepcopy(self.criterion)
+                assert hasattr(self.ema_criterion, 'ema_mode'), 'ema_criterion doesn\'t have ema_mode attribute, which means the criterion is not a CriterionBase instance.'
+                self.ema_criterion.ema_mode = True
+                assert hasattr(self.ema_criterion, 'infer_mode'), 'ema_criterion doesn\'t have infer_mode attribute, which means the criterion is not a CriterionBase instance.'
+                self.criterion.infer_mode = True
                 self.ema_criterion.eval()
                 
             self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
@@ -135,14 +143,13 @@ class TesterBase:
         with torch.no_grad():
             with self.inference_autocast():
                 outputs = self.model(inputs)
-                loss, metrics_dict = self.criterion(outputs, targets, infer_mode=True)
+                loss, metrics_dict = self.criterion(outputs, targets)
                 
                 if self.ema_container is not None:
                     ema_outputs = self.ema_container(inputs)
-                    ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
-                    # metrics_dict['ema_loss'] = ema_loss  # no need to show 'loss' & 'ema_loss' in inference
-                    for key, value in ema_metrics_dict.items():
-                        metrics_dict[f'ema_{key}'] = value
+                    _, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
+                    outputs.update(LoggerMisc.set_dict_key_prefix(ema_outputs, 'ema_'))
+                    metrics_dict.update(ema_metrics_dict)
             
         return outputs, loss, metrics_dict
     
@@ -155,13 +162,15 @@ class TesterBase:
             pbar=self.test_pbar,  
             header='Test',
             )
+        mlogger.add_metrics([{'loss': ValueMetric(high_prior=True)}])
         first_iter = True
         for batch in mlogger.log_every(self.test_loader):
             
-            outputs, _, metrics_dict = self._forward(batch)
+            _, loss, metrics_dict = self._forward(batch)
                 
             mlogger.update_metrics(
                 sample_count=batch['batch_size'],
+                loss=loss,
                 **metrics_dict,
                 )
             
@@ -169,13 +178,9 @@ class TesterBase:
                 first_iter = False
                 self._after_first_inference_iter()
         
-        mlogger.add_epoch_metrics(**self.criterion.get_epoch_metrics_and_reset())
+        mlogger.add_epoch_metrics(**self.criterion.forward_epoch_metrics())
         if hasattr(self, 'ema_criterion'):
-            ema_epoch_metrics = {}
-            raw_epoch_metrics = self.ema_criterion.get_epoch_metrics_and_reset()
-            for k, v in raw_epoch_metrics.items():
-                ema_epoch_metrics[f'ema_{k}'] = v
-            mlogger.add_epoch_metrics(**ema_epoch_metrics)
+            mlogger.add_epoch_metrics(**self.ema_criterion.forward_epoch_metrics())
         self.test_metrics = mlogger.output_dict(sync=True, final_print=True)
     
     def run(self):

@@ -20,6 +20,8 @@ from src.utils.register import Register
 trainer_register = Register('trainer')
 
 class TrainerBase:
+    registered_name: str
+    
     def __init__(
         self,
         cfg: Namespace,
@@ -76,6 +78,8 @@ class TrainerBase:
             print(LoggerMisc.block_wrapper('Using EMA model to evaluate. Setting EMA model and criterion to eval mode...', '='))
             self.ema_container.eval()
             self.ema_criterion = deepcopy(self.criterion)
+            assert hasattr(self.ema_criterion, 'ema_mode'), 'ema_criterion doesn\'t have ema_mode attribute, which means the criterion is not a CriterionBase instance.'
+            self.ema_criterion.ema_mode = True
             self.ema_criterion.eval()
         
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
@@ -370,10 +374,9 @@ class TrainerBase:
                     
                     if self.ema_container is not None:
                         ema_outputs = self.ema_container(inputs)
-                        ema_loss, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
-                        metrics_dict['ema_loss'] = ema_loss
-                        for key, value in ema_metrics_dict.items():
-                            metrics_dict[f'ema_{key}'] = value
+                        _, ema_metrics_dict = self.ema_criterion(ema_outputs, targets)
+                        outputs.update(LoggerMisc.set_dict_key_prefix(ema_outputs, 'ema_'))
+                        metrics_dict.update(ema_metrics_dict)
             
         return outputs, loss, metrics_dict
     
@@ -471,7 +474,7 @@ class TrainerBase:
                 first_iter = False
                 self._after_first_train_iter()
         
-        mlogger.add_epoch_metrics(**self.criterion.get_epoch_metrics_and_reset())
+        mlogger.add_epoch_metrics(**self.criterion.forward_epoch_metrics())
         self.train_outputs = mlogger.output_dict(no_avg_list=[*self.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
     
     def _evaluate(self):
@@ -500,13 +503,9 @@ class TrainerBase:
                 first_iter = False
                 self._after_first_validation_iter()
         
-        mlogger.add_epoch_metrics(**self.criterion.get_epoch_metrics_and_reset())
+        mlogger.add_epoch_metrics(**self.criterion.forward_epoch_metrics())
         if hasattr(self, 'ema_criterion'):
-            ema_epoch_metrics = {}
-            raw_epoch_metrics = self.ema_criterion.get_epoch_metrics_and_reset()
-            for k, v in raw_epoch_metrics.items():
-                ema_epoch_metrics[f'ema_{k}'] = v
-            mlogger.add_epoch_metrics(**ema_epoch_metrics)
+            mlogger.add_epoch_metrics(**self.ema_criterion.forward_epoch_metrics())
         self.last_val_metrics = mlogger.output_dict(sync=self.dist_eval, final_print=True)
     
     def run(self):

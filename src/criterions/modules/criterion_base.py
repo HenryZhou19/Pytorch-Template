@@ -1,12 +1,18 @@
 from torch import nn
 
+from src.utils.misc import LoggerMisc
 from src.utils.register import Register
 
 criterion_register = Register('criterion')
 
 class CriterionBase(nn.Module):
+    registered_name: str
+    
     def __init__(self, cfg):
         super().__init__()
+        self.ema_mode = False
+        self.infer_mode = False
+        self.cfg = cfg
         self.loss_config = cfg.criterion.loss
         self.primary_criterion = cfg.criterion.primary_criterion
         if self.primary_criterion is None:
@@ -39,7 +45,7 @@ class CriterionBase(nn.Module):
         
         return compare_primary_criterion(last_metric, best_metric)
         
-    def forward(self, outputs, targets, infer_mode=False):
+    def forward(self, outputs, targets):
         """
         outputs: dict
         targets: dict
@@ -54,12 +60,35 @@ class CriterionBase(nn.Module):
         Maybe differ in 
             1. self.training=True [train]
             2. self.training=False [eval]
-            3. self.training=False and infer_mode=True [test/infer]
+            3. self.training=False and self.infer_mode=True [test/infer]
         """
-        if infer_mode:
+        if self.infer_mode:
             assert self.training == False, f'CriterionModule {self.__class__} is in training mode while infer_mode is True.'
+            
+        loss, metrics_dict = self._get_iter_loss_and_metrics(outputs, targets)
         
-    def get_epoch_metrics_and_reset(self):
+        if self.ema_mode:
+            ema_metrics_dict = metrics_dict
+            metrics_dict = {'ema_loss': loss}
+            metrics_dict.update(LoggerMisc.set_dict_key_prefix(ema_metrics_dict, 'ema_'))
+            
+        return loss, metrics_dict
+    
+    def forward_epoch_metrics(self):
+        epoch_metrics_dict = self._get_epoch_metrics_and_reset()
+        
+        if self.ema_mode:
+            epoch_metrics_dict = LoggerMisc.set_dict_key_prefix(epoch_metrics_dict, 'ema_')
+            
+        return epoch_metrics_dict
+        
+    def _get_iter_loss_and_metrics(self, outputs, targets):
+        """
+        calculate loss and metrics for one iteration
+        """
+        raise NotImplementedError
+        
+    def _get_epoch_metrics_and_reset(self):
         """
         metrics which should be calculated after a whole epoch
         """
