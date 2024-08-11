@@ -1008,34 +1008,79 @@ class LoggerMisc:
 
 class SweepMisc:
     @staticmethod
-    def init_sweep_mode(cfg, portal_fn):
-        if cfg.sweep.sweep_enabled:
-            if hasattr(cfg, 'trainer'):
-                if cfg.trainer.resume is not None:
-                    print(LoggerMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', '$'))
-                    portal_fn(cfg)
-                    exit()
-            else:
-                assert hasattr(cfg, 'tester'), 'Sweep mode can only be used in phase of training or inference.'
-            sweep_cfg_dict = ConfigMisc.nested_namespace_to_nested_dict(cfg.sweep.sweep_params)
+    def _send_email(cfg, subject, message='No-reply'):
+        if DistMisc.is_main_process():
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            import smtplib
             
-            from itertools import product
-            combinations = [dict(zip(sweep_cfg_dict.keys(), values)) for values in product(*sweep_cfg_dict.values())]
-            
-            sweep_skip_indices = getattr(cfg.sweep,'sweep_skip_indices', [])
-            sweep_skip_indices = set([x for x in sweep_skip_indices if isinstance(x, int) and x < len(combinations)])
-            filtered_combinations = [combination for idx, combination in enumerate(combinations) if idx not in sweep_skip_indices]
-            
-            for idx, combination in enumerate(filtered_combinations):
-                print(LoggerMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(filtered_combinations)}] combinations', s='#', block_width=80))
-                
-                cfg_now = deepcopy(cfg)
-                for chained_k, v in combination.items():
-                    k_list = chained_k.split('//')
-                    ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v)
-                portal_fn(cfg_now)
+            email_host = cfg.special.email_host
+            email_sender = cfg.special.email_sender
+            email_password = cfg.special.email_password
+            email_receiver = cfg.special.email_receiver
+            try:
+                import socket
+                device_name = socket.gethostname()
+            except:
+                device_name = 'Unknown Device'
+
+            msg = MIMEMultipart()
+            msg['From'] = device_name
+            msg['To'] = 'Base'
+            msg['Subject'] = f'{device_name}: {subject}'
+            mail_msg = '''<p>{}</p>'''.format(message)
+            msg.attach(MIMEText(mail_msg, 'html', 'utf-8'))
+
+            smtp = smtplib.SMTP()
+            smtp.connect(email_host, 25)
+            smtp.login(email_sender, email_password)
+            smtp.sendmail(email_sender, email_receiver, msg.as_string())
+            smtp.quit()
+            print(LoggerMisc.block_wrapper('Email sent successfully.'))
+    
+    @staticmethod
+    def _do_sweep(cfg, portal_fn):
+        if hasattr(cfg, 'trainer'):
+            if cfg.trainer.resume is not None:
+                print(LoggerMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', '$'))
+                portal_fn(cfg)
+                exit()
         else:
-            portal_fn(cfg)
+            assert hasattr(cfg, 'tester'), 'Sweep mode can only be used in phase of training or inference.'
+        sweep_cfg_dict = ConfigMisc.nested_namespace_to_nested_dict(cfg.sweep.sweep_params)
+        
+        from itertools import product
+        combinations = [dict(zip(sweep_cfg_dict.keys(), values)) for values in product(*sweep_cfg_dict.values())]
+        
+        sweep_skip_indices = getattr(cfg.sweep,'sweep_skip_indices', [])
+        sweep_skip_indices = set([x for x in sweep_skip_indices if isinstance(x, int) and x < len(combinations)])
+        filtered_combinations = [combination for idx, combination in enumerate(combinations) if idx not in sweep_skip_indices]
+        
+        for idx, combination in enumerate(filtered_combinations):
+            print(LoggerMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(filtered_combinations)}] combinations', s='#', block_width=80))
+            
+            cfg_now = deepcopy(cfg)
+            for chained_k, v in combination.items():
+                k_list = chained_k.split('//')
+                ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v)
+            portal_fn(cfg_now)
+    
+    @staticmethod
+    def init_sweep_mode(cfg, portal_fn):
+        try:
+            if cfg.sweep.sweep_enabled:
+                SweepMisc._do_sweep(cfg, portal_fn)
+            else:
+                portal_fn(cfg)
+        except Exception as e:
+            if getattr(cfg.special, 'send_email', False):
+                SweepMisc._send_email(cfg, 'Error', str(e))
+            raise e
+        else:
+            if getattr(cfg.special, 'send_email', False):
+                SweepMisc._send_email(cfg, 'Finished')
+        finally:
+            pass
 
 
 class TensorMisc:

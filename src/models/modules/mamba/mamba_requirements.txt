@@ -1,2 +1,2 @@
-causal-conv1d>=1.2.0
-mamba-ssm  # ==2.1.0 will be ok
+causal-conv1d==1.3.0.post0
+mamba-ssm==2.2.2  # ==2.1.0 will be ok
