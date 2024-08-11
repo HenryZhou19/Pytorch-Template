@@ -1,0 +1,6 @@
+special:
+  send_email: False
+  email_host: null
+  email_sender: null
+  email_password: null
+  email_receiver: null

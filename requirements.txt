@@ -1,7 +1,7 @@
 # conda create -n pytorch-template python=3.10
 
-torch
-torchvision
+torch<=2.3.1
+torchvision<=0.18.1
 
 wheel
 hjson
