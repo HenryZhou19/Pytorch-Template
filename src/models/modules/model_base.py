@@ -14,10 +14,20 @@ class ModelBase(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.ema_mode = False
+        self.infer_mode = False
         self.cfg = cfg
         self.do_grad_checkpoint = cfg.trainer.grad_checkpoint
         
         self.custom_inited = False
+        
+    def set_ema_mode(self, ema_mode):
+        self.ema_mode = ema_mode
+    
+    def set_infer_mode(self, infer_mode):
+        self.infer_mode = infer_mode
+        
+    def print_states(self, prefix='', force=True):
+        print(f'{prefix}Model --- training mode: {self.training}, infer_mode: {self.infer_mode}, ema_mode: {self.ema_mode}', force=force)
                     
     def _grad_checkpoint(self, func, *args, **kwargs):
         if self.do_grad_checkpoint and self.training:

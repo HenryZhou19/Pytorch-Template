@@ -28,6 +28,7 @@ info: # info & wandb
   global_tqdm: True
   torchinfo: True  # print model info to logs.log
   print_param_names: True
+  print_module_states: False
 
 model:
   ema:
