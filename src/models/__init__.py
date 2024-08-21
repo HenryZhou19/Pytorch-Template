@@ -39,7 +39,7 @@ class ModelManager(object):
                 }
             ema_container: EMA = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
             assert hasattr(ema_container.ema_model, 'ema_mode'), 'ema_container.ema_model doesn\'t have ema_mode attribute, which means the model is not a ModelBase instance.'
-            ema_container.ema_model.ema_mode = True
+            ema_container.ema_model.set_ema_mode(True)
             if verbose:
                 print('EMA_model built successfully.')
                 

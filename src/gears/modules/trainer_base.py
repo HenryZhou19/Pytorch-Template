@@ -26,7 +26,7 @@ class TrainerBase:
         self,
         cfg: Namespace,
         loggers: Namespace,
-        model: ModelBase,
+        model,  # ModelBase or nn.Module(DDP)
         ema_container: EMA,
         criterion: CriterionBase,
         train_loader: DataLoaderX,
@@ -40,7 +40,7 @@ class TrainerBase:
         self.cfg = cfg
         self.loggers = loggers
         self.model = model
-        self.model_without_ddp = model.module if cfg.env.distributed else model
+        self.model_without_ddp: ModelBase = model.module if cfg.env.distributed else model
         self.ema_container = ema_container  # still in train mode (in ModelManager)
         self.criterion = criterion
         self.train_loader = train_loader
@@ -79,15 +79,15 @@ class TrainerBase:
             self.ema_container.eval()
             self.ema_criterion = deepcopy(self.criterion)
             assert hasattr(self.ema_criterion, 'ema_mode'), 'ema_criterion doesn\'t have ema_mode attribute, which means the criterion is not a CriterionBase instance.'
-            self.ema_criterion.ema_mode = True
+            self.ema_criterion.set_ema_mode(True)
             self.ema_criterion.eval()
         
-        self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
         self.checkpoint_last_interval = self.cfg.trainer.checkpoint_last_interval  # save the last checkpoint every {checkpoint_last_interval} epochs (keep latest)
         assert self.checkpoint_last_interval > 0, 'checkpoint_last_interval should be a positive integer.'
         self.checkpoint_keep_interval = self.cfg.trainer.checkpoint_keep_interval  # save the checkpoint every {checkpoint_keep_interval} epochs (keep all)
         if self.checkpoint_keep_interval > 0:
             os.makedirs(os.path.join(self.cfg.info.work_dir, 'checkpoint_keep_storage'), exist_ok=True)
+        self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
         self._init_autocast()
     
     @property
@@ -507,6 +507,18 @@ class TrainerBase:
         if hasattr(self, 'ema_criterion'):
             mlogger.add_epoch_metrics(**self.ema_criterion.forward_epoch_metrics())
         self.last_val_metrics = mlogger.output_dict(sync=self.dist_eval, final_print=True)
+        
+    def _print_module_states(self, prefix):
+        print(f'\n[{prefix}] epoch {self.epoch}:')
+        DistMisc.avoid_print_mess()
+        print(f'\tRank {DistMisc.get_rank()}:', force=True)
+        print(f'\t\tOnline:', force=True)
+        self.model_without_ddp.print_states(prefix='\t\t\t')
+        self.criterion.print_states(prefix='\t\t\t')
+        if self.ema_container is not None:
+            print(f'\t\tEMA:', force=True)
+            self.ema_container.ema_model.print_states(prefix='\t\t\t')
+            self.ema_criterion.print_states(prefix='\t\t\t')
     
     def run(self):
         # train and val
@@ -516,6 +528,8 @@ class TrainerBase:
         for _ in self.epoch_loop:
             self._before_one_epoch()
             
+            if self.cfg.info.print_module_states:
+                self._print_module_states('Train')
             self._train_one_epoch()
             
             self._after_one_epoch()
@@ -525,6 +539,8 @@ class TrainerBase:
                 self._before_validation()
                 
                 if self.dist_eval or DistMisc.is_main_process():
+                    if self.cfg.info.print_module_states:
+                        self._print_module_states('Eval')
                     self._evaluate()
                     
                 self._after_validation()

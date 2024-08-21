@@ -26,6 +26,15 @@ class CriterionBase(nn.Module):
         else:
             self.choose_better_fn = lambda now, stored: now < stored  # lower better
             
+    def set_ema_mode(self, ema_mode):
+        self.ema_mode = ema_mode
+    
+    def set_infer_mode(self, infer_mode):
+        self.infer_mode = infer_mode
+        
+    def print_states(self, prefix='', force=True):
+        print(f'{prefix}Criterion --- training mode: {self.training}, infer_mode: {self.infer_mode}, ema_mode: {self.ema_mode}', force=force)
+            
     def untrainable_check(self):
         trainable_params = [p for p in self.parameters() if p.requires_grad]
         assert len(trainable_params) == 0, f'Criterion {self.__class__} has trainable parameters.'

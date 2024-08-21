@@ -36,21 +36,19 @@ class TesterBase:
         self.model = model_without_ddp
         self.ema_container = ema_container  # still in train mode (in ModelManager)
         self.device = device
-             
-        self._init_autocast()
         
-        if self.ema_container is not None:
-            self.ema_container.eval()
+        self.model.set_infer_mode(True)
         
         if model_only_mode:
             self.nn_module_list = [self.model]
             
             if self.ema_container is not None:
+                self.ema_container.ema_model.set_infer_mode(True)
                 self.ema_container.eval()
         else:
             self.criterion = criterion
             assert hasattr(self.criterion, 'infer_mode'), 'criterion doesn\'t have infer_mode attribute, which means the criterion is not a CriterionBase instance.'
-            self.criterion.infer_mode = True
+            self.criterion.set_infer_mode(True)
             self.test_loader = test_loader
             self.test_metrics = {}
             self.test_pbar = None
@@ -59,16 +57,18 @@ class TesterBase:
             self.nn_module_list = [self.model, self.criterion]
             
             if self.ema_container is not None:
+                self.ema_container.ema_model.set_infer_mode(True)
                 self.ema_container.eval()
                 print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
                 self.ema_criterion = deepcopy(self.criterion)
                 assert hasattr(self.ema_criterion, 'ema_mode'), 'ema_criterion doesn\'t have ema_mode attribute, which means the criterion is not a CriterionBase instance.'
-                self.ema_criterion.ema_mode = True
+                self.ema_criterion.set_ema_mode(True)
                 assert hasattr(self.ema_criterion, 'infer_mode'), 'ema_criterion doesn\'t have infer_mode attribute, which means the criterion is not a CriterionBase instance.'
-                self.criterion.infer_mode = True
+                self.ema_criterion.set_infer_mode(True)
                 self.ema_criterion.eval()
                 
             self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
+            self._init_autocast()
             
     def _init_autocast(self):
         if self.cfg.env.amp.amp_mode == 'fp16':
@@ -182,11 +182,25 @@ class TesterBase:
         if hasattr(self, 'ema_criterion'):
             mlogger.add_epoch_metrics(**self.ema_criterion.forward_epoch_metrics())
         self.test_metrics = mlogger.output_dict(sync=True, final_print=True)
+        
+    def _print_module_states(self, prefix):
+        print(f'\n[{prefix}]')
+        DistMisc.avoid_print_mess()
+        print(f'\tRank {DistMisc.get_rank()}:', force=True)
+        print(f'\t\tOnline:', force=True)
+        self.model.print_states(prefix='\t\t\t')
+        self.criterion.print_states(prefix='\t\t\t')
+        if self.ema_container is not None:
+            print(f'\t\tEMA:', force=True)
+            self.ema_container.ema_model.print_states(prefix='\t\t\t')
+            self.ema_criterion.print_states(prefix='\t\t\t')
     
     def run(self):
         # prepare for 1. loading model; 2. progress bar
         self._before_inference()
         
+        if self.cfg.info.print_module_states:
+            self._print_module_states('Test')
         self._test()
         
         self._after_inference()
