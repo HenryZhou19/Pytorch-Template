@@ -4,3 +4,4 @@ special:
   email_sender: null
   email_password: null
   email_receiver: null
+  email_when_interrupted: False
