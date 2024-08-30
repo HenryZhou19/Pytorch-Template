@@ -535,7 +535,7 @@ class PortalMisc:
                 else:
                     LoggerMisc.print_all_pid(get_parent=False)
                     LoggerMisc.get_wandb_pid(get_parent=False, kill_all=True)
-            sys.exit(0)
+            raise KeyboardInterrupt
         
         signal.signal(signal.SIGINT, signal_handler)
 
@@ -1010,9 +1010,9 @@ class SweepMisc:
     @staticmethod
     def _send_email(cfg, subject, message='No-reply'):
         if DistMisc.is_main_process():
+            import smtplib
             from email.mime.multipart import MIMEMultipart
             from email.mime.text import MIMEText
-            import smtplib
             
             email_host = cfg.special.email_host
             email_sender = cfg.special.email_sender
@@ -1036,7 +1036,7 @@ class SweepMisc:
             smtp.login(email_sender, email_password)
             smtp.sendmail(email_sender, email_receiver, msg.as_string())
             smtp.quit()
-            print(LoggerMisc.block_wrapper('Email sent successfully.'))
+            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) sent successfully.'))
     
     @staticmethod
     def _do_sweep(cfg, portal_fn):
@@ -1067,20 +1067,31 @@ class SweepMisc:
     
     @staticmethod
     def init_sweep_mode(cfg, portal_fn):
+        if_send_email = getattr(cfg.special, 'send_email', False)
+        email_subject='Elusive Error'
+        email_message='Unexpected exit.'
+        
         try:
             if cfg.sweep.sweep_enabled:
                 SweepMisc._do_sweep(cfg, portal_fn)
             else:
                 portal_fn(cfg)
+        
         except Exception as e:
-            if getattr(cfg.special, 'send_email', False):
-                SweepMisc._send_email(cfg, 'Error', str(e))
+            email_subject = 'Error'
+            email_message = str(e)
             raise e
+        except KeyboardInterrupt:
+            email_subject = 'Interrupted'
+            email_message = 'KeyboardInterrupt.'
+            if not getattr(cfg.special, 'email_when_interrupted', False):
+                if_send_email = False
         else:
-            if getattr(cfg.special, 'send_email', False):
-                SweepMisc._send_email(cfg, 'Finished')
+            email_subject = 'Success'
+            email_message = 'Finished.'
         finally:
-            pass
+            if if_send_email:
+                SweepMisc._send_email(cfg, email_subject, email_message)   
 
 
 class TensorMisc:
