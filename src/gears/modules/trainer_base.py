@@ -56,7 +56,6 @@ class TrainerBase:
         self.best_val_metrics = {}
         self.train_pbar = None
         self.val_pbar = None
-        self.val_epoch_list = self._get_val_epochs()
         self.dist_eval = self.cfg.trainer.dist_eval
         
         assert self.cfg.trainer.grad_accumulation > 0 and isinstance(self.cfg.trainer.grad_accumulation, int), 'grad_accumulation should be a positive integer.'
@@ -68,7 +67,13 @@ class TrainerBase:
         self.val_len = len(self.val_loader)
         
         self.trained_iters = 0
-        self.total_iters = self.cfg.trainer.epochs * self.train_len
+        self.total_epochs = self.cfg.trainer.epochs
+        real_total_epochs = getattr(self.cfg.trainer, 'real_epochs', None)
+        if real_total_epochs is not None:
+            self.total_epochs = real_total_epochs
+        self.total_iters = self.total_epochs * self.train_len
+        
+        self.val_epoch_list = self._get_val_epochs()
           
         self.nn_module_list = [self.model, self.criterion]
         self.freeze_modules = getattr(self.cfg.trainer, 'freeze_modules', [])
@@ -92,7 +97,7 @@ class TrainerBase:
     
     @property
     def epoch_loop(self):
-        return range(self.start_epoch, self.cfg.trainer.epochs + 1)
+        return range(self.start_epoch, self.total_epochs + 1)
     
     @property
     def lr_groups(self):
@@ -118,11 +123,11 @@ class TrainerBase:
     
     def _get_val_epochs(self):
         if self.cfg.trainer.eval_freq <= 0:
-            val_epochs = [self.cfg.trainer.epochs]
+            val_epochs = [self.total_epochs]
         else:
-            val_epochs = list(range(self.cfg.trainer.eval_freq, self.cfg.trainer.epochs + 1, self.cfg.trainer.eval_freq))
-            if val_epochs[-1] != self.cfg.trainer.epochs:
-                val_epochs.append(self.cfg.trainer.epochs)
+            val_epochs = list(range(self.cfg.trainer.eval_freq, self.total_epochs + 1, self.cfg.trainer.eval_freq))
+            if val_epochs[-1] != self.total_epochs:
+                val_epochs.append(self.total_epochs)
         return val_epochs
     
     def _get_pbar(self):
@@ -436,7 +441,7 @@ class TrainerBase:
             loggers=loggers,
             pbar=self.train_pbar,  
             header='Train',
-            epoch_str=f'epoch: [{self.epoch}/{cfg.trainer.epochs}]',
+            epoch_str=f'epoch: [{self.epoch}/{self.total_epochs}]',
             )
         mlogger.add_metrics([{
             'loss': ValueMetric(high_prior=True),
@@ -485,7 +490,7 @@ class TrainerBase:
             loggers=self.loggers,
             pbar=self.val_pbar,  
             header='Eval ',
-            epoch_str=f'epoch: [{self.epoch}/{cfg.trainer.epochs}]',
+            epoch_str=f'epoch: [{self.epoch}/{self.total_epochs}]',
             )
         mlogger.add_metrics([{'loss': ValueMetric(high_prior=True)}])
         first_iter = True
