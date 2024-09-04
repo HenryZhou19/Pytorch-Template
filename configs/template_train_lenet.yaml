@@ -30,6 +30,7 @@ trainer:
   trainer_choice: default
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
   epochs: 20
+  real_epochs: null  # if not None, do early stopping based on real_epochs (scheduler is still based on epochs)
   optimizer:
     optimizer_choice: sgd  # adamw, sgd
     sgd_momentum: 0.9

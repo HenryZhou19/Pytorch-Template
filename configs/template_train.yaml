@@ -33,6 +33,7 @@ trainer:
   load_from_ema: True
   freeze_modules: []  # [submodule_name1, submodule_name2, ...]
   epochs: 10
+  real_epochs: null  # if not None, do early stopping based on real_epochs (scheduler is still based on epochs)
   optimizer:
     optimizer_choice: adamw  # adamw, sgd
     sgd_momentum: 0.9
