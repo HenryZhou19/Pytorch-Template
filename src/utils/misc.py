@@ -858,6 +858,32 @@ class ModelMisc:
             print(LoggerMisc.block_wrapper(verbose_string, '='))
     
     @staticmethod
+    def unfreeze_or_freeze_params(module, params_name_list, is_trainable: bool, strict=False, verbose=True):  # whether to update the parameters of the submodules
+        """
+        Just change the trainable property of specific parameters.
+        
+        verbose: (default True) as this function is usually called only once --- before all epochs
+        """
+        module: nn.Module
+        verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} the following specific parameters:'
+        if len(params_name_list) > 0:
+            params_dict = dict(module.named_parameters())
+            for param_name in params_name_list:
+                param = params_dict.get(param_name, None)
+                if param is None:
+                    error_message = f'Cannot find parameter "{param_name}" in {module.__class__.__name__} when {"unfreezing" if is_trainable else "freezing"} parameters.'
+                    if strict:
+                        raise ValueError(error_message)
+                    else:
+                        warnings.warn(error_message)
+                else:
+                    verbose_string += f'\n    {param_name}'
+                    param.requires_grad = is_trainable
+
+        if verbose and len(params_name_list) > 0:
+            print(LoggerMisc.block_wrapper(verbose_string, '='))        
+    
+    @staticmethod
     def train_or_eval_submodules(module, submodule_name_list, is_train: bool, strict=False, verbose=False):
         """
         Just change the behavior of some specific submodules (e.g. BatchNorm, Dropout).
