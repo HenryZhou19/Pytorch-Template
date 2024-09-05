@@ -77,6 +77,7 @@ class TrainerBase:
           
         self.nn_module_list = [self.model, self.criterion]
         self.freeze_modules = getattr(self.cfg.trainer, 'freeze_modules', [])
+        self.freeze_params = getattr(self.cfg.trainer, 'freeze_params', [])
         self.training = True
         
         if self.ema_container is not None:
@@ -302,6 +303,12 @@ class TrainerBase:
         ModelMisc.unfreeze_or_freeze_submodules(
             self.model_without_ddp,
             self.freeze_modules,
+            False,
+            )
+        
+        ModelMisc.unfreeze_or_freeze_params(
+            self.model_without_ddp,
+            self.freeze_params,
             False,
             )
             
