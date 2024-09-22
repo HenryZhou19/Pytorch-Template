@@ -6,6 +6,7 @@ from typing import Optional, Union
 
 import torch
 from mamba_ssm.ops.triton.layer_norm import layer_norm_fn, rms_norm_fn
+from timm.models.layers import DropPath
 from torch import nn
 
 from src.utils.misc import DummyContextManager
@@ -26,6 +27,7 @@ class MambaLayer(nn.Module):
         norm_cls: Union[nn.LayerNorm, RMSNorm],
         fused_add_norm=False,
         residual_in_fp32=False,
+        drop_path=0.0,
         ):
         '''
         Simple block wrapping a mixer class with LayerNorm/RMSNorm and residual connection"
@@ -46,6 +48,7 @@ class MambaLayer(nn.Module):
         
         self.mamba_block: MambaBlock = mamba_block_cls(layer_index=layer_index)
         self.norm = norm_cls()
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
     
     def forward(
         self,
@@ -61,13 +64,13 @@ class MambaLayer(nn.Module):
         """
         
         if not self.fused_add_norm:
-            residual = (hidden_states + residual) if residual is not None else hidden_states
+            residual = (self.drop_path(hidden_states) + residual) if residual is not None else hidden_states
             hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
             if self.residual_in_fp32:
                 residual = residual.to(torch.float32)
         else:
             hidden_states, residual = layer_norm_fn(
-                hidden_states,
+                self.drop_path(hidden_states),
                 self.norm.weight,
                 self.norm.bias,
                 residual=residual,
@@ -99,6 +102,8 @@ class Mamba(nn.Module):
         custom_init=True,
         initializer_cfg=None,
         fused_add_norm=False,
+        total_layers: int=None,
+        drop_path=0.0,
         device=None,
         dtype=None,
         ):
@@ -133,6 +138,7 @@ class Mamba(nn.Module):
                     norm_cls=norm_cls,
                     fused_add_norm=fused_add_norm,
                     residual_in_fp32=residual_in_fp32,
+                    drop_path=drop_path,
                 )
                 for layer_index in range(n_layer)
             ]
@@ -143,7 +149,7 @@ class Mamba(nn.Module):
         else:
             self.final_norm = None
         
-        self.n_layer = n_layer
+        self.total_layers = n_layer if total_layers is None else total_layers
         self.initializer_cfg = initializer_cfg
         if custom_init:
             self._init_weights()
@@ -152,7 +158,7 @@ class Mamba(nn.Module):
         self.apply(
             partial(
                 init_mamba_weights,
-                n_layer=self.n_layer,
+                n_layer=self.total_layers,
                 **(self.initializer_cfg if self.initializer_cfg is not None else {}),
             )
         )
