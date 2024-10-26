@@ -102,3 +102,6 @@ class CriterionBase(nn.Module):
         metrics which should be calculated after a whole epoch
         """
         return {}
+    
+    def _if_skip_epoch_metrics_gathering(self):
+        return not self.cfg.trainer.dist_eval and not self.training and not self.infer_mode

@@ -15,6 +15,7 @@ env:
 
 special:
   debug: null  # 'normal', 'one_iter', 'one_epoch', 'one_val_epoch', null for no debug
+  single_eval: False  # if True, only do evaluation with one rank and eval_batch_size -> 1, making sure that each sample is evaluated once
   no_logger: False  # if True, no loggers will be used
   save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
   print_config_start: False  # if True, print config at the start of the run

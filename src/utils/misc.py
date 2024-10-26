@@ -385,6 +385,9 @@ class PortalMisc:
         if cfg.special.no_logger:
             cfg.info.wandb.wandb_enabled = False
             cfg.info.tensorboard.tensorboard_enabled = False
+            
+        if cfg.special.single_eval:
+            cfg.trainer.dist_eval = False
 
 
     @staticmethod
