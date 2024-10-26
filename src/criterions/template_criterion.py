@@ -82,7 +82,7 @@ class MnistCriterion(CriterionBase):
 
         from src.utils.misc import DistMisc
 
-        if DistMisc.is_dist_avail_and_initialized():
+        if self._if_gather_epoch_metrics():
             self.epoch_sample_count = torch.tensor(self.epoch_sample_count).cuda()
             self.epoch_correct_count = torch.tensor(self.epoch_correct_count).cuda()
             dist.all_reduce(self.epoch_sample_count, op=dist.ReduceOp.SUM)

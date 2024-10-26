@@ -1,6 +1,6 @@
 from torch import nn
 
-from src.utils.misc import LoggerMisc
+from src.utils.misc import DistMisc, LoggerMisc
 from src.utils.register import Register
 
 criterion_register = Register('criterion')
@@ -103,5 +103,6 @@ class CriterionBase(nn.Module):
         """
         return {}
     
-    def _if_skip_epoch_metrics_gathering(self):
-        return not self.cfg.trainer.dist_eval and not self.training and not self.infer_mode
+    def _if_gather_epoch_metrics(self):
+        if_real_dist = self.training or self.infer_mode or self.cfg.trainer.dist_eval
+        return DistMisc.is_dist_avail_and_initialized() and if_real_dist
