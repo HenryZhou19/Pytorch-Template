@@ -178,8 +178,9 @@ class TrainerBase:
                 assert 'scaler' in checkpoint, 'checkpoint does not contain "scaler".'
                 self.scaler.load_state_dict(checkpoint['scaler'])
             self.start_epoch = checkpoint['epoch'] + 1
-            self.best_val_metrics = checkpoint.get('best_val_metrics', {})
-            self.last_val_metrics = checkpoint.get('last_val_metrics', {})
+            if DistMisc.is_main_process():
+                self.best_val_metrics = checkpoint.get('best_val_metrics', {})
+                self.last_val_metrics = checkpoint.get('last_val_metrics', {})
             self.trained_iters = checkpoint['epoch'] * self.train_len
             self.epoch = self.start_epoch - 1  # will be the same as {checkpoint['epoch'] + 1} by doing '+1' in "before_one_epoch"
         else:
@@ -261,11 +262,11 @@ class TrainerBase:
     
     def _save_best_only_model_checkpoint(self):
         # called in "after_validation"
-        self.best_val_metrics, last_is_best = self.criterion.choose_best(
-            self.last_val_metrics, self.best_val_metrics
-            )
-        
         if DistMisc.is_main_process():
+            self.best_val_metrics, last_is_best = self.criterion.choose_best(
+                self.last_val_metrics, self.best_val_metrics
+            )
+            
             epoch_finished = self.epoch
             
             if last_is_best:
@@ -381,7 +382,10 @@ class TrainerBase:
         else:
             with torch.no_grad():
                 with self.val_autocast():
-                    outputs = self.model(inputs)
+                    if not self.dist_eval and isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
+                        outputs = self.model.module(inputs)
+                    else:
+                        outputs = self.model(inputs)
                     loss, metrics_dict = self.criterion(outputs, targets)
                     
                     if self.ema_container is not None:

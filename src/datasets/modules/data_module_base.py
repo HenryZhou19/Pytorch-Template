@@ -105,9 +105,14 @@ class DataModuleBase:
                 )
         else:
             DataloaderClass = DataLoaderX
+            
+        batch_size=self.cfg.trainer.trainer_batch_size_per_rank if is_train_or_val else self.cfg.tester.tester_batch_size_per_rank
+        if split=='val' and self.cfg.special.single_eval:
+            batch_size = 1
+        
         return DataloaderClass(
             dataset=dataset,
-            batch_size=self.cfg.trainer.trainer_batch_size_per_rank if is_train_or_val else self.cfg.tester.tester_batch_size_per_rank,
+            batch_size=batch_size,
             sampler=self.get_sampler(dataset, is_train, use_dist_sampler),
             pin_memory=self.cfg.env.pin_memory,
             collate_fn=self.collate_fn,
