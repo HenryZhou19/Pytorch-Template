@@ -1,5 +1,5 @@
 # Copyright (c) 2024, Tri Dao, Albert Gu.
-# Modified by Jiaheng Zhou
+# Modified by Jiaheng Zhou: https://github.com/HenryZhou19/Pytorch-Template
 
 import math
 

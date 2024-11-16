@@ -1,5 +1,5 @@
 # Mamba Copyright (c) 2023, Tri Dao, Albert Gu.
-# Modifed by Jiaheng Zhou
+# Modified by Jiaheng Zhou: https://github.com/HenryZhou19/Pytorch-Template
 
 from functools import partial
 from typing import Optional, Union
