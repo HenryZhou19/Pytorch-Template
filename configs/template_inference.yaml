@@ -7,6 +7,7 @@ tester:
   ## batch_control ends
   tester_choice: default
   use_best: True
+  ema_only: False
   checkpoint_path: TBD
   train_cfg_path: to_be_specified  # XXX: required
 
