@@ -44,6 +44,7 @@ class MambaBlock(nn.Module):
         layer_index=None,
         device=None,
         dtype=None,
+        save_delta=False,
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -55,6 +56,7 @@ class MambaBlock(nn.Module):
         self.dt_rank = math.ceil(self.d_model / 16) if dt_rank == "auto" else dt_rank
         self.use_fast_path = use_fast_path
         self.layer_index = layer_index
+        self.save_delta = save_delta
         
         self.in_proj = nn.Linear(self.d_model, self.d_inner * 2, bias=bias, **factory_kwargs)
         
@@ -165,6 +167,7 @@ class MambaBlock(nn.Module):
             self.D.float(),
             delta_bias=self.dt_proj.bias.float(),
             delta_softplus=True,
+            save_delta=self.save_delta,
             )
         
         out = rearrange(out, "b d l -> b l d")

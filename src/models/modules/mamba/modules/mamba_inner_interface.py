@@ -50,13 +50,25 @@ def _prepare_delta_B_C_D(x_dbl, delta_proj_weight, delta_rank, d_state, A, B, C,
     
     return delta, B, C, D
 
+
+def _save_delta(delta, folder_path='./temp_delta_vis', verbose=False):
+    import os
+    from datetime import datetime
+    delta = F.softplus(delta).to('cpu')  # XXX: Save delta for visualization
+    os.makedirs(folder_path, exist_ok=True)
+    out_file = os.path.join(folder_path, f'delta_{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}.pt')
+    torch.save(delta, out_file)  # (b, d_inner, l)
+    if verbose:
+        print(f"Saved delta to {out_file}")
+
+
 class MambaInnerFn(torch.autograd.Function):
     
     @staticmethod
     @custom_fwd
     def forward(ctx, xz, conv1d_weight, conv1d_bias, x_proj_weight, delta_proj_weight,
                 A, B=None, C=None, D=None, delta_bias=None, B_proj_bias=None,
-                C_proj_bias=None, delta_softplus=True, checkpoint_lvl=1):
+                C_proj_bias=None, delta_softplus=True, checkpoint_lvl=1, save_delta=False):
         """
         xz: (batch, 2*dim, seqlen) i.e. (B, 2*D, L)
         """
@@ -90,6 +102,8 @@ class MambaInnerFn(torch.autograd.Function):
         ctx.C_proj_bias_is_None = C_proj_bias is None
         
         delta, B, C, D = _prepare_delta_B_C_D(x_dbl, delta_proj_weight, delta_rank, d_state, A, B, C, D, B_proj_bias, C_proj_bias, L)
+        if save_delta:
+            _save_delta(delta, verbose=True)
         
         out, scan_intermediates, y = selective_scan_cuda.fwd(
             conv1d_out, delta, A, B, C, D, z, delta_bias, delta_softplus
@@ -171,16 +185,17 @@ class MambaInnerFn(torch.autograd.Function):
         return (dxz, dconv1d_weight, dconv1d_bias, dx_proj_weight, ddelta_proj_weight,
                 dA, dB, dC, dD,
                 ddelta_bias if delta_bias is not None else None,
-                dB_proj_bias, dC_proj_bias, None)
+                dB_proj_bias, dC_proj_bias, None, None, None)
 
 
 def mamba_inner_fn(
     xz, conv1d_weight, conv1d_bias, x_proj_weight, delta_proj_weight,
     A, B=None, C=None, D=None, delta_bias=None, B_proj_bias=None,
-    C_proj_bias=None, delta_softplus=True
+    C_proj_bias=None, delta_softplus=True, checkpoint_lvl=1, save_delta=False
 ):
     return MambaInnerFn.apply(xz, conv1d_weight, conv1d_bias, x_proj_weight, delta_proj_weight,
-                              A, B, C, D, delta_bias, B_proj_bias, C_proj_bias, delta_softplus)
+                              A, B, C, D, delta_bias, B_proj_bias, C_proj_bias, delta_softplus,
+                              checkpoint_lvl, save_delta)
 
 
 # for mamba2
