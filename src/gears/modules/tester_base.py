@@ -68,6 +68,7 @@ class TesterBase:
                 self.ema_criterion.eval()
                 
             self.breath_time = self.cfg.tester.tester_breath_time  # XXX: avoid cpu being too busy
+            self.ema_only = self.cfg.tester.ema_only
             self._init_autocast()
             
     def _init_autocast(self):
@@ -142,8 +143,14 @@ class TesterBase:
         
         with torch.no_grad():
             with self.inference_autocast():
-                outputs = self.model(inputs)
-                loss, metrics_dict = self.criterion(outputs, targets)
+                if self.ema_only:
+                    assert self.ema_container is not None, 'ema_container is None when ema_only is True.'
+                    outputs = {}
+                    loss = torch.nan
+                    metrics_dict = {}
+                else:
+                    outputs = self.model(inputs)
+                    loss, metrics_dict = self.criterion(outputs, targets)
                 
                 if self.ema_container is not None:
                     ema_outputs = self.ema_container(inputs)
