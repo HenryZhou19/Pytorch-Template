@@ -719,7 +719,8 @@ class ModelMisc:
     def show_model_info(cfg, trainer, torchinfo_columns=None):
         if DistMisc.is_main_process():
             input_data_one_sample = TensorMisc.to(trainer.train_loader.collate_fn([trainer.train_loader.dataset[0]])['inputs'], trainer.device)
-            temp_model = deepcopy(trainer.model_without_ddp)
+            temp_model = trainer.model_without_ddp
+            temp_model.eval()
             
             if hasattr(trainer.loggers, 'tensorboard_run'):
                 if cfg.info.tensorboard.tensorboard_graph:
