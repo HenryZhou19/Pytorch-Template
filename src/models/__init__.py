@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import ema_pytorch
 import torch
 from ema_pytorch.ema_pytorch import EMA
@@ -38,15 +40,15 @@ class ModelManager(object):
                 'include_online_model': False,
                 }
             try:
-                ema_container: EMA = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
+                ema_model = deepcopy(model_without_ddp)
             except Exception as e:
                 print(f'Warning: {e}')
                 print('Build an EMA model from scratch and load state_dict instead.')
                 ema_model = self.build_model(verbose=False)
                 ema_model.load_state_dict(model_without_ddp.state_dict())
                 
-                ema_init_kwargs['ema_model'] = ema_model
-                ema_container: EMA = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
+            ema_init_kwargs['ema_model'] = ema_model
+            ema_container: EMA = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
             
             assert hasattr(ema_container.ema_model, 'ema_mode'), 'ema_container.ema_model doesn\'t have ema_mode attribute, which means the model is not a ModelBase instance.'
             ema_container.ema_model.set_ema_mode(True)
