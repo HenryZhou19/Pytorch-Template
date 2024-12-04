@@ -189,25 +189,44 @@ class TrainerBase:
         return self.cfg.trainer.resume
     
     def _load_pretrained_models(self):
+        class FakeEMA(torch.nn.Module):
+            def __init__(self, model):
+                super().__init__()
+                self.ema_model = model
+        
         def _load_pretrained_model(model_path, pretrain_model_name):
-            if self.ema_container is not None and self.cfg.trainer.load_from_ema:
+            if self.cfg.trainer.load_from_ema:  # use state_dict[EMA] to load
                 checkpoint = torch.load(model_path, map_location='cpu')
                 if 'ema_container' in checkpoint:
                     key = 'ema_container'
-                else:  # FIXME: deprecated
+                elif 'ema_model' in checkpoint:  # FIXME: deprecated
                     key = 'ema_model'
+                else:
+                    raise ValueError(f'checkpoint does not contain "ema_container" or "ema_model", but "load_from_ema" is True.')
                 print(f'\nLoading {pretrain_model_name} (key="{key}") from {model_path}')
                 state_dict = checkpoint[key]
                 state_dict.pop('initted', None)
                 state_dict.pop('step', None)
-                ModelMisc.load_state_dict_with_more_info(
-                    self.ema_container,
-                    state_dict,
-                    strict=False,
-                    print_keys_level=2,
-                    )
-                self.ema_container.copy_params_from_ema_to_model()
-            else:
+                if self.ema_container is not None:
+                    ModelMisc.load_state_dict_with_more_info(
+                        self.ema_container,
+                        state_dict,
+                        strict=False,
+                        print_keys_level=2,
+                        )
+                    print(f'EMA container exists. Process of param & buffer copying:\n\tstate_dict[EMA] -> ema_container -> online_model')
+                    self.ema_container.copy_params_from_ema_to_model()
+                else:
+                    fake_ema_container = FakeEMA(self.model_without_ddp)
+                    ModelMisc.load_state_dict_with_more_info(
+                        fake_ema_container,
+                        state_dict,
+                        strict=False,
+                        print_keys_level=1,
+                        )
+                    print(f'No EMA. Process of param & buffer copying:\n\tstate_dict[EMA] -> fake_ema_container -> online_model')
+                    del fake_ema_container
+            else:  # use state_dict[model] to load
                 print(f'\nLoading {pretrain_model_name} (key="model") from {model_path}')
                 ModelMisc.load_state_dict_with_more_info(
                     self.model_without_ddp,
@@ -215,7 +234,11 @@ class TrainerBase:
                     strict=False,
                     print_keys_level=1,
                     )
-                self.ema_container.copy_params_from_model_to_ema()
+                if self.ema_container is not None:
+                    print(f'EMA container exists. Process of param & buffer copying:\n\tstate_dict[online] -> online_model -> ema_container')
+                    self.ema_container.copy_params_from_model_to_ema()
+                else:
+                    print(f'No EMA. Process of param & buffer copying:\n\tstate_dict[online] -> online_model')
         
         if getattr(self.cfg.trainer, 'pretrained_models', None) is not None:
             for pretrain_model_name, pretrained_model_path in ConfigMisc.nested_namespace_to_nested_dict(self.cfg.trainer.pretrained_models).items():

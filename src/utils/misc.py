@@ -550,10 +550,10 @@ class DistMisc:
             dist.barrier()    
     
     @staticmethod
-    def avoid_print_mess():
+    def avoid_print_mess(sleep_interval=0.1):
         if DistMisc.is_dist_avail_and_initialized():  # 
             dist.barrier()
-            time.sleep(DistMisc.get_rank() * 0.1)
+            time.sleep(DistMisc.get_rank() * sleep_interval)
     
     @staticmethod
     def all_gather(x, concat_out=False):
