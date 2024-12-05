@@ -63,6 +63,7 @@ class TrainerBase:
         self.gradient_accumulation_steps = self.cfg.trainer.grad_accumulation
         self.do_gradient_accumulation = self.gradient_accumulation_steps > 1
         self.max_grad_norm = self.cfg.trainer.max_grad_norm
+        self.modules_for_grad_norm = self._get_modules_for_grad_norm()
         self.train_len = len(self.train_loader)
         self.val_len = len(self.val_loader)
         
@@ -95,6 +96,18 @@ class TrainerBase:
             os.makedirs(os.path.join(self.cfg.info.work_dir, 'checkpoint_keep_storage'), exist_ok=True)
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
         self._init_autocast()
+        
+    def _get_modules_for_grad_norm(self):
+        if getattr(self.cfg.trainer, 'modules_for_grad_norm', None) is not None:
+            modules_for_grad_norm = torch.nn.ModuleList(
+                [getattr(self.model_without_ddp, module_name) for module_name in self.cfg.trainer.modules_for_grad_norm]
+                )
+            
+            print(LoggerMisc.block_wrapper(f'grad norm modules: {self.cfg.trainer.modules_for_grad_norm}'))
+        else:
+            modules_for_grad_norm = self.model
+            print(LoggerMisc.block_wrapper('grad norm modules: ALL'))
+        return modules_for_grad_norm
     
     @property
     def epoch_loop(self):
@@ -432,12 +445,12 @@ class TrainerBase:
             if self.scaler is not None:
                 if self.max_grad_norm > 0:
                     self.scaler.unscale_(self.optimizer)
-                    grad_norm = torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(parameters=self.modules_for_grad_norm.parameters(), max_norm=self.max_grad_norm)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
                 if self.max_grad_norm > 0:
-                    grad_norm = torch.nn.utils.clip_grad_norm_(parameters=self.model.parameters(), max_norm=self.max_grad_norm)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(parameters=self.modules_for_grad_norm.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
             self.optimizer.zero_grad()
             if self.ema_container is not None:
