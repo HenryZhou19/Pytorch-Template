@@ -222,35 +222,8 @@ class ConfigMisc:
         return specific_list
     
     @staticmethod
-    def output_dir_extras(cfg, is_infer=False):
-        extras = '_'.join([cfg.info.infer_start_time if is_infer else cfg.info.start_time] + ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
-        if cfg.special.debug is not None:
-            extras = 'debug_' + extras
-        return extras
-    
-    @staticmethod
     def is_inference(cfg):
         return hasattr(cfg, 'tester')
-    
-    @staticmethod
-    def set_real_batch_size_and_lr(cfg):
-        if not ConfigMisc.is_inference(cfg):  # for train and val
-            if cfg.trainer.grad_accumulation > 1:
-                warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
-        
-            cfg.trainer.trainer_batch_size_total = cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
-            cfg.info.batch_info = f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
-            
-            if cfg.trainer.sync_lr_with_batch_size > 0:
-                cfg.trainer.optimizer.lr_default *= float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size
-                if hasattr(cfg.trainer.optimizer, 'param_groups'):
-                    lr_mark = 'lr_'
-                    for k, v in vars(cfg.trainer.optimizer.param_groups).items():
-                        if k.startswith(lr_mark):
-                            setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
-        else: # for inference
-            cfg.tester.tester_batch_size_total = cfg.tester.tester_batch_size_per_rank * cfg.env.world_size
-            cfg.info.batch_info = f'{cfg.tester.tester_batch_size_total}={cfg.tester.tester_batch_size_per_rank}_{cfg.env.world_size}'
 
 
 class PortalMisc:
@@ -307,30 +280,38 @@ class PortalMisc:
     
     @staticmethod
     def combine_train_infer_configs(infer_cfg, use_train_seed=True, custom_work_dir=None):
+        ## 1. simply combine the train_cfg and infer_cfg, using infer_cfg to overwrite train_cfg
         cfg = ConfigMisc.read_from_yaml(infer_cfg.tester.train_cfg_path)  # config in training
         train_seed_base = cfg.seed_base
         ConfigMisc.update_nested_namespace(cfg, infer_cfg)
         if use_train_seed:
             cfg.seed_base = train_seed_base
         
+        ## 2. confirm the train_work_dir for the "checkpoint_path" and the "(inference_)work_dir"
+        ## Note: get it from the train_cfg_path, not in the config itself, as the train_work_dir might have been moved or renamed.
         # cfg.info.train_work_dir = cfg.info.work_dir
         cfg.info.train_work_dir = '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1])
         if os.path.abspath(cfg.info.train_work_dir) != os.path.abspath(cfg.info.work_dir):
             print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', '#'))
         
-        if custom_work_dir is not None:
-            cfg.info.work_dir = os.path.join(custom_work_dir, ConfigMisc.output_dir_extras(cfg, is_infer=True))
+        ## 3. confirm the checkpoint_path (last or best, or specified) for inference
+        if cfg.tester.checkpoint_path is None:
+            checkpoint_path = glob(os.path.join(
+                cfg.info.train_work_dir,
+                'checkpoint_best_epoch_*.pth' if cfg.tester.use_best else 'checkpoint_last_epoch_*.pth'))
+            assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
+            cfg.tester.checkpoint_path = checkpoint_path[0]
         else:
-            cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + ConfigMisc.output_dir_extras(cfg, is_infer=True)
-        cfg.trainer.grad_accumulation = 1
+            assert os.path.exists(cfg.tester.checkpoint_path), f'Checkpoint path "{cfg.tester.checkpoint_path}" not found.'
+        
+        ## 4. set work_dir for inference (default: train_work_dir/inference_results)
+        if custom_work_dir is not None:
+            cfg.info.work_dir = os.path.join(custom_work_dir, LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True))
+        else:
+            cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True)
         if DistMisc.is_main_process():
             if not os.path.exists(cfg.info.work_dir):
                 os.makedirs(cfg.info.work_dir)
-        checkpoint_path = glob(os.path.join(
-            cfg.info.train_work_dir,
-            'checkpoint_best_epoch_*.pth' if cfg.tester.use_best else 'checkpoint_last_epoch_*.pth'))
-        assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
-        cfg.tester.checkpoint_path = checkpoint_path[0]
         
         return cfg
     
@@ -345,7 +326,7 @@ class PortalMisc:
             setattr(cfg.info, 'resume_start_time', cfg.info.start_time)
             cfg.info.start_time = cfg_old.info.start_time
         else:
-            work_dir = os.path.join(cfg.info.output_dir, ConfigMisc.output_dir_extras(cfg))
+            work_dir = os.path.join(cfg.info.output_dir, LoggerMisc.output_dir_time_and_extras(cfg))
             if DistMisc.is_main_process():
                 print(LoggerMisc.block_wrapper(f'New start at: {work_dir}', '>'))
                 if not os.path.exists(work_dir):
@@ -376,8 +357,26 @@ class PortalMisc:
     
     @staticmethod
     def special_config_adjustment(cfg):
+        def _set_real_batch_size_and_lr(cfg):
+            if not ConfigMisc.is_inference(cfg):  # for train and val
+                if cfg.trainer.grad_accumulation > 1:
+                    warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
+            
+                cfg.trainer.trainer_batch_size_total = cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
+                cfg.info.batch_info = f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
+                
+                if cfg.trainer.sync_lr_with_batch_size > 0:
+                    cfg.trainer.optimizer.lr_default *= float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size
+                    if hasattr(cfg.trainer.optimizer, 'param_groups'):
+                        lr_mark = 'lr_'
+                        for k, v in vars(cfg.trainer.optimizer.param_groups).items():
+                            if k.startswith(lr_mark):
+                                setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
+            else: # for inference
+                cfg.tester.tester_batch_size_total = cfg.tester.tester_batch_size_per_rank * cfg.env.world_size
+                cfg.info.batch_info = f'{cfg.tester.tester_batch_size_total}={cfg.tester.tester_batch_size_per_rank}_{cfg.env.world_size}'
         
-        ConfigMisc.set_real_batch_size_and_lr(cfg)
+        _set_real_batch_size_and_lr(cfg)
         
         if cfg.special.debug == 'one_iter':  # 'one_iter' debug mode
             cfg.env.num_workers = 0
@@ -1034,6 +1033,13 @@ class LoggerMisc:
                     os.kill(p.pid, signal.SIGTERM)
                     print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running.', s='#'))
         return wandb_pid_list
+    
+    @staticmethod
+    def output_dir_time_and_extras(cfg, is_infer=False):
+        extras = '_'.join([cfg.info.infer_start_time if is_infer else cfg.info.start_time] + ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
+        if cfg.special.debug is not None:
+            extras = 'debug_' + extras
+        return extras
 
 
 class SweepMisc:

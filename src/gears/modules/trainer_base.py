@@ -1,6 +1,7 @@
 import math
 import os
 import time
+from typing import Union
 import warnings
 from argparse import Namespace
 from copy import deepcopy
@@ -26,7 +27,7 @@ class TrainerBase:
         self,
         cfg: Namespace,
         loggers: Namespace,
-        model,  # ModelBase or nn.Module(DDP)
+        model: Union[ModelBase, torch.nn.parallel.DistributedDataParallel],
         ema_container: EMA,
         criterion: CriterionBase,
         train_loader: DataLoaderX,
@@ -41,7 +42,7 @@ class TrainerBase:
         self.loggers = loggers
         self.model = model
         self.model_without_ddp: ModelBase = model.module if cfg.env.distributed else model
-        self.ema_container = ema_container  # still in train mode (in ModelManager)
+        self.ema_container = ema_container  # still in train mode (inited in ModelManager)
         self.criterion = criterion
         self.train_loader = train_loader
         self.val_loader = val_loader

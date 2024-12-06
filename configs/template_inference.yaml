@@ -2,14 +2,14 @@ config:  # main config (in this file) overrides additional configs
   additional: [default_shared, default_inference]  # add additional config file names, e.g. [default_xxx] --- the order matters (later ones overwrite previous ones)
 
 tester:
+  train_cfg_path: to_be_specified  # XXX: required
   ## batch_control
-  tester_batch_size_per_rank: 4
+  tester_batch_size_per_rank: 4  # override this in main config
   ## batch_control ends
   tester_choice: default
+  checkpoint_path: null  # if not specified (null as None), use the best or last checkpoint in the train_work_dir according to use_best
   use_best: True
   ema_only: False
-  checkpoint_path: TBD
-  train_cfg_path: to_be_specified  # XXX: required
 
 sweep:
   sweep_enabled: False
