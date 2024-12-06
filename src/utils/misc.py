@@ -101,7 +101,7 @@ class ConfigMisc:
         return additional_configs
     
     @staticmethod
-    def _get_configs_from_sacred(main_config_path, additional_config_paths, do_print=False):
+    def _get_configs_from_sacred(main_config_path, additional_config_paths, do_print=False, warnings_for_added_configs=False):
         sys.argv.extend(['--loglevel=ERROR'])
         ex = sacred.Experiment('Config Collector', save_git_info=False)
         
@@ -133,6 +133,13 @@ class ConfigMisc:
         for k, v in cfg.modified_cfg_dict.items():
             cfg.modified_cfg_dict[k] = [cfg_name.split('.')[-1] for cfg_name in v]
         
+        # BUG: there's one bug in sacred now (version <= 0.8.7), which will cause all "added" configs not collected when config_scopes >= 2.
+        if warnings_for_added_configs:
+            print(LoggerMisc.block_wrapper(f'Warning: \
+                \n\tnew configuration added from the command line, which may have come from typos. \
+                \n\033[34m{cfg.modified_cfg_dict["added"]}\033[0m \
+                \nThese configurations may not work, please check', '#'))
+            
         return cfg
     
     @staticmethod 
@@ -426,13 +433,13 @@ class PortalMisc:
                         m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
                     color_flag = ''
                     if name in modified_cfg_dict['modified']:
-                        color_flag = '\033[34m'
+                        color_flag = '\033[34m'  # blue
                     elif name in modified_cfg_dict['added']:
-                        color_flag = '\033[32m'
+                        color_flag = '\033[32m'  # green
                     elif name in modified_cfg_dict['typechanged']:
-                        color_flag = '\033[31m'
+                        color_flag = '\033[31m'  # red
                     elif name in modified_cfg_dict['docs']:
-                        color_flag = '\033[30m'
+                        color_flag = '\033[30m'  # black
                     msg_in += f'{color_flag}{m_indent:40}{v}\033[0m\n'
             return msg_in
         
