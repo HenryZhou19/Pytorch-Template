@@ -34,7 +34,7 @@ class TesterBase:
         self.cfg = cfg
         self.loggers = loggers
         self.model = model_without_ddp
-        self.ema_container = ema_container  # still in train mode (in ModelManager)
+        self.ema_container = ema_container  # still in train mode (inited in ModelManager)
         self.device = device
         
         self.model.set_infer_mode(True)
@@ -212,15 +212,22 @@ class TesterBase:
         
         self._after_inference()
         
-    def get_best_model_for_practical_use(self, verbose=True):
+    def get_model_for_practical_use(self, get_ema_model=False, verbose=True):
         self._load_model()
         self._eval_mode()
-        if self.cfg.model.ema.ema_enabled and self.cfg.model.ema.ema_primary_criterion:
-            if verbose:
-                print(LoggerMisc.block_wrapper('using EMA model according to training config...'))
-            return self.ema_container.ema_model
+        if get_ema_model:
+            assert self.ema_container is not None, 'ema_container is None when get_ema_model is True.'
+            string_to_print = 'Using the EMA model...'
+            return_model = self.ema_container.ema_model
         else:
-            if verbose:
-                print(LoggerMisc.block_wrapper('NOT using EMA model according to training config...'))
-            return self.model
+            string_to_print = 'Using the online model...'
+            return_model = self.model
+        if self.cfg.model.ema.ema_enabled and self.cfg.model.ema.ema_primary_criterion:
+            string_to_print += '\nIn trainer, ema_primary_criterion is True, so using the "best" checkpoint and "get_ema_model=True" is recommended.'
+        else:
+            string_to_print += '\nIn trainer, ema_primary_criterion is False, so using the "best" checkpoint and "get_ema_model=False" is recommended.'
+        
+        if verbose:
+            print(LoggerMisc.block_wrapper(string_to_print, '='))
+        return return_model
     
