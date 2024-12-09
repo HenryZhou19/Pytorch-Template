@@ -7,11 +7,11 @@ import signal
 import sys
 import time
 import warnings
-from argparse import Namespace
-from collections import UserList
+from collections import UserList, defaultdict
 from copy import deepcopy
 from glob import glob
 from math import inf
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from tqdm import tqdm
@@ -60,7 +60,6 @@ class ImportMisc:
 if TYPE_CHECKING:
     import numpy as np
     import psutil
-    import sacred
     import torch
     import yaml
     from torch import distributed as dist
@@ -68,7 +67,6 @@ if TYPE_CHECKING:
 else:
     np = ImportMisc.LazyImporter('numpy')
     psutil = ImportMisc.LazyImporter('psutil')
-    sacred = ImportMisc.LazyImporter('sacred')
     torch = ImportMisc.LazyImporter('torch')
     yaml = ImportMisc.LazyImporter('yaml')
     dist = ImportMisc.LazyImporter('torch.distributed')
@@ -80,7 +78,9 @@ class ConfigMisc:
     def get_configs(config_dir):
         main_config_path = ConfigMisc._get_main_config_file_path(config_dir)
         additional_config_paths = ConfigMisc._get_additional_config_file_paths(config_dir, main_config_path)
-        return ConfigMisc._get_configs_from_sacred(main_config_path, additional_config_paths)
+        cfg = ConfigMisc._parse_yaml_files(additional_config_paths + [main_config_path])
+        cfg = ConfigMisc._update_config_with_cli_args(cfg)
+        return cfg
     
     @staticmethod
     def _get_main_config_file_path(config_dir):
@@ -101,52 +101,34 @@ class ConfigMisc:
         return additional_configs
     
     @staticmethod
-    def _get_configs_from_sacred(main_config_path, additional_config_paths, do_print=False, warnings_for_added_configs=False):
-        sys.argv.extend(['--loglevel=ERROR'])
-        ex = sacred.Experiment('Config Collector', save_git_info=False)
-        
-        for additional_config_path in additional_config_paths:
-            ex.add_config(additional_config_path)
-        ex.add_config(main_config_path)
-                
-        def trim_sacred_configs(_run):
-            final_config = _run.config
-            final_config.pop('seed', None)  # seed given by sacred is useless
-            config_mods = _run.config_modifications
-            if do_print:
-                if 'RANK' in os.environ:
-                    rank = int(os.environ['RANK'])
-                    if rank != 0:
-                        return vars(config_mods)
-                print(f'\nInitial configs read by sacred for ALL Ranks:')
-                print(sacred.commands._format_config(final_config, config_mods))
-            return vars(config_mods)
-        
-        @ex.main
-        def get_init_configs(_config, _run):
-            modified_configs = trim_sacred_configs(_run)
-            return modified_configs
-        
-        ex_run = ex.run_commandline()
-        cfg = ConfigMisc.nested_dict_to_nested_namespace(ex_run.config)
-        cfg.modified_cfg_dict = ex_run.result
-        for k, v in cfg.modified_cfg_dict.items():
-            cfg.modified_cfg_dict[k] = [cfg_name.split('.')[-1] for cfg_name in v]
-        
-        # BUG: there's one bug in sacred now (version <= 0.8.7), which will cause all "added" configs not collected when config_scopes >= 2.
-        if warnings_for_added_configs:
-            print(LoggerMisc.block_wrapper(f'Warning: \
-                \n\tnew configuration added from the command line, which may have come from typos. \
-                \n\033[34m{cfg.modified_cfg_dict["added"]}\033[0m \
-                \nThese configurations may not work, please check', '#'))
+    def _parse_yaml_files(config_file_paths):
+        """Load and merge multiple YAML files."""
+        cfg = SimpleNamespace()
+        for path in config_file_paths:
+            cfg_new = ConfigMisc.read_from_yaml(path)
+            ConfigMisc.update_nested_namespace(cfg, cfg_new)
+        return cfg
+    
+    @staticmethod
+    def _update_config_with_cli_args(cfg):
+        args = sys.argv
+        modified_cfg_dict = defaultdict(dict)
+        for arg in args:
+            if "=" not in arg:
+                continue  # Skip arguments without "key=value" format
+            key_path, value = arg.split("=", 1)
+            value = yaml.safe_load(value)  # Convert strings like 'true', '1' properly
             
+            keys = key_path.split(".")
+            ConfigMisc.setattr_for_nested_namespace(cfg, keys, value, modified_cfg_dict)
+        cfg.modified_cfg_dict = modified_cfg_dict
         return cfg
     
     @staticmethod 
     def nested_dict_to_nested_namespace(dictionary, ignore_key_list=[]):
         namespace = dictionary
         if isinstance(dictionary, dict):
-            namespace = Namespace(**dictionary)
+            namespace = SimpleNamespace(**dictionary)
             for key, value in dictionary.items():
                 if key in ignore_key_list:
                     delattr(namespace, key)
@@ -160,7 +142,7 @@ class ConfigMisc:
         for name, value in vars(namespace).items():
             if name in ignore_name_list:
                 continue
-            if isinstance(value, Namespace):
+            if isinstance(value, SimpleNamespace):
                 dictionary[name] = ConfigMisc.nested_namespace_to_nested_dict(value, ignore_name_list)
             else:
                 dictionary[name] = value
@@ -172,11 +154,11 @@ class ConfigMisc:
             assert not hasattr(ns, n), f'Namespace conflict: {n}(={v})'
             setattr(ns, n, v)
         
-        plain_namespace = Namespace()
+        plain_namespace = SimpleNamespace()
         for name, value in vars(namespace).items():
             if name in ignore_name_list:
                 continue
-            if isinstance(value, Namespace):
+            if isinstance(value, SimpleNamespace):
                 plain_subnamespace = ConfigMisc.nested_namespace_to_plain_namespace(value, ignore_name_list)
                 for subname, subvalue in vars(plain_subnamespace).items():
                     setattr_safely(plain_namespace, subname, subvalue)
@@ -188,18 +170,25 @@ class ConfigMisc:
     @staticmethod
     def update_nested_namespace(cfg_base, cfg_new):
         for name, value in vars(cfg_new).items():
-            if isinstance(value, Namespace):
+            if isinstance(value, SimpleNamespace):
                 if name not in vars(cfg_base):
-                    setattr(cfg_base, name, Namespace())
+                    setattr(cfg_base, name, SimpleNamespace())
                 ConfigMisc.update_nested_namespace(getattr(cfg_base, name), value)
             else:
                 setattr(cfg_base, name, value)
     
     @staticmethod
-    def setattr_for_nested_namespace(cfg, name_list, value):
+    def setattr_for_nested_namespace(cfg, name_list, value, modified_cfg_dict: defaultdict=None):
         namespace_now = cfg
         for name in name_list[:-1]:
-            namespace_now = getattr(namespace_now, name)
+            namespace_now = getattr(namespace_now, name, SimpleNamespace())
+        if modified_cfg_dict is not None:
+            if not hasattr(namespace_now, name_list[-1]):
+                modified_cfg_dict['added'][name_list[-1]] = {'new_value': value, 'full_key': '.'.join(name_list)}
+            else:
+                if type(getattr(namespace_now, name_list[-1])) != type(value):
+                    modified_cfg_dict['typechanged'][name_list[-1]] = {'old_type': type(getattr(namespace_now, name_list[-1])).__name__, 'new_type': type(value).__name__, 'full_key': '.'.join(name_list)}
+                modified_cfg_dict['modified'][name_list[-1]] = {'old_value': getattr(namespace_now, name_list[-1]), 'new_value': value, 'full_key': '.'.join(name_list)}
         setattr(namespace_now, name_list[-1], value)
     
     @staticmethod
@@ -413,46 +402,53 @@ class PortalMisc:
             
         if cfg.special.print_config_start:
             PortalMisc._print_config(cfg, force_all_rank=cfg.special.print_config_all_rank)
+        else:
+            PortalMisc._print_config(cfg, force_all_rank=False, modified_config_only=True)
     
     @staticmethod
-    def _print_config(cfg, force_all_rank=False):
+    def _print_config(cfg, force_all_rank=False, modified_config_only=False):
         modified_cfg_dict = cfg.modified_cfg_dict
         
-        def write_msg_lines(msg_in, cfg_in, indent=1):
-            for name in sorted(vars(cfg_in).keys()):
-                if name in cfg.special.print_save_config_ignore + ['modified_cfg_dict']:
+        def write_config_lines(str_block_in, cfg_in, indent=0):
+            str_block_add = ''
+            for key in sorted(vars(cfg_in).keys()):
+                if key in cfg.special.print_save_config_ignore + ['modified_cfg_dict']:
                     continue   
-                m_indent = ' ' * (4 * (indent - 1)) + ' ├─ ' + name
-                v = getattr(cfg_in, name)
-                if isinstance(v, Namespace):
-                    msg_in += write_msg_lines(f'{m_indent}\n', v, indent + 1)
+                key_indent = ' ' * (4 * indent) + ' ├─ ' + key
+                value = getattr(cfg_in, key)
+                if isinstance(value, SimpleNamespace):
+                    str_block_add += write_config_lines(f'{key_indent}\n', value, indent + 1)
                 else:
-                    if len(m_indent) > 40:
-                        warnings.warn(f'Config key "{name}" with indent is too long (>40) to display, please check.')
-                    if len(m_indent) < 38:
-                        m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
-                    color_flag = ''
-                    if name in modified_cfg_dict['modified']:
-                        color_flag = '\033[34m'  # blue
-                    elif name in modified_cfg_dict['added']:
-                        color_flag = '\033[32m'  # green
-                    elif name in modified_cfg_dict['typechanged']:
-                        color_flag = '\033[31m'  # red
-                    elif name in modified_cfg_dict['docs']:
-                        color_flag = '\033[30m'  # black
-                    msg_in += f'{color_flag}{m_indent:40}{v}\033[0m\n'
-            return msg_in
+                    if len(key_indent) > 40:
+                        warnings.warn(f'Config key "{key}" with indent is too long (>40) to display, please check.')
+                    elif len(key_indent) < 38:
+                        key_indent += ' ' + '-' * (38 - len(key_indent)) + ' '
+                    
+                    if key in modified_cfg_dict['added']:
+                        str_block_add += f'\033[32m{key_indent:40}{value}\033[0m\n'  # green
+                    elif key in modified_cfg_dict['modified']:
+                        assert value == modified_cfg_dict['modified'][key]['new_value'], f'Value of key "{key}" is not equal to the new value in "modified".'
+                        if key in modified_cfg_dict['typechanged']:
+                            str_block_add += f'\033[31m{key_indent:40}\033[30m{modified_cfg_dict["modified"][key]["old_value"]} ({modified_cfg_dict["typechanged"][key]["old_type"]}) -> \033[31m{value} ({modified_cfg_dict["typechanged"][key]["new_type"]})\033[0m\n'  # red
+                        else:
+                            str_block_add += f'\033[34m{key_indent:40}\033[30m{modified_cfg_dict["modified"][key]["old_value"]} -> \033[34m{value}\033[0m\n'  # blue
+                    elif not modified_config_only:
+                        str_block_add += f'{key_indent:40}{value}\n'
+            if str_block_add != '':
+                return str_block_in + str_block_add
+            else:
+                return ''
         
-        msg = f'Rank {DistMisc.get_rank()} --- Parameters: (\033[34mmodified, \033[32madded, \033[31mtypechanged, \033[30mdoc)\033[0m\n'
-        msg = LoggerMisc.block_wrapper(write_msg_lines(msg, cfg), s='=', block_width=80)
+        str_block = f'Rank {DistMisc.get_rank()} --- {"Modified" if modified_config_only else "All"} Parameters: (\033[32madded, \033[34mmodified, \033[31mtypechanged)\033[0m\n'
+        str_block = LoggerMisc.block_wrapper(write_config_lines(str_block, cfg), s='=', block_width=80)
         
         DistMisc.avoid_print_mess()
-        print(msg, force=force_all_rank)
+        print(str_block, force=force_all_rank)
         DistMisc.avoid_print_mess()
     
     @staticmethod 
     def init_loggers(cfg):
-        loggers = Namespace()
+        loggers = SimpleNamespace()
         if DistMisc.is_main_process():
             cfg_dict = ConfigMisc.nested_namespace_to_plain_namespace(cfg, cfg.special.logger_config_ignore + ['modified_cfg_dict'])
             if cfg.info.wandb.wandb_enabled:

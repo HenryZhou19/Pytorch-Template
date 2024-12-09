@@ -1,8 +1,8 @@
 import math
 import time
-from argparse import Namespace
 from copy import deepcopy
 from functools import partial
+from types import SimpleNamespace
 
 import torch
 from ema_pytorch.ema_pytorch import EMA
@@ -21,8 +21,8 @@ class TesterBase:
     
     def __init__(
         self,
-        cfg: Namespace,
-        loggers: Namespace,
+        cfg: SimpleNamespace,
+        loggers: SimpleNamespace,
         model_without_ddp: ModelBase,
         ema_container: EMA,
         device: torch.device,

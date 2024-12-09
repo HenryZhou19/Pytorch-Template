@@ -7,7 +7,6 @@ wheel
 hjson
 numpy<2.0.0
 opencv-python
-sacred==0.8.5
 tensorboard
 torchinfo
 tqdm
