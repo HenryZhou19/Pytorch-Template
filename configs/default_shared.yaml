@@ -1,5 +1,5 @@
 config:
-  main: TBD  # name of the main config file, will be overwritten by sacred (specified in .sh file, no need to name it here) 
+  main: TBD  # name of the main config file, will be overwritten by the commandline-arg (-c MAIN_CONFIG_NAME) 
 
 env:
   device: cuda  # cuda or cpu (if 'cpu', specified in .sh file) 
@@ -18,9 +18,9 @@ special:
   single_eval: False  # if True, only do evaluation with one rank and eval_batch_size -> 1, making sure that each sample is evaluated once
   no_logger: False  # if True, no loggers will be used
   save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
-  print_config_start: False  # if True, print config at the start of the run
-  print_config_end: False  # if True, print config at the end of the run
-  print_config_all_rank: False  # if True, print config for all ranks when "print_config_start" or "print_config_end" is True
+  print_config_start: False  # if True, print all configs at the start of the run, else print the modified configs only
+  print_config_end: False  # if True, print configs at the end of the run
+  print_config_all_rank: False  # if True, print configs for all ranks when "print_config_start" or "print_config_end" is True
   print_save_config_ignore: [sweep]
   logger_config_ignore: [config, env, info, sweep, special]
   extra_name: null  # null for no extra name

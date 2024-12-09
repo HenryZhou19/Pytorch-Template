@@ -1,12 +1,12 @@
 import math
 import os
 import time
-from typing import Union
 import warnings
-from argparse import Namespace
 from copy import deepcopy
 from functools import partial
 from glob import glob
+from types import SimpleNamespace
+from typing import Union
 
 import torch
 from ema_pytorch import EMA
@@ -25,8 +25,8 @@ class TrainerBase:
     
     def __init__(
         self,
-        cfg: Namespace,
-        loggers: Namespace,
+        cfg: SimpleNamespace,
+        loggers: SimpleNamespace,
         model: Union[ModelBase, torch.nn.parallel.DistributedDataParallel],
         ema_container: EMA,
         criterion: CriterionBase,
