@@ -171,7 +171,7 @@ class ConfigMisc:
     def update_nested_namespace(cfg_base, cfg_new):
         for name, value in vars(cfg_new).items():
             if isinstance(value, SimpleNamespace):
-                if name not in vars(cfg_base):
+                if name not in vars(cfg_base) or not isinstance(getattr(cfg_base, name), SimpleNamespace):
                     setattr(cfg_base, name, SimpleNamespace())
                 ConfigMisc.update_nested_namespace(getattr(cfg_base, name), value)
             else:
