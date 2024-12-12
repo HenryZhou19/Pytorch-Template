@@ -1,5 +1,6 @@
 import itertools
 import random
+import signal
 from functools import partial
 
 import numpy as np
@@ -126,6 +127,7 @@ class DataModuleBase:
     
     def get_worker_init_fn(self):
         def _worker_init_fn(worker_id, rank_seed):
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
             worker_seed = rank_seed + worker_id
             random.seed(worker_seed)
             np.random.seed(worker_seed)
