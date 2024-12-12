@@ -79,6 +79,7 @@ class ConfigMisc:
         main_config_path = ConfigMisc._get_main_config_file_path(config_dir)
         additional_config_paths = ConfigMisc._get_additional_config_file_paths(config_dir, main_config_path)
         cfg = ConfigMisc._parse_yaml_files(additional_config_paths + [main_config_path])
+        cfg.modified_cfg_dict = defaultdict(dict)
         cfg = ConfigMisc._update_config_with_cli_args(cfg)
         return cfg
     
@@ -112,7 +113,6 @@ class ConfigMisc:
     @staticmethod
     def _update_config_with_cli_args(cfg):
         args = sys.argv
-        modified_cfg_dict = defaultdict(dict)
         for arg in args:
             if "=" not in arg:
                 continue  # Skip arguments without "key=value" format
@@ -120,8 +120,7 @@ class ConfigMisc:
             value = yaml.safe_load(value)  # Convert strings like 'true', '1' properly
             
             keys = key_path.split(".")
-            ConfigMisc.setattr_for_nested_namespace(cfg, keys, value, modified_cfg_dict)
-        cfg.modified_cfg_dict = modified_cfg_dict
+            ConfigMisc.setattr_for_nested_namespace(cfg, keys, value, track_modifications=True, mod_dict_key_prefix='cli')
         return cfg
     
     @staticmethod 
@@ -178,18 +177,28 @@ class ConfigMisc:
                 setattr(cfg_base, name, value)
     
     @staticmethod
-    def setattr_for_nested_namespace(cfg, name_list, value, modified_cfg_dict: defaultdict=None):
+    def setattr_for_nested_namespace(cfg, name_list, value, track_modifications=False, mod_dict_key_prefix=''):
         namespace_now = cfg
         for name in name_list[:-1]:
             namespace_now = getattr(namespace_now, name, SimpleNamespace())
-        if modified_cfg_dict is not None:
+        if track_modifications:
+            modified_cfg_dict = getattr(cfg, 'modified_cfg_dict', defaultdict(dict))
+            if mod_dict_key_prefix != '':
+                mod_dict_key_prefix += '_'
             if not hasattr(namespace_now, name_list[-1]):
-                modified_cfg_dict['added'][name_list[-1]] = {'new_value': value, 'full_key': '.'.join(name_list)}
+                modified_cfg_dict[f'{mod_dict_key_prefix}added'][name_list[-1]] = {'new_value': value, 'full_key': '.'.join(name_list)}
             else:
-                if type(getattr(namespace_now, name_list[-1])) != type(value):
-                    modified_cfg_dict['typechanged'][name_list[-1]] = {'old_type': type(getattr(namespace_now, name_list[-1])).__name__, 'new_type': type(value).__name__, 'full_key': '.'.join(name_list)}
-                modified_cfg_dict['modified'][name_list[-1]] = {'old_value': getattr(namespace_now, name_list[-1]), 'new_value': value, 'full_key': '.'.join(name_list)}
+                old_value = getattr(namespace_now, name_list[-1])
+                if old_value != value:
+                    modified_cfg_dict[f'{mod_dict_key_prefix}modified'][name_list[-1]] = {'old_value': old_value, 'new_value': value, 'full_key': '.'.join(name_list)}
+                    old_type, new_type = type(old_value), type(value)
+                    if old_type != new_type:
+                        modified_cfg_dict[f'{mod_dict_key_prefix}typechanged'][name_list[-1]] = {'old_type': old_type.__name__, 'new_type': new_type.__name__, 'full_key': '.'.join(name_list)}
         setattr(namespace_now, name_list[-1], value)
+        
+    @staticmethod
+    def auto_track_setattr(cfg, name_list, value):
+        ConfigMisc.setattr_for_nested_namespace(cfg, name_list, value, track_modifications=True, mod_dict_key_prefix='auto')
     
     @staticmethod
     def read_from_yaml(path):
@@ -237,7 +246,7 @@ class PortalMisc:
             dist.barrier()
         time_string = buffer.cpu().numpy().tobytes().decode('utf-8')
         # print(f"Rank {DistMisc.get_rank()} has time string: {time_string}", force=True)
-        setattr(cfg.info, config_name, time_string)
+        ConfigMisc.auto_track_setattr(cfg, ['info', config_name], time_string)
     
     @staticmethod
     def _find_available_new_path(path, suffix=''):
@@ -281,12 +290,12 @@ class PortalMisc:
         train_seed_base = cfg.seed_base
         ConfigMisc.update_nested_namespace(cfg, infer_cfg)
         if use_train_seed:
-            cfg.seed_base = train_seed_base
+            ConfigMisc.auto_track_setattr(cfg, ['seed_base'], train_seed_base)
         
         ## 2. confirm the train_work_dir for the "checkpoint_path" and the "(inference_)work_dir"
         ## Note: get it from the train_cfg_path, not in the config itself, as the train_work_dir might have been moved or renamed.
-        # cfg.info.train_work_dir = cfg.info.work_dir
-        cfg.info.train_work_dir = '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1])
+        # ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], cfg.info.work_dir)
+        ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1]))
         if os.path.abspath(cfg.info.train_work_dir) != os.path.abspath(cfg.info.work_dir):
             print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', '#'))
         
@@ -296,15 +305,17 @@ class PortalMisc:
                 cfg.info.train_work_dir,
                 'checkpoint_best_epoch_*.pth' if cfg.tester.use_best else 'checkpoint_last_epoch_*.pth'))
             assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
-            cfg.tester.checkpoint_path = checkpoint_path[0]
+            ConfigMisc.auto_track_setattr(cfg, ['tester', 'checkpoint_path'], checkpoint_path[0])
         else:
             assert os.path.exists(cfg.tester.checkpoint_path), f'Checkpoint path "{cfg.tester.checkpoint_path}" not found.'
         
         ## 4. set work_dir for inference (default: train_work_dir/inference_results)
         if custom_work_dir is not None:
-            cfg.info.work_dir = os.path.join(custom_work_dir, LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True))
+            ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'],
+                                          os.path.join(custom_work_dir, LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True)))
         else:
-            cfg.info.work_dir = cfg.info.train_work_dir + '/inference_results/' + LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True)
+            ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'],
+                                          cfg.info.train_work_dir + '/inference_results/' + LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True))
         if DistMisc.is_main_process():
             if not os.path.exists(cfg.info.work_dir):
                 os.makedirs(cfg.info.work_dir)
@@ -319,15 +330,15 @@ class PortalMisc:
             cfg_old = ConfigMisc.read_from_yaml(cfg.trainer.resume)
             # XXX: assert critial params are the same, but others can be changed(e.g. info...)
             work_dir = cfg_old.info.work_dir
-            setattr(cfg.info, 'resume_start_time', cfg.info.start_time)
-            cfg.info.start_time = cfg_old.info.start_time
+            ConfigMisc.auto_track_setattr(cfg, ['info', 'resume_start_time'], cfg.info.start_time)
+            ConfigMisc.auto_track_setattr(cfg, ['info', 'start_time'], cfg_old.info.start_time)
         else:
             work_dir = os.path.join(cfg.info.output_dir, LoggerMisc.output_dir_time_and_extras(cfg))
             if DistMisc.is_main_process():
                 print(LoggerMisc.block_wrapper(f'New start at: {work_dir}', '>'))
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir)
-        cfg.info.work_dir = work_dir
+        ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'], work_dir)
     
     @staticmethod
     def seed_everything(cfg):
@@ -357,32 +368,38 @@ class PortalMisc:
             if not ConfigMisc.is_inference(cfg):  # for train and val
                 if cfg.trainer.grad_accumulation > 1:
                     warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
-            
-                cfg.trainer.trainer_batch_size_total = cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation
-                cfg.info.batch_info = f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}'
+
+                ConfigMisc.auto_track_setattr(cfg, ['trainer', 'trainer_batch_size_total'],
+                                              cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation)
+                ConfigMisc.auto_track_setattr(cfg, ['info', 'batch_info'],
+                                              f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}')
                 
                 if cfg.trainer.sync_lr_with_batch_size > 0:
-                    cfg.trainer.optimizer.lr_default *= float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size
+                    ConfigMisc.auto_track_setattr(cfg, ['trainer', 'optimizer', 'lr_default'],
+                                                  cfg.trainer.optimizer.lr_default * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
                     if hasattr(cfg.trainer.optimizer, 'param_groups'):
                         lr_mark = 'lr_'
                         for k, v in vars(cfg.trainer.optimizer.param_groups).items():
                             if k.startswith(lr_mark):
-                                setattr(cfg.trainer.optimizer.param_groups, k, v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
+                                ConfigMisc.auto_track_setattr(cfg, ['trainer', 'optimizer', 'param_groups', k],
+                                                              v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
             else: # for inference
-                cfg.tester.tester_batch_size_total = cfg.tester.tester_batch_size_per_rank * cfg.env.world_size
-                cfg.info.batch_info = f'{cfg.tester.tester_batch_size_total}={cfg.tester.tester_batch_size_per_rank}_{cfg.env.world_size}'
+                ConfigMisc.auto_track_setattr(cfg, ['tester', 'tester_batch_size_total'],
+                                              cfg.tester.tester_batch_size_per_rank * cfg.env.world_size)
+                ConfigMisc.auto_track_setattr(cfg, ['info', 'batch_info'],
+                                              f'{cfg.tester.tester_batch_size_total}={cfg.tester.tester_batch_size_per_rank}_{cfg.env.world_size}')
         
         _set_real_batch_size_and_lr(cfg)
         
         if cfg.special.debug == 'one_iter':  # 'one_iter' debug mode
-            cfg.env.num_workers = 0
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'num_workers'], 0)
          
         if cfg.special.no_logger:
-            cfg.info.wandb.wandb_enabled = False
-            cfg.info.tensorboard.tensorboard_enabled = False
+            ConfigMisc.auto_track_setattr(cfg, ['info', 'wandb', 'wandb_enabled'], False)
+            ConfigMisc.auto_track_setattr(cfg, ['info', 'tensorboard', 'tensorboard_enabled'], False)
             
         if cfg.special.single_eval:
-            cfg.trainer.dist_eval = False
+            ConfigMisc.auto_track_setattr(cfg, ['trainer', 'dist_eval'], False)
 
 
     @staticmethod
@@ -407,7 +424,53 @@ class PortalMisc:
     
     @staticmethod
     def _print_config(cfg, force_all_rank=False, modified_config_only=False):
+        UNCHANGED = 0
+        ADDED = 1
+        MODIFIED = 2
+        TYPECHANGED = 3
+        
+        FADED_COLOR = '\033[30m'  # black
+        COLORS = {
+            0: '\033[0m',  # white
+            1: '\033[32m',  # green
+            2: '\033[34m',  # blue
+            3: '\033[31m',  # red
+        }
+        CLI_COLOR = '\033[33m'  # yellow
+        SWEEP_COLOR = '\033[35m'  # magenta
+        AUTO_COLOR = '\033[36m'  # cyan
+        
         modified_cfg_dict = cfg.modified_cfg_dict
+        dict_key_prefix_list = ['auto', 'sweep', 'cli']  # In reverse order of occurrence
+        
+        def get_value_prefix(dict_key_prefix):
+            color = CLI_COLOR if dict_key_prefix == 'cli' else SWEEP_COLOR if dict_key_prefix == 'sweep' else AUTO_COLOR
+            value_prefix = color + dict_key_prefix + ': ' + COLORS[UNCHANGED]
+            return value_prefix
+            
+        def check_modified_cfg_dict(modified_cfg_dict, key, value, dict_key_prefix='cli'):
+            modified = UNCHANGED
+            str_pre, str_post = '', ''
+            assert dict_key_prefix in ['cli', 'sweep', 'auto'], f'Invalid dict_key_prefix: {dict_key_prefix}'
+            
+            if key in modified_cfg_dict[f'{dict_key_prefix}_added']:
+                modified = ADDED
+                str_post = f'{get_value_prefix(dict_key_prefix)}{COLORS[ADDED]}{value}{COLORS[UNCHANGED]}'  # green
+            elif key in modified_cfg_dict[f'{dict_key_prefix}_modified']:
+                old_value = modified_cfg_dict[f"{dict_key_prefix}_modified"][key]["old_value"]
+                new_value = modified_cfg_dict[f'{dict_key_prefix}_modified'][key]['new_value']
+                if key in modified_cfg_dict[f'{dict_key_prefix}_typechanged']:
+                    modified = TYPECHANGED
+                    old_type = modified_cfg_dict[f"{dict_key_prefix}_typechanged"][key]["old_type"]
+                    new_type = modified_cfg_dict[f"{dict_key_prefix}_typechanged"][key]["new_type"]
+                    str_pre = f'{FADED_COLOR}{old_value} ({old_type})'
+                    str_post = f'{FADED_COLOR} -> {get_value_prefix(dict_key_prefix)}{COLORS[TYPECHANGED]}{new_value} ({new_type}){COLORS[UNCHANGED]}'  # red
+                else:
+                    modified = MODIFIED
+                    str_pre = f'{FADED_COLOR}{old_value}'
+                    str_post = f'{FADED_COLOR} -> {get_value_prefix(dict_key_prefix)}{COLORS[MODIFIED]}{new_value}{COLORS[UNCHANGED]}'  # blue
+                    
+            return modified, str_pre, str_post
         
         def write_config_lines(str_block_in, cfg_in, indent=0):
             str_block_add = ''
@@ -424,16 +487,23 @@ class PortalMisc:
                     elif len(key_indent) < 38:
                         key_indent += ' ' + '-' * (38 - len(key_indent)) + ' '
                     
-                    if key in modified_cfg_dict['added']:
-                        str_block_add += f'\033[32m{key_indent:40}{value}\033[0m\n'  # green
-                    elif key in modified_cfg_dict['modified']:
-                        assert value == modified_cfg_dict['modified'][key]['new_value'], f'Value of key "{key}" is not equal to the new value in "modified".'
-                        if key in modified_cfg_dict['typechanged']:
-                            str_block_add += f'\033[31m{key_indent:40}\033[30m{modified_cfg_dict["modified"][key]["old_value"]} ({modified_cfg_dict["typechanged"][key]["old_type"]}) -> \033[31m{value} ({modified_cfg_dict["typechanged"][key]["new_type"]})\033[0m\n'  # red
-                        else:
-                            str_block_add += f'\033[34m{key_indent:40}\033[30m{modified_cfg_dict["modified"][key]["old_value"]} -> \033[34m{value}\033[0m\n'  # blue
-                    elif not modified_config_only:
-                        str_block_add += f'{key_indent:40}{value}\n'
+                    ever_modified = False
+                    str_add, final_str_pre = '', ''
+                    for dict_key_prefix in dict_key_prefix_list:
+                        modified, str_pre, str_post = check_modified_cfg_dict(modified_cfg_dict, key, value, dict_key_prefix=dict_key_prefix)         
+                        if modified:
+                            ever_modified = True
+                            final_str_pre = f'{COLORS[modified]}{key_indent:40}{COLORS[UNCHANGED]}' + str_pre
+                            str_add = str_post + str_add
+                            
+                    if not modified_config_only and not ever_modified:
+                        str_add = f'{key_indent:40}{value}\n'
+                    else:
+                        str_add = final_str_pre + str_add
+                        if str_add != '':
+                            str_add += '\n'
+                        
+                    str_block_add += str_add
             if str_block_add != '':
                 return str_block_in + str_block_add
             else:
@@ -646,18 +716,18 @@ class DistMisc:
     def init_distributed_mode(cfg):
         if cfg.env.device == 'cuda':
             if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:  # 
-                cfg.env.world_size = int(os.environ['WORLD_SIZE'])
-                cfg.env.rank = int(os.environ['RANK'])
-                cfg.env.local_rank = int(os.environ['LOCAL_RANK'])
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'world_size'], int(os.environ['WORLD_SIZE']))
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'rank'], int(os.environ['RANK']))
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'local_rank'], int(os.environ['LOCAL_RANK']))
             # elif 'SLURM_PROCID' in os.environ and 'SLURM_PTY_PORT' not in os.environ:
-            #     cfg.env.rank = int(os.environ['SLURM_PROCID'])
-            #     cfg.env.local_rank = cfg.env.rank % torch.cuda.device_count()
+            #     ConfigMisc.auto_track_setattr(cfg, ['env', 'rank'], int(os.environ['SLURM_PROCID']))
+            #     ConfigMisc.auto_track_setattr(cfg, ['env', 'local_rank'], cfg.env.rank % torch.cuda.device_count())
             else:
                 raise NotImplementedError('Must use "torchrun" when device is cuda')
             
-            cfg.env.distributed = True
-            cfg.env.dist_backend = 'nccl'
-            cfg.env.dist_url = 'env://'
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'distributed'], True)
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_backend'], 'nccl')
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_url'], 'env://')
             torch.cuda.set_device(cfg.env.local_rank)
             
             # dist.distributed_c10d.logger.setLevel(logging.WARNING)  # this line may cause the multi-machine ddp to hang
@@ -674,21 +744,21 @@ class DistMisc:
                 if DistMisc.is_node_first_rank():
                     print(LoggerMisc.block_wrapper(f'This is not the main node, which is on {os.environ["MASTER_ADDR"]}:{os.environ["MASTER_PORT"]}'), force=True)
         elif cfg.env.device == 'cpu':
-            cfg.env.distributed = False
-            cfg.env.world_size = 1
-            cfg.env.rank = 0
-            cfg.env.local_rank = 0
-            cfg.env.dist_backend = 'None'
-            cfg.env.dist_url = 'None'
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'distributed'], False)
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'world_size'], 1)
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'rank'], 0)
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'local_rank'], 0)
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_backend'], 'None')
+            ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_url'], 'None')
             
             DistMisc.setup_for_distributed(True)
             
             if getattr(cfg.env, 'amp', False):  # in train mode, check AMP
                 print(LoggerMisc.block_wrapper('AMP is not supported on CPU. Automatically turning off AMP by setting "cfg.env.amp.amp_enabled = False".', '#'))
-                cfg.env.amp.amp_enabled = False
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'amp', 'amp_enabled'], False)
             if cfg.env.pin_memory:
                 print(LoggerMisc.block_wrapper('Pin memory is not supported on CPU. Automatically turning off pin_memory by setting "cfg.env.pin_memory = False".', '#'))
-                cfg.env.pin_memory = False
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'pin_memory'], False)
         else:
             raise ValueError('Invalid device type.')
     
@@ -1101,7 +1171,7 @@ class SweepMisc:
             cfg_now = deepcopy(cfg)
             for chained_k, v in combination.items():
                 k_list = chained_k.split('//')
-                ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v)
+                ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v, track_modifications=True, mod_dict_key_prefix='sweep')
             portal_fn(cfg_now)
     
     @staticmethod
