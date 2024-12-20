@@ -3,10 +3,16 @@ config:  # main config (in this file) overrides additional configs
   - configs/defaults/shared.yaml
   - configs/defaults/inference.yaml
 
+info:
+  wandb:
+    wandb_enabled: False
+  tensorboard:
+    tensorboard_enabled: False
+
 tester:
   train_cfg_path: to_be_specified  # XXX: required
   ## batch_control
-  tester_batch_size_per_rank: 4  # override this in main config
+  tester_batch_size_per_rank: 1  # override this in main config
   ## batch_control ends
   tester_choice: default
   checkpoint_path: null  # if not specified (null as None), use the best or last checkpoint in the train_work_dir according to use_best
