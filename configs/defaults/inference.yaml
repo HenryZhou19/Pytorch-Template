@@ -1,8 +1,7 @@
-env:
-  amp:
-    amp_enabled: True
-    amp_inference: True
-    amp_mode: fp16  # fp16, bf16
+amp:
+  amp_enabled: True
+  amp_inference: True
+  amp_mode: fp16  # fp16, bf16
   
 info:
   task_type: Infer  # Test, Infer, ...

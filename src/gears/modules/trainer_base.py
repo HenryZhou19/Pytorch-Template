@@ -125,14 +125,14 @@ class TrainerBase:
                 for param_group in self.optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')}
         
     def _init_autocast(self):
-        if self.cfg.env.amp.amp_mode == 'fp16':
+        if self.cfg.amp.amp_mode == 'fp16':
             dtype = torch.float16
-        elif self.cfg.env.amp.amp_mode == 'bf16':
+        elif self.cfg.amp.amp_mode == 'bf16':
             dtype = torch.bfloat16
         else:
-            raise ValueError(f'Unknown amp.amp_mode: {self.cfg.env.amp.amp_mode}')
-        train_amp_enabled = self.cfg.env.amp.amp_enabled
-        val_amp_enabled = self.cfg.env.amp.amp_enabled and self.cfg.env.amp.amp_val
+            raise ValueError(f'Unknown amp.amp_mode: {self.cfg.amp.amp_mode}')
+        train_amp_enabled = self.cfg.amp.amp_enabled
+        val_amp_enabled = self.cfg.amp.amp_enabled and self.cfg.amp.amp_val
         self.train_autocast = partial(torch.cuda.amp.autocast, enabled=train_amp_enabled, dtype=dtype)
         self.val_autocast = partial(torch.cuda.amp.autocast, enabled=val_amp_enabled, dtype=dtype)
     

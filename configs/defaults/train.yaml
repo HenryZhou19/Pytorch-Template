@@ -1,11 +1,12 @@
+amp:
+  amp_enabled: True
+  amp_val: True
+  amp_mode: fp16  # fp16, bf16
+
 env:
   seed_with_rank: True
   cuda_deterministic: False
   find_unused_parameters: True
-  amp:
-    amp_enabled: True
-    amp_val: True
-    amp_mode: fp16  # fp16, bf16
 
 info: # info & wandb
   start_time : TBD

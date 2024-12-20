@@ -15,7 +15,7 @@ env:
 
 special:
   debug: null  # 'normal', 'one_iter', 'one_epoch', 'one_val_epoch', null for no debug
-  single_eval: False  # if True, only do evaluation with one rank and eval_batch_size -> 1, making sure that each sample is evaluated once
+  single_eval: False  # if True, only do evaluation with one rank and eval_batch_size=1, making sure that each sample is evaluated once (for "single_inference", just set tester_batch_size_per_rank=1 in inference.yaml and make sure to use one device only)
   no_logger: False  # if True, no loggers will be used
   save_current_project: True  # src/, scripts/, configs/, ./*.py (train.py, inference.py, ...)
   print_config_start: False  # if True, print all configs at the start of the run, else print the modified configs only

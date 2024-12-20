@@ -751,9 +751,9 @@ class DistMisc:
             
             DistMisc.setup_for_distributed(True)
             
-            if getattr(cfg.env, 'amp', False):  # in train mode, check AMP
-                print(LoggerMisc.block_wrapper('AMP is not supported on CPU. Automatically turning off AMP by setting "cfg.env.amp.amp_enabled = False".', '#'))
-                ConfigMisc.auto_track_setattr(cfg, ['env', 'amp', 'amp_enabled'], False)
+            if getattr(cfg.amp, 'amp_enabled', False):  # in train mode, check AMP
+                print(LoggerMisc.block_wrapper('AMP is not supported on CPU. Automatically turning off AMP by setting "cfg.amp.amp_enabled = False".', '#'))
+                ConfigMisc.auto_track_setattr(cfg, ['amp', 'amp_enabled'], False)
             if cfg.env.pin_memory:
                 print(LoggerMisc.block_wrapper('Pin memory is not supported on CPU. Automatically turning off pin_memory by setting "cfg.env.pin_memory = False".', '#'))
                 ConfigMisc.auto_track_setattr(cfg, ['env', 'pin_memory'], False)

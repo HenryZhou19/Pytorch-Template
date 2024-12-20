@@ -83,7 +83,7 @@ class OptimizerUtils:
         else:
             raise ValueError(f'Unknown optimizer choice: {cfg.trainer.optimizer.optimizer_choice}')
         
-        if cfg.env.amp.amp_enabled and cfg.env.amp.amp_mode == 'fp16':
+        if cfg.amp.amp_enabled and cfg.amp.amp_mode == 'fp16':
             scaler = torch.cuda.amp.GradScaler(enabled=True)
         else:
             scaler = None

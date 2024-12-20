@@ -72,13 +72,13 @@ class TesterBase:
             self._init_autocast()
             
     def _init_autocast(self):
-        if self.cfg.env.amp.amp_mode == 'fp16':
+        if self.cfg.amp.amp_mode == 'fp16':
             dtype = torch.float16
-        elif self.cfg.env.amp.amp_mode == 'bf16':
+        elif self.cfg.amp.amp_mode == 'bf16':
             dtype = torch.bfloat16
         else:
-            raise ValueError(f'Unknown amp.amp_mode: {self.cfg.env.amp.amp_mode}')
-        inference_amp_enabled = self.cfg.env.amp.amp_enabled and self.cfg.env.amp.amp_inference
+            raise ValueError(f'Unknown amp.amp_mode: {self.cfg.amp.amp_mode}')
+        inference_amp_enabled = self.cfg.amp.amp_enabled and self.cfg.amp.amp_inference
         self.inference_autocast = partial(torch.cuda.amp.autocast, enabled=inference_amp_enabled, dtype=dtype)
     
     def _get_pbar(self):
