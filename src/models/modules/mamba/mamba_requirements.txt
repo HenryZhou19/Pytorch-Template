@@ -1,2 +1,3 @@
-causal-conv1d==1.3.0.post0
+## make sure the actually used CUDA >= 11.6
+causal-conv1d==1.3.0.post1
 mamba-ssm==2.2.2  # ==2.1.0 will be ok

@@ -31,9 +31,9 @@
 
     * Loggers can be configured in 'yaml' config files, or you can disable all of them by running the bash command with 'special.no_logger=True':
         ```
-        bash scripts/train.sh -d 0 -c template_train_lenet special.no_logger=True
+        bash scripts/train.sh -d 0 -c configs/templates/train_lenet.yaml special.no_logger=True
         ```
-        * '-c template_train_lenet' means using './config/template_train_lenet.yaml' as the main config file.
+        * '-c configs/templates/train_lenet.yaml' means using './configs/templates/train_lenet.yaml' as the main config file.
     * Most of the configs can be modified or added in the bash command line by adding 'X.Y.Z=abc' intuitively, which equals to the following contents in the 'yaml' file:
         ```
         X:
@@ -45,13 +45,13 @@
     ```
     # Example(s):
     # CPU
-    bash scripts/train.sh -d cpu -c template_train_lenet
+    bash scripts/train.sh -d cpu -c configs/templates/train_lenet.yaml
 
     # GPU device_id=0
-    bash scripts/train.sh -d 0 -c template_train_lenet
+    bash scripts/train.sh -d 0 -c configs/templates/train_lenet.yaml
 
     # GPU device_id=0,1 (DDP)
-    bash scripts/train.sh -d 0,1 -c template_train_lenet
+    bash scripts/train.sh -d 0,1 -c configs/templates/train_lenet.yaml
     ```
 
 * (optional) DDP across multiple machines 
@@ -64,10 +64,10 @@
     # i.e. 4+2 GPUs
 
     # node 0 (master)
-    bash scripts/multi_machine_train.sh -d 0,1,2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 0 -c template_train_lenet
+    bash scripts/multi_machine_train.sh -d 0,1,2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 0 -c configs/templates/train_lenet.yaml
 
     # node 1 (slave_1)
-    bash scripts/multi_machine_train.sh -d 2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 1 -c template_train_lenet
+    bash scripts/multi_machine_train.sh -d 2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 1 -c configs/templates/train_lenet.yaml
 
     # '-a' means '--master_addr' in torchrun.
     # '-p' means '--master_port' in torchrun.
@@ -90,7 +90,7 @@
     bash scripts/inference.sh -d (cpu; 0; 0,1 ...) tester.train_cfg_path=TRAIN_CFG_PATH
     ```
 * Notes: 
-    * It will use 'template_inference.yaml' as configs for inference by default.
+    * It will use 'configs/templates/inference.yaml' as configs for inference by default.
 
     * The config 'tester.use_best' can control whether to use the best model or the latest model in the outputs folder.
 
@@ -286,7 +286,7 @@
 1. Create a new 'yaml' file for your task (still named ResNet for example) in **configs** as **configs/train_resnet.yaml**.
 
 * In your new file, do the following steps just as in **src/models/template_model.py**.
-* Maybe just copying one of the 'template_train_XXX.yaml' files will help your work greatly.
+* Maybe just copying one of the 'configs/templates/train_XXX.yaml' files will help your work greatly.
 
 2. 'config.additional' is the list of default config files in which all configs are inherited (and overridden by the latter one in the list **and this main yaml file**).
 
@@ -311,7 +311,7 @@
         4. trainer.scheduler.scheduler_choice=cosine  
            trainer.optimizer.lr_default=4.0e-4
 
-5. You may explore the usage of other configs by reading the comments in 'default_xxx.yaml' and 'template_xxx.yaml' files.
+5. You may explore the usage of other configs by reading the comments in 'configs/defaults/\*.yaml' and 'configs/templates/\*.yaml' files.
 
 #### ⑦ Run the task:
 
@@ -347,9 +347,9 @@
 ### scripts
 * the folder for bash scripts, which are used as the entry of the most main functions in this repository
 * common usage: "bash scripts/xxx.sh -args ..."
-    * <u>"bash scripts/train.sh -d 0,1"</u> to train on GPU0 and GPU1 with config file "configs/template_train.yaml"
-    * <u>"bash scripts/train.sh -c template_train_lenet -d 0"</u> to train on GPU0 with config file "configs/template_train_lenet.yaml"
-    * <u>"bash scripts/train.sh -d 0,1,2,3 trainer.trainer_batch_size_per_rank=16"</u> to train on GPU 0~3 with config file "configs/template_train.yaml", in which the default "trainer_batch_size_per_rank" will be changed to 16
+    * <u>"bash scripts/train.sh -d 0,1"</u> to train on GPU0 and GPU1 with config file "configs/templates/train.yaml"
+    * <u>"bash scripts/train.sh -c configs/templates/train_lenet.yaml -d 0"</u> to train on GPU0 with config file "configs/templates/train_lenet.yaml"
+    * <u>"bash scripts/train.sh -d 0,1,2,3 trainer.trainer_batch_size_per_rank=16"</u> to train on GPU 0~3 with config file "configs/templates/train.yaml", in which the default "trainer_batch_size_per_rank" will be changed to 16
     * ......
 
 ### src
