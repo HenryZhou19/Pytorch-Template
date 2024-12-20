@@ -9,4 +9,4 @@ __pycache__/
 data
 dataset
 outputs*
-temp*
+temp_*

@@ -80,7 +80,7 @@ def train_portal(cfg):
 
 
 if __name__ == '__main__':
-    cfg = ConfigMisc.get_configs(config_dir='./configs/')
+    cfg = ConfigMisc.get_configs()
     
     # init distributed mode
     DistMisc.init_distributed_mode(cfg)

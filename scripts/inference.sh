@@ -3,7 +3,7 @@ devices="cpu"  # numbers with ',' or 'cpu'
 omp_num_threads=4
 mkl_num_threads=4
 numexpr_num_threads=4
-main_config_file_name="template_inference"
+main_config_file_name="configs/templates/inference.yaml"
 params=()
 
 seconds_to_wait=0
@@ -26,8 +26,8 @@ options:
         Default: "cpu"
 
     [-c value], --config
-        Set the main config file name to use in "./config/".
-        Default: "template_inference"
+        Set the main config file path.
+        Default: "configs/templates/inference.yaml"
 
     [-w value], --wait
         Set the seconds to wait before running the command.

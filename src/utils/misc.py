@@ -75,31 +75,29 @@ else:
 
 class ConfigMisc:
     @staticmethod
-    def get_configs(config_dir):
-        main_config_path = ConfigMisc._get_main_config_file_path(config_dir)
-        additional_config_paths = ConfigMisc._get_additional_config_file_paths(config_dir, main_config_path)
+    def get_configs():
+        main_config_path = ConfigMisc._get_main_config_file_path()
+        additional_config_paths = ConfigMisc._get_additional_config_file_paths(main_config_path)
         cfg = ConfigMisc._parse_yaml_files(additional_config_paths + [main_config_path])
         cfg.modified_cfg_dict = defaultdict(dict)
         cfg = ConfigMisc._update_config_with_cli_args(cfg)
         return cfg
     
     @staticmethod
-    def _get_main_config_file_path(config_dir):
+    def _get_main_config_file_path():
         args = sys.argv
-        main_config_name = None
+        main_config_path = None
         for arg in args:
             if arg.startswith('config.main='):
-                main_config_name = arg.split('=')[1]
+                main_config_path = arg.split('=')[1]
                 break
-        assert main_config_name is not None, 'Should have a main config file name.'
-        return os.path.join(config_dir, main_config_name + '.yaml')
+        assert main_config_path is not None, 'Should have a main config file name.'
+        return main_config_path
     
     @staticmethod
-    def _get_additional_config_file_paths(config_dir, main_config_path):
-        additional_configs = getattr(ConfigMisc.read_from_yaml(main_config_path).config, 'additional', [])
-        for idx, additional_config in enumerate(additional_configs):
-            additional_configs[idx] = os.path.join(config_dir, additional_config + '.yaml')
-        return additional_configs
+    def _get_additional_config_file_paths(main_config_path):
+        additional_config_paths = getattr(ConfigMisc.read_from_yaml(main_config_path).config, 'additional', [])
+        return additional_config_paths
     
     @staticmethod
     def _parse_yaml_files(config_file_paths):

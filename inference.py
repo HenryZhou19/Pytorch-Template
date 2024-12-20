@@ -66,7 +66,7 @@ def infer_portal(infer_cfg):
 
 
 if __name__ == '__main__':
-    infer_cfg = ConfigMisc.get_configs(config_dir='./configs/')
+    infer_cfg = ConfigMisc.get_configs()
     
     # init distributed mode
     DistMisc.init_distributed_mode(infer_cfg)

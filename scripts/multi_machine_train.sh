@@ -3,7 +3,7 @@ devices="0"  # numbers with ',' or 'cpu'
 omp_num_threads=4
 mkl_num_threads=4
 numexpr_num_threads=4
-main_config_file_name="template_train"
+main_config_file_name="configs/templates/train.yaml"
 params=()
 
 seconds_to_wait=0
@@ -42,8 +42,8 @@ options:
         Default: "0"
 
     [-c value], --config
-        Set the main config file name to use in "./config/".
-        Default: "template_train"
+        Set the main config file path to use.
+        Default: "configs/templates/train.yaml"
 
     [-ot value], --omp_threads
         Set the OMP_NUM_THREADS.
