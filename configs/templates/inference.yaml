@@ -1,0 +1,25 @@
+config:  # main config (in this file) overrides additional configs
+  additional:  # add additional config file paths --- the order matters (later ones overwrite previous ones, then the main config (this file) overwrites them, and finally the command line arguments overwrite all)
+  - configs/defaults/shared.yaml
+  - configs/defaults/inference.yaml
+
+info:
+  wandb:
+    wandb_enabled: False
+  tensorboard:
+    tensorboard_enabled: False
+
+tester:
+  train_cfg_path: to_be_specified  # XXX: required
+  ## batch_control
+  tester_batch_size_per_rank: 1  # override this in main config
+  ## batch_control ends
+  tester_choice: default
+  checkpoint_path: null  # if not specified (null as None), use the best or last checkpoint in the train_work_dir according to use_best
+  use_best: True
+  ema_only: False
+
+sweep:
+  sweep_enabled: False
+  sweep_params:  # use '//' as the connector for sub-params 
+    tester//tester_batch_size_per_rank: [1, 2]
