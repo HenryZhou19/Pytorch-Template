@@ -16,7 +16,6 @@ def train_run(cfg, loggers):
     # prepare for model, postprocessor
     model_manager = ModelManager(cfg, loggers)
     model_without_ddp = model_manager.build_model()
-    ema_container = model_manager.build_ema(model_without_ddp)
     # postprocessor = model_manager.build_postprocessor()
     
     # prepare for criterion
@@ -31,6 +30,9 @@ def train_run(cfg, loggers):
     
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
+    
+    # prepare for EMA (must be called after the ddp_wrapper to avoid potential problems)
+    ema_container = model_manager.build_ema(model_without_ddp)
     
     # get Trainer instance
     trainer = GearManager(cfg, loggers).build_trainer(
