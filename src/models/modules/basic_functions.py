@@ -1,4 +1,5 @@
 import warnings
+from typing import Union
 
 import numpy as np
 import torch
@@ -99,7 +100,7 @@ def torch_get_local_maxima_with_topk(x: torch.Tensor, k: int, lower_bound: float
     return torch.sort(k_max_indices)[0]
 
 
-def create_group_attn_mask(total_length, group_length, batch_size=None):
+def create_group_attn_mask(total_length: int, group_length: int, batch_size: int=None):
     assert total_length % group_length == 0
     group_num = total_length // group_length
     
@@ -112,3 +113,25 @@ def create_group_attn_mask(total_length, group_length, batch_size=None):
         return attn_mask
     else:
         return attn_mask.unsqueeze(0).expand(batch_size, *attn_mask.shape)
+
+
+def multi_dim_repeat_interleave(tensor: torch.Tensor, repeats: Union[list, tuple]) -> torch.Tensor:
+    """
+    repeat_interleave on multiple dimensions.
+    
+    Args:
+        tensor (torch.Tensor): input tensor [*].
+        repeats (list or tuple): the number of repetitions for each dimension.
+            if some elements in `repeats` are `1`, the corresponding dimensions will be skipped.
+
+    Returns:
+        torch.Tensor: output tensor [*].
+    """
+    assert isinstance(repeats, (list, tuple)), "`repeats` must be a list or tuple."
+    assert len(repeats) == tensor.dim(), "The length of `repeats` must be equal to the number of dimensions of `tensor`."
+    
+    for dim, repeat in enumerate(repeats):
+        if repeat == 1:
+            continue
+        tensor = tensor.repeat_interleave(repeat, dim=dim)
+    return tensor
