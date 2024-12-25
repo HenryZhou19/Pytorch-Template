@@ -297,7 +297,7 @@ class TrainerBase:
                 keep_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_keep_storage/checkpoint_keep_epoch_{epoch_finished}.pth')
                 torch.save(save_dict, keep_path)
     
-    def _save_best_only_model_checkpoint(self):
+    def _save_checkpoint_only_best_model(self):
         # called in "after_validation"
         if DistMisc.is_main_process():
             self.best_val_metrics, last_is_best = self.criterion.choose_best(
@@ -394,7 +394,7 @@ class TrainerBase:
     def _after_validation(self, **kwargs):
         LoggerMisc.logging(self.loggers, 'val_epoch', self.last_val_metrics, self.trained_iters)
         
-        self._save_best_only_model_checkpoint()
+        self._save_checkpoint_only_best_model()
     
     def _after_all_epochs(self, **kwargs):
         DistMisc.barrier()

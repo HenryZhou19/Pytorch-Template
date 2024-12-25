@@ -147,20 +147,24 @@ class ConfigMisc:
     
     @staticmethod
     def nested_namespace_to_plain_namespace(namespace, ignore_name_list=[]):
-        def setattr_safely(ns, n, v):
-            assert not hasattr(ns, n), f'Namespace conflict: {n}(={v})'
-            setattr(ns, n, v)
+        def setattr_safely(namespace, name, value, identifier=None):
+            if identifier is not None:
+                name = f'{identifier}|{name}'
+            assert not hasattr(namespace, name), f'Namespace conflict: {name}(={value})'
+            setattr(namespace, name, value)
         
         plain_namespace = SimpleNamespace()
+        identifier = getattr(namespace, 'identifier', None)
+        
         for name, value in vars(namespace).items():
-            if name in ignore_name_list:
+            if name in ignore_name_list or name == 'identifier':
                 continue
             if isinstance(value, SimpleNamespace):
                 plain_subnamespace = ConfigMisc.nested_namespace_to_plain_namespace(value, ignore_name_list)
                 for subname, subvalue in vars(plain_subnamespace).items():
-                    setattr_safely(plain_namespace, subname, subvalue)
+                    setattr_safely(plain_namespace, subname, subvalue, identifier)
             else:
-                setattr_safely(plain_namespace, name, value)
+                setattr_safely(plain_namespace, name, value, identifier)
         
         return plain_namespace
     
@@ -518,7 +522,7 @@ class PortalMisc:
     def init_loggers(cfg):
         loggers = SimpleNamespace()
         if DistMisc.is_main_process():
-            cfg_dict = ConfigMisc.nested_namespace_to_plain_namespace(cfg, cfg.special.logger_config_ignore + ['modified_cfg_dict'])
+            cfg_plain = ConfigMisc.nested_namespace_to_plain_namespace(cfg, cfg.special.logger_config_ignore + ['modified_cfg_dict'])
             if cfg.info.wandb.wandb_enabled:
                 import wandb
                 wandb_name = '_'.join(ConfigMisc.get_specific_list(cfg, cfg.info.name_tags))
@@ -535,7 +539,7 @@ class PortalMisc:
                     name=wandb_name,
                     tags=wandb_tags,
                     dir=cfg.info.work_dir,
-                    config=cfg_dict,
+                    config=cfg_plain,
                     resume='allow' if cfg.trainer.resume and cfg.info.wandb.wandb_resume_enabled else None,
                     id=resumed_wandb_id if cfg.trainer.resume and cfg.info.wandb.wandb_resume_enabled else None,
                     )
