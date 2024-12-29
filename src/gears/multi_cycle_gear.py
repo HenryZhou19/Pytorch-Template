@@ -44,7 +44,7 @@ class MultiCycleTrainer(TrainerBase):
 
         self._set_cycle_train_mode(self.model_without_ddp, self.cycle_type, self.cycle_modules_list)
 
-        if self.new_cycle and DistMisc.is_dist_avail_and_initialized():
+        if self.new_cycle and self.cfg.env.device == 'cuda':
             if hasattr(self, 'memory_tensor'):
                 del self.memory_tensor
             torch.cuda.empty_cache()
@@ -53,7 +53,7 @@ class MultiCycleTrainer(TrainerBase):
     def _after_first_train_iter(self, **kwargs):
         super()._after_first_train_iter(**kwargs)
         
-        if self.new_cycle and DistMisc.is_dist_avail_and_initialized():
+        if self.new_cycle and self.cfg.env.device == 'cuda':
             _, max_allocated_mb, reserved_mb, _ = TensorMisc.get_gpu_memory_usage(verbose=False)
             print(LoggerMisc.block_wrapper(f'Epoch {self.epoch}: Cycle Type {self.cycle_type}\n\tMax allocated memory: {max_allocated_mb:.2f} MB\n\tReserved memory: {reserved_mb:.2f} MB\n'))
             if reserved_mb < self.min_hold_memory_mb:

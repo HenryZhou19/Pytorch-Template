@@ -51,7 +51,7 @@ options:
 EOF
 }
 
-run_cmd() {
+run_multi_cuda_cmd() {
   CUDA_VISIBLE_DEVICES=$devices \
   OMP_NUM_THREADS=$omp_num_threads \
   MKL_NUM_THREADS=$mkl_num_threads \
@@ -61,6 +61,17 @@ run_cmd() {
   torchrun \
   --nproc_per_node=$nproc_per_node \
   --master_port=$master_port \
+  train.py ${params[@]}
+}
+
+run_single_cuda_cmd() {
+  CUDA_VISIBLE_DEVICES=$devices \
+  OMP_NUM_THREADS=$omp_num_threads \
+  MKL_NUM_THREADS=$mkl_num_threads \
+  NUMEXPR_NUM_THREADS=$numexpr_num_threads \
+  WANDB_CACHE_DIR=~/.cache/wandb \
+  WANDB_CONFIG_DIR=~/.config/wandb \
+  python \
   train.py ${params[@]}
 }
 
@@ -139,46 +150,55 @@ echo "waiting for ${seconds_to_wait} seconds..."
 echo -e "start at: ${formatted_new_time}\n"
 sleep $seconds_to_wait
 
+echo "OMP_NUM_THREADS: $omp_num_threads"
+echo "MKL_NUM_THREADS: $mkl_num_threads"
+echo "NUMEXPR_NUM_THREADS: $numexpr_num_threads"
+
 if [[ $devices == "cpu" ]]; then
   params+=" env.device=cpu"
   echo -e "\nRunning this task in cpu mode"
   
   run_cpu_cmd
 else
-  echo "OMP_NUM_THREADS: $omp_num_threads"
-  echo "MKL_NUM_THREADS: $mkl_num_threads"
-  echo "NUMEXPR_NUM_THREADS: $numexpr_num_threads"
   # params+=" env.device=cuda"  # default
-  echo -e "\nRunning this task in cuda DDP mode\n"
-
   IFS=',' read -ra cuda_devices <<< $devices
   num_devices=${#cuda_devices[@]}
-  nproc_per_node=$num_devices
-  echo "CUDA_VISIBLE_DEVICES: $devices"
-  echo "nproc_per_node: $nproc_per_node"
-  start_port=25950
-  end_port=25999
-  master_port=$start_port
-
-  while [ $master_port -le $end_port ]; do
-    if netstat -tuln | grep -q ":$master_port "; then
-      # echo "Port: $master_port is occupied."
-      ((master_port++))
-    else
-      echo -e "\nTrying DDP with a potentially free port: $master_port"
-      run_cmd
-      if [ $? -eq 0 ]; then
-          echo -e "\nDDP ran successfully with master_port: $master_port."
+  
+  if [ $num_devices -eq 1 ]; then
+    echo -e "\nRunning this task in single cuda mode\n"
+    echo "CUDA_VISIBLE_DEVICES: $devices"
+    
+    run_single_cuda_cmd
+  else
+    nproc_per_node=$num_devices
+    echo -e "\nRunning this task in cuda DDP mode\n"
+    echo "CUDA_VISIBLE_DEVICES: $devices"
+    echo "nproc_per_node: $nproc_per_node"
+    start_port=25950
+    end_port=25999
+    master_port=$start_port
+    
+    while [ $master_port -le $end_port ]; do
+      if netstat -tuln | grep -q ":$master_port "; then
+        # echo "Port: $master_port is occupied."
+        ((master_port++))
       else
-          echo -e "\nDDP failed with master_port: $master_port. (Maybe triggered by other ERRORs)"
+        echo -e "\nTrying DDP with a potentially free port: $master_port"
+        run_multi_cuda_cmd
+
+        if [ $? -eq 0 ]; then
+            echo -e "\nDDP ran successfully with master_port: $master_port."
+        else
+            echo -e "\nDDP failed with master_port: $master_port. (Maybe triggered by other ERRORs)"
+        fi
+        break
       fi
-      break
-    fi
-    if [ $master_port -gt $end_port ]; then
-      echo -e "\nAll ports from $start_port to $end_port are occupied."
-      break
-    fi
-  done
+      if [ $master_port -gt $end_port ]; then
+        echo -e "\nAll ports from $start_port to $end_port are occupied."
+        break
+      fi
+    done
+  fi
 fi
 
 echo -e "\n\"train.sh ${args[@]}\" ends."

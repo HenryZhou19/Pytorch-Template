@@ -18,3 +18,4 @@ scikit-image
 matplotlib
 pandas
 torchmetrics
+timm

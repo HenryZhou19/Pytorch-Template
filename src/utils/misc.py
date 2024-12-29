@@ -724,22 +724,28 @@ class DistMisc:
             # elif 'SLURM_PROCID' in os.environ and 'SLURM_PTY_PORT' not in os.environ:
             #     ConfigMisc.auto_track_setattr(cfg, ['env', 'rank'], int(os.environ['SLURM_PROCID']))
             #     ConfigMisc.auto_track_setattr(cfg, ['env', 'local_rank'], cfg.env.rank % torch.cuda.device_count())
+                
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'distributed'], True)
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_backend'], 'nccl')
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_url'], 'env://')
+                torch.cuda.set_device(cfg.env.local_rank)
+            
+                # dist.distributed_c10d.logger.setLevel(logging.WARNING)  # this line may cause the multi-machine ddp to hang
+                
+                dist.init_process_group(
+                    backend=cfg.env.dist_backend, init_method=cfg.env.dist_url, world_size=cfg.env.world_size, rank=cfg.env.rank
+                )
+                # DistMisc.avoid_print_mess()
+                # print(f'INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}')
+                # DistMisc.avoid_print_mess()
             else:
-                raise NotImplementedError('Must use "torchrun" when device is cuda')
-            
-            ConfigMisc.auto_track_setattr(cfg, ['env', 'distributed'], True)
-            ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_backend'], 'nccl')
-            ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_url'], 'env://')
-            torch.cuda.set_device(cfg.env.local_rank)
-            
-            # dist.distributed_c10d.logger.setLevel(logging.WARNING)  # this line may cause the multi-machine ddp to hang
-            
-            dist.init_process_group(
-                backend=cfg.env.dist_backend, init_method=cfg.env.dist_url, world_size=cfg.env.world_size, rank=cfg.env.rank
-            )       
-            # DistMisc.avoid_print_mess()
-            # print(f'INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}')
-            # DistMisc.avoid_print_mess()
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'distributed'], False)
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'world_size'], 1)
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'rank'], 0)
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'local_rank'], 0)
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_backend'], 'None')
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_url'], 'None')
+
             DistMisc.setup_for_distributed(cfg.env.rank == 0)
             
             if cfg.env.rank != cfg.env.local_rank:
