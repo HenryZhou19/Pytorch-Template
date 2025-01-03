@@ -376,15 +376,19 @@ class PortalMisc:
                 ConfigMisc.auto_track_setattr(cfg, ['info', 'batch_info'],
                                               f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}')
                 
+                ConfigMisc.auto_track_setattr(cfg, ['trainer', 'name_optimizers'],
+                                              [attr for attr in dir(cfg.trainer) if attr.startswith('optimizer')])
                 if cfg.trainer.sync_lr_with_batch_size > 0:
-                    ConfigMisc.auto_track_setattr(cfg, ['trainer', 'optimizer', 'lr_default'],
-                                                  cfg.trainer.optimizer.lr_default * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
-                    if hasattr(cfg.trainer.optimizer, 'param_groups'):
-                        lr_mark = 'lr_'
-                        for k, v in vars(cfg.trainer.optimizer.param_groups).items():
-                            if k.startswith(lr_mark):
-                                ConfigMisc.auto_track_setattr(cfg, ['trainer', 'optimizer', 'param_groups', k],
-                                                              v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
+                    for name_optimizer in cfg.trainer.name_optimizers:
+                        optimizer_cfg = getattr(cfg.trainer, name_optimizer)
+                        ConfigMisc.auto_track_setattr(cfg, ['trainer', name_optimizer, 'lr_default'],
+                                                    optimizer_cfg.lr_default * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
+                        if hasattr(optimizer_cfg, 'param_groups'):
+                            lr_mark = 'lr_'
+                            for k, v in vars(optimizer_cfg.param_groups).items():
+                                if k.startswith(lr_mark):
+                                    ConfigMisc.auto_track_setattr(cfg, ['trainer', 'optimizer', 'param_groups', k],
+                                                                v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
             else: # for inference
                 ConfigMisc.auto_track_setattr(cfg, ['tester', 'tester_batch_size_total'],
                                               cfg.tester.tester_batch_size_per_rank * cfg.env.world_size)

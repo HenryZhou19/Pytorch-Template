@@ -3,7 +3,7 @@ from src.datasets import DataManager
 from src.gears import GearManager
 from src.models import ModelManager
 from src.utils.misc import *
-from src.utils.optimizer import OptimizerUtils, SchedulerUtils
+from src.utils.optimizer import OptimizerUtils
 
 
 def train_run(cfg, loggers):
@@ -22,14 +22,11 @@ def train_run(cfg, loggers):
     criterion_manager = CriterionManager(cfg, loggers)
     criterion = criterion_manager.build_criterion()
     
-    # prepare for optimizer and scaler (cuda auto mixed precision(amp)) if needed
-    optimizer, scaler = OptimizerUtils.get_optimizer(cfg, model_without_ddp)
-    
-    # prepare for lr_scheduler
-    lr_scheduler = SchedulerUtils.get_warmup_lr_scheduler(cfg, optimizer, scaler, train_loader)
-    
     # model wrapper
     model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
+    
+    # prepare for optimizers, le_schedulers, and scalers (cuda auto mixed precision(amp)) if needed, all in the integrated_optimizers
+    integrated_optimizers = OptimizerUtils.get_integrated_optimizers(cfg, model_without_ddp, train_loader)
     
     # prepare for EMA (must be called after the ddp_wrapper to avoid potential problems)
     ema_container = model_manager.build_ema(model_without_ddp)
@@ -41,9 +38,7 @@ def train_run(cfg, loggers):
         criterion=criterion,
         train_loader=train_loader,
         val_loader=val_loader,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        scaler=scaler,
+        integrated_optimizers=integrated_optimizers,
         device=model_manager.device,
         )
     
