@@ -3,9 +3,10 @@ __pycache__/
 *$py.class
 
 .idea/
-.vscode/*
+.vscode/launch.json
 .venv/
 
+configs/no_sync
 data
 dataset
 outputs*

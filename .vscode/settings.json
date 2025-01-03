@@ -1,0 +1,28 @@
+{
+    "search.exclude": {
+        "**/__pycache__/**": true,
+        "**/.git/**": true,
+        "**/.vscode/**": true,
+        "**/data/**": true,
+        "**/outputs/**": true,
+    },
+
+    "files.watcherExclude": {
+        "**/__pycache__/**": true,
+        "**/.git/**": true,
+        "**/.vscode/**": true,
+        "**/data/**": true,
+        "**/outputs/**": true,
+    },
+
+    "python.analysis.exclude": [
+        "**/__pycache__",
+        "**/.git",
+        "**/.vscode",
+        "**/configs",
+        "**/data",
+        "**/outputs",
+        "**/scripts",
+    ],
+    "python.analysis.diagnosticMode": "workspace",
+}
