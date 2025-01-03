@@ -118,7 +118,7 @@ class MetricLogger(object):
         for k, v in kwargs.items():
             if isinstance(v, (torch.Tensor, np.ndarray)):
                 v = v.item()
-            assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
+            assert isinstance(v, (float, int)), f'{v} is {type(v)}, not float or int.'
             # self.metrics[k] = SmoothedValue()  # as default
             self.metrics[k].append_one_value(v, sample_count)
             
@@ -126,7 +126,7 @@ class MetricLogger(object):
         for k, v in kwargs.items():
             if isinstance(v, (torch.Tensor, np.ndarray, np.number)):
                 v = v.item()
-            assert isinstance(v, (float, int)), f'v is {type(v)}, not float or int.'
+            assert isinstance(v, (float, int)), f'{v} is {type(v)}, not float or int.'
             self.metrics[k] = ValueMetric(
                 window_size=1,
                 format='({value:.4f})',
