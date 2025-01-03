@@ -4,7 +4,7 @@ config:  # main config (in this file) overrides additional configs
   - configs/defaults/train.yaml
 
 special:
-  extra_name: template  # null for no extra name
+  extra_name: template_lenet  # null for no extra name
 
 info:
   output_dir: ./outputs/template/
@@ -43,19 +43,19 @@ trainer:
       wd_backbone: 1.0e-2
       lr_head: 1.0e-4
       wd_head: 1.0e-4
-  scheduler:
-    scheduler_choice: multistep  # multistep, cosine, linear, cosine_restart
-    lr_milestones_epochs: [5, 10, 15]  # only for scheduler_choice == 'multistep' [50, 100]
-    lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
-    lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
-    warmup_epochs: 10
-    warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
-    # lr_min_factor: 0.0  # default
-    # warmup_type: linear  # default
-  max_grad_norm: 1.0  # .inf means no gradient clipping (setting to 0.0 is the same in training procedure, but grad_norm will not be logged)
+    max_grad_norm: 1.0  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
+    scheduler:
+      scheduler_choice: multistep  # multistep, cosine, linear, cosine_restart
+      lr_milestones_epochs: [5, 10, 15]  # only for scheduler_choice == 'multistep' [50, 100]
+      lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
+      lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
+      warmup_epochs: 10
+      warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
+      # lr_min_factor: 0.0  # default
+      # warmup_type: linear  # default
 
 sweep:
   sweep_enabled: True
   sweep_params:  # use '//' as the connector for sub-params 
     trainer//optimizer//lr_default: [2.0e-4, 4.0e-4]
-    trainer//scheduler//scheduler_choice: [linear, cosine]
+    trainer//optimizer//scheduler//scheduler_choice: [linear, cosine]

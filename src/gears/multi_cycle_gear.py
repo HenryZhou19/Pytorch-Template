@@ -10,19 +10,21 @@ from .modules.trainer_base import TrainerBase, trainer_register
 @trainer_register('multi_cycle')
 class MultiCycleTrainer(TrainerBase):
     def _before_all_epochs(self, **kwargs):
+        assert len(self.integrated_optimizers) == 1 and self.integrated_optimizers[0].identifier == 'main', "Only one optimizer (main) is supported for MultiCycleTrainer of this version"
+        
         def _clean_cycle_modules(modules):
             # remove the modules that are frozen
             clean_modules = []
             for module in modules:
-                if module not in self.freeze_modules:
+                if module not in self.integrated_optimizers[0].freeze_modules:
                     clean_modules.append(module)
             return clean_modules
         
-        assert isinstance(self.lr_scheduler, WarmupCosineAnnealingMultiCycleLR)
+        assert isinstance(self.integrated_optimizers[0].lr_scheduler, WarmupCosineAnnealingMultiCycleLR)
         
         super()._before_all_epochs(**kwargs)
         
-        self.cycle_type = self.lr_scheduler.cycle_type
+        self.cycle_type = self.integrated_optimizers[0].lr_scheduler.cycle_type
         self.cycle_modules_list = [_clean_cycle_modules(cycle_modules) for cycle_modules in self.cfg.trainer.cycle_modules_list]
         print(LoggerMisc.block_wrapper(f'Cycle modules list: {self.cycle_modules_list}'))
         self.min_hold_memory_mb = self.cfg.trainer.min_hold_memory_mb
@@ -34,8 +36,8 @@ class MultiCycleTrainer(TrainerBase):
         
         self.new_cycle = (self.epoch == 1)
         
-        if self.cycle_type != self.lr_scheduler.cycle_type:
-            self.cycle_type = self.lr_scheduler.cycle_type
+        if self.cycle_type != self.integrated_optimizers[0].lr_scheduler.cycle_type:
+            self.cycle_type = self.integrated_optimizers[0].lr_scheduler.cycle_type
             if self.cfg.trainer.copy_ema_after_each_cycle:
                 assert self.ema_container is not None, "EMA model is not initialized"
                 self.ema_container.copy_params_from_ema_to_model()

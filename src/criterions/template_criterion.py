@@ -33,7 +33,9 @@ class SimpleCriterion(CriterionBase):
         #         'L1_loss': l1_loss,
         #         }
         
-        return loss, {
+        return {
+            'loss_main': loss
+            }, {
             'mse_loss': mse_loss,
             'L1_loss': l1_loss,
             }
@@ -73,7 +75,9 @@ class MnistCriterion(CriterionBase):
         self.epoch_sample_count += gt_y.shape[0]
         self.epoch_correct_count += (predicted == gt_y).sum().item()
             
-        return loss, {
+        return {
+            'loss_main': loss
+            }, {
             'ce_loss': ce_loss,
             }
 
@@ -92,4 +96,32 @@ class MnistCriterion(CriterionBase):
         self.epoch_sample_count = 0
         return {
             'accuracy': accuracy,
+            }
+        
+
+
+@criterion_register('lenet_multi_optimizer')
+class MnistMultiOptimizerCriterion(MnistCriterion):
+    def _get_iter_loss_and_metrics(self, outputs, targets):
+        conv_out = outputs['conv_out']  # N, 16, 4, 4
+        pred_scores = outputs['pred_scores']
+        gt_y = targets['gt_y']   
+
+        # metrics (loss) used for backprop
+        if self.loss_config == 'ce':
+            ce_loss = self.ce_loss(pred_scores, gt_y)
+        else:
+            raise NotImplementedError(f'loss "{self.loss_config}" has not been implemented yet.')
+        
+        convs_loss = -1.0 * torch.std(conv_out, dim=1).mean()
+        
+        _, predicted = torch.max(pred_scores.data, 1)
+        self.epoch_sample_count += gt_y.shape[0]
+        self.epoch_correct_count += (predicted == gt_y).sum().item()
+            
+        return {
+            'loss_convs': convs_loss,
+            'loss_fcs': ce_loss
+            }, {
+            'ce_loss': ce_loss,
             }

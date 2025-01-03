@@ -33,7 +33,6 @@ trainer:
   resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
   pretrained_models: null  # None or a dict of pretrained models {name1: path1, name2: path2, ...}
   load_from_ema: True
-  freeze_modules: []  # [submodule_name1, submodule_name2, ...]
   epochs: 10
   real_epochs: null  # if not None, do early stopping based on real_epochs (scheduler is still based on epochs)
   optimizer:
@@ -46,23 +45,24 @@ trainer:
     #   wd_backbone: 1.0e-2
     #   lr_head: 1.0e-4
     #   wd_head: 1.0e-4
-  scheduler:
-    scheduler_choice: linear  # multistep, cosine, linear, cosine_restart
-    lr_milestones_epochs: null  # only for scheduler_choice == 'multistep' [50, 100]
-    lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
-    lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
-    lr_first_cycle_epochs: null  # only for scheduler_choice == 'cosine_restart'
-    lr_first_cycle_steps: null  # only for scheduler_choice == 'cosine_restart'
-    lr_cycle_mult: 1.0  # only for scheduler_choice == 'cosine_restart'
-    lr_cycle_gamma: 1.0  # only for scheduler_choice == 'cosine_restart'
-    warmup_epochs: 10
-    warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
-    # lr_min_factor: 0.0  # default
-    # warmup_type: linear  # default
-  max_grad_norm: 1.0  # <= 0 means no gradient clipping
+    max_grad_norm: 1.0  # <= 0 means no gradient clipping
+    freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
+    scheduler:
+      scheduler_choice: linear  # multistep, cosine, linear, cosine_restart
+      lr_milestones_epochs: null  # only for scheduler_choice == 'multistep' [50, 100]
+      lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
+      lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
+      lr_first_cycle_epochs: null  # only for scheduler_choice == 'cosine_restart'
+      lr_first_cycle_steps: null  # only for scheduler_choice == 'cosine_restart'
+      lr_cycle_mult: 1.0  # only for scheduler_choice == 'cosine_restart'
+      lr_cycle_gamma: 1.0  # only for scheduler_choice == 'cosine_restart'
+      warmup_epochs: 10
+      warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
+      # lr_min_factor: 0.0  # default
+      # warmup_type: linear  # default
 
 sweep:
   sweep_enabled: False
   sweep_params:  # use '//' as the connector for sub-params 
     trainer//optimizer//lr_default: [2.0e-4, 4.0e-4]
-    trainer//scheduler//scheduler_choice: [linear, cosine]
+    trainer//optimizer//scheduler//scheduler_choice: [linear, cosine]

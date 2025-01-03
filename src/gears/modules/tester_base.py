@@ -146,11 +146,11 @@ class TesterBase:
                 if self.ema_only:
                     assert self.ema_container is not None, 'ema_container is None when ema_only is True.'
                     outputs = {}
-                    loss = torch.nan
+                    loss_dict = {}
                     metrics_dict = {}
                 else:
                     outputs = self.model(inputs)
-                    loss, metrics_dict = self.criterion(outputs, targets)
+                    loss_dict, metrics_dict = self.criterion(outputs, targets)
                 
                 if self.ema_container is not None:
                     ema_outputs = self.ema_container(inputs)
@@ -158,7 +158,7 @@ class TesterBase:
                     outputs.update(LoggerMisc.set_dict_key_prefix(ema_outputs, 'ema_'))
                     metrics_dict.update(ema_metrics_dict)
             
-        return outputs, loss, metrics_dict
+        return outputs, loss_dict, metrics_dict
     
     def _test(self):
         cfg = self.cfg
@@ -169,15 +169,14 @@ class TesterBase:
             pbar=self.test_pbar,  
             header='Test',
             )
-        mlogger.add_metrics([{'loss': ValueMetric(high_prior=True)}])
         first_iter = True
         for batch in mlogger.log_every(self.test_loader):
             
-            _, loss, metrics_dict = self._forward(batch)
+            _, loss_dict, metrics_dict = self._forward(batch)
                 
             mlogger.update_metrics(
                 sample_count=batch['batch_size'],
-                loss=loss,
+                **loss_dict,
                 **metrics_dict,
                 )
             

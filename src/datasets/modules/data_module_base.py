@@ -125,13 +125,15 @@ class DataModuleBase:
             drop_last=is_train,
         )
     
-    def get_worker_init_fn(self):
-        def _worker_init_fn(worker_id, rank_seed):
+    @staticmethod
+    def _worker_init_fn(worker_id, rank_seed):
             signal.signal(signal.SIGINT, signal.SIG_IGN)
             worker_seed = rank_seed + worker_id
             random.seed(worker_seed)
             np.random.seed(worker_seed)
-        return partial(_worker_init_fn, rank_seed=self.cfg.seed_base + self.cfg.env.num_workers * DistMisc.get_rank())
+    
+    def get_worker_init_fn(self):
+        return partial(DataModuleBase._worker_init_fn, rank_seed=self.cfg.seed_base + self.cfg.env.num_workers * DistMisc.get_rank())
     
     def get_sampler(self, dataset: Dataset, is_training: bool, use_dist_sampler: bool) -> Sampler:
         if self.cfg.env.distributed and use_dist_sampler:

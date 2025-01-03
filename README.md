@@ -78,7 +78,7 @@
 ### outputs of the running task
 * You can find the outputs where the path is defined in the corresponding 'yaml' file in './configs' (info.output_dir):
     * current_project files
-    * checkpoints of the latest and the best model (the latest one includes the state of optimizer and scheduler etc., so it can be used to resume the task)
+    * checkpoints of the latest and the best model (the latest one includes the state of the integrated_optimizer (optimizer and scheduler etc), so it can be used to resume the task)
     * logs.log with model's structure, summary...
     * ...
 
@@ -299,16 +299,16 @@
         sweep_enabled: True
         sweep_params:  # use '//' as the connector for sub-params 
             trainer//optimizer//lr_default: [2.0e-4, 4.0e-4]
-            trainer//scheduler//scheduler_choice: [linear, cosine]
+            trainer//optimizer//scheduler//scheduler_choice: [linear, cosine]
     ```
     * so if you run one task using this 'yaml' file, there will be four experiments in total:
-        1. trainer.scheduler.scheduler_choice=linear  
+        1. trainer.optimizer.scheduler.scheduler_choice=linear  
            trainer.optimizer.lr_default=2.0e-4
-        2. trainer.scheduler.scheduler_choice=cosine  
+        2. trainer.optimizer.scheduler.scheduler_choice=cosine  
            trainer.optimizer.lr_default=2.0e-4
-        3. trainer.scheduler.scheduler_choice=linear  
+        3. trainer.optimizer.scheduler.scheduler_choice=linear  
            trainer.optimizer.lr_default=4.0e-4
-        4. trainer.scheduler.scheduler_choice=cosine  
+        4. trainer.optimizer.scheduler.scheduler_choice=cosine  
            trainer.optimizer.lr_default=4.0e-4
 
 5. You may explore the usage of other configs by reading the comments in 'configs/defaults/\*.yaml' and 'configs/templates/\*.yaml' files.

@@ -16,7 +16,9 @@ class CriterionBase(nn.Module):
         self.loss_config = cfg.criterion.loss
         self.primary_criterion = cfg.criterion.primary_criterion
         if self.primary_criterion is None:
-            self.primary_criterion = 'loss'
+            assert len(self.cfg.trainer.name_optimizers) == 1, 'Main optimizer config must be the only one if primary_criterion is not specified.'
+            self.primary_criterion = 'loss_main'
+        print(LoggerMisc.block_wrapper(f'primary_criterion: {self.primary_criterion}'))
         
         if cfg.model.ema.ema_enabled and cfg.model.ema.ema_primary_criterion:
             self.primary_criterion = 'ema_' + self.primary_criterion  # use 'ema_xxx' as primary criterion
@@ -74,14 +76,13 @@ class CriterionBase(nn.Module):
         if self.infer_mode:
             assert self.training == False, f'CriterionModule {self.__class__} is in training mode while infer_mode is True.'
             
-        loss, metrics_dict = self._get_iter_loss_and_metrics(outputs, targets, *args, **kwargs)
+        loss_dict, metrics_dict = self._get_iter_loss_and_metrics(outputs, targets, *args, **kwargs)
         
         if self.ema_mode:
-            ema_metrics_dict = metrics_dict
-            metrics_dict = {'ema_loss': loss}
-            metrics_dict.update(LoggerMisc.set_dict_key_prefix(ema_metrics_dict, 'ema_'))
+            loss_dict = LoggerMisc.set_dict_key_prefix(loss_dict, 'ema_')
+            metrics_dict = LoggerMisc.set_dict_key_prefix(metrics_dict, 'ema_')
             
-        return loss, metrics_dict
+        return loss_dict, metrics_dict
     
     def forward_epoch_metrics(self):
         epoch_metrics_dict = self._get_epoch_metrics_and_reset()
