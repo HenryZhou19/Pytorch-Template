@@ -144,14 +144,13 @@ class OptimizerUtils:
     @staticmethod
     def _get_modules_for_grad_norm(optimizer_name, root_module, modules_for_grad_norm=None):
         if modules_for_grad_norm is not None:
+            print(LoggerMisc.block_wrapper(f'Optimizer {optimizer_name} --- grad norm modules: {modules_for_grad_norm}'))
             modules_for_grad_norm = torch.nn.ModuleList(
                 [getattr(root_module, module_name) for module_name in modules_for_grad_norm]
                 )
-            
-            print(LoggerMisc.block_wrapper(f'Optimizer {optimizer_name} --- grad norm modules: {modules_for_grad_norm}'))
         else:
-            modules_for_grad_norm = root_module
             print(LoggerMisc.block_wrapper(f'Optimizer {optimizer_name} --- grad norm modules: ALL'))
+            modules_for_grad_norm = root_module
         return modules_for_grad_norm
     
     
