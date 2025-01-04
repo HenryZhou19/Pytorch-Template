@@ -263,7 +263,7 @@ class PortalMisc:
             return path
     
     @staticmethod
-    def _save_currect_project(cfg):
+    def _save_currect_project(cfg, compressed=True):
         if DistMisc.is_main_process():
             main_py_files = glob('./*.py')
             source_paths = [
@@ -283,7 +283,14 @@ class PortalMisc:
                     shutil.copy(source_path, destination_dir)
                 else:
                     print(f'Skipping {source_path} as it is neither a file nor a directory.')
-            print(LoggerMisc.block_wrapper('Files and folders of currect project are copied successfully.'))
+                    
+            if compressed:
+                shutil.make_archive(destination_dir, 'zip', destination_dir)
+                shutil.rmtree(destination_dir)
+                destination_dir = destination_dir + '.zip'
+                print(LoggerMisc.block_wrapper(f'Main project files are successfully copied and compressed to "{destination_dir}"'))
+            else:
+                print(LoggerMisc.block_wrapper(f'Main project files are successfully copied to "{destination_dir}"'))
     
     @staticmethod
     def combine_train_infer_configs(infer_cfg, use_train_seed=True, custom_work_dir=None):
@@ -421,7 +428,7 @@ class PortalMisc:
             ConfigMisc.write_to_yaml(os.path.join(cfg.info.work_dir, cfg_file_name), cfg, ignore_name_list=cfg.special.print_save_config_ignore + ['modified_cfg_dict'])
             
         if cfg.special.save_current_project:
-            PortalMisc._save_currect_project(cfg)
+            PortalMisc._save_currect_project(cfg, compressed=True)
             
         if cfg.special.print_config_start:
             PortalMisc._print_config(cfg, force_all_rank=cfg.special.print_config_all_rank)
