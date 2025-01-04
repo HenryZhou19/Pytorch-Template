@@ -15,7 +15,7 @@ data:
   split_rate: 0.8
 
 model:
-  model_choice: lenet_multi_optimizer
+  model_choice: lenet_multi_optimizer_v2
   backbone: default
 
 criterion:
