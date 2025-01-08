@@ -50,8 +50,20 @@ class DataModuleBase:
     @staticmethod
     def collate_fn(data, recursion=False):
         """
-        AcceptableType: torch.Tensor, str, dict, int, float, bool, np.ndarray
-        data: 
+        AcceptableType: dict，torch.Tensor, np.ndarray, int, float, bool, str, tuple, list
+        `dict` Type will always be processed recursively.
+        `torch.Tensor` and `np.ndarray` will be stacked as a batched ND-Tensor.
+        `int`, `float`, `bool` will be stacked as a batched 1D-Tensor.
+        `str` will be stacked as a batched list (TensorMisc.NotToCudaBatchList), which will not be on cuda later.
+        `list` will be simply stacked as a batched list (to support `Tensor` or `ndarray` of different shapes).
+        
+        NOTE 1: For `tuple`, please use `list` instead of `tuple` in data as `pin_memory=True` will convert all tuples to lists
+        
+        NOTE 2: If you are sure that the elements are not needed to be on cuda later, 
+            try to use `TensorMisc.NotToCudaBatchList` instead of `list` in `__getitem__` function of your Dataset class,
+            This could speedup `TensorMisc.to` a little bit.
+        
+        data (recursion=False): 
             list(
                 [0] dict{
                     'a': AcceptableType,
@@ -71,19 +83,24 @@ class DataModuleBase:
                 # recursion
                 batch[k] = DataModuleBase.collate_fn(list(map(lambda d: d[k], data)), recursion=True)
             elif isinstance(v, torch.Tensor):
-                # every d in data, get d[k]: Tensor to form a list, then stack them as a batched Tensor
+                # every d in data, get d[k]: `Tensor` to form a list, then stack them as a batched ND-Tensor
                 batch[k] = torch.stack(list(map(lambda d: d[k], data)), dim=0)
             elif isinstance(v, np.ndarray):
-                # every d in data, get d[k]: ndarray to form a list of Tensors, then stack them as a batched Tensor
+                # every d in data, get d[k]: `ndarray` to form a list of Tensors, then stack them as a batched ND-Tensor
                 batch[k] = torch.stack(list(map(lambda d: torch.as_tensor(d[k]), data)), dim=0)
             elif isinstance(v, (int, float, bool)):
-                # every d in data, get d[k]: (int, float, bool) to form a batched Tensor
+                # every d in data, get d[k]: `(int, float, bool)` to form a batched 1D-Tensor
                 batch[k] = torch.as_tensor(list(map(lambda d: d[k], data)))
             elif isinstance(v, str):
-                # every d in data, get d[k]: str to form a list, which will not be on cuda later
-                batch[k] = TensorMisc.NotToCudaList(map(lambda d: d[k], data))
+                # every d in data, get d[k]: `str` to form a NotToCudaBatchList, which will not be on cuda later
+                batch[k] = TensorMisc.NotToCudaBatchList(map(lambda d: d[k], data))
+            elif isinstance(v, list):
+                # every d in data, get d[k]: `list` to simply form a BatchList (to support `Tensor` or `ndarray` of different shapes)
+                batch[k] = TensorMisc.BatchList(map(lambda d: d[k], data))
+            elif isinstance(v, tuple):
+                raise TypeError(f'Please use `list` instead of `tuple` in data as `pin_memory=True` will convert all tuples to lists')
             else:
-                raise NotImplementedError(f'collate_fn not implemented for {type(v)}')
+                raise NotImplementedError(f'DataModuleBase.collate_fn not implemented for Type: {type(v)} of Element: {v}')
         if not recursion:
             batch['batch_size'] = len(data)
         return batch  # batch: dataloader's output
