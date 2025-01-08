@@ -1162,12 +1162,15 @@ class SweepMisc:
             mail_msg = '''<p>{}</p>'''.format(message)
             msg.attach(MIMEText(mail_msg, 'html', 'utf-8'))
 
-            smtp = smtplib.SMTP()
-            smtp.connect(email_host, 25)
-            smtp.login(email_sender, email_password)
-            smtp.sendmail(email_sender, email_receiver, msg.as_string())
-            smtp.quit()
-            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) sent successfully.'))
+            try:
+                smtp = smtplib.SMTP_SSL(email_host, 465)
+                smtp.login(email_sender, email_password)
+                smtp.sendmail(email_sender, email_receiver, msg.as_string())
+                print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) sent successfully.'))
+            except Exception as e:
+                print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) failed to send. Error: {e}'))
+            finally:
+                smtp.quit()
     
     @staticmethod
     def _do_sweep(cfg, portal_fn):
