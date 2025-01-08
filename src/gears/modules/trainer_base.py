@@ -170,11 +170,8 @@ class TrainerBase:
             checkpoint = torch.load(checkpoint_path[0], map_location='cpu')
             self.model_without_ddp.load_state_dict(checkpoint['model'])
             if self.ema_container is not None:
-                assert 'ema_container' in checkpoint or 'ema_model' in checkpoint, 'checkpoint does not contain "ema_container" or "ema_model".'
-                if 'ema_container' in checkpoint:
-                    self.ema_container.load_state_dict(checkpoint['ema_container'])
-                else:  # FIXME: deprecated
-                    self.ema_container.load_state_dict(checkpoint['ema_model'])
+                assert 'ema_container' in checkpoint, 'checkpoint does not contain "ema_container".'
+                self.ema_container.load_state_dict(checkpoint['ema_container'])
             for integrated_optimizer in self.integrated_optimizers:
                 integrated_optimizer.load_state_dict(checkpoint[f'integrated_optimizer_{integrated_optimizer.identifier}'])
             self.start_epoch = checkpoint['epoch'] + 1
@@ -197,12 +194,9 @@ class TrainerBase:
         def _load_pretrained_model(model_path, pretrain_model_name):
             if self.cfg.trainer.load_from_ema:  # use state_dict[EMA] to load
                 checkpoint = torch.load(model_path, map_location='cpu')
-                if 'ema_container' in checkpoint:
-                    key = 'ema_container'
-                elif 'ema_model' in checkpoint:  # FIXME: deprecated
-                    key = 'ema_model'
-                else:
-                    raise ValueError(f'checkpoint does not contain "ema_container" or "ema_model", but "load_from_ema" is True.')
+                key = 'ema_container'
+                assert key in checkpoint, f'checkpoint does not contain "{key}", but "load_from_ema" is True.'
+                
                 print(f'\nLoading {pretrain_model_name} (key="{key}") from {model_path}')
                 state_dict = checkpoint[key]
                 state_dict.pop('initted', None)
