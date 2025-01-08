@@ -809,7 +809,10 @@ class ModelMisc:
     @staticmethod
     def show_model_info(cfg, trainer, torchinfo_columns=None):
         if DistMisc.is_main_process():
-            input_data_one_sample = TensorMisc.to(trainer.train_loader.collate_fn([trainer.train_loader.dataset[0]])['inputs'], trainer.device)
+            one_sample = trainer.train_loader.dataset[0]
+            one_sample_batch_input = TensorMisc.to(trainer.train_loader.collate_fn([one_sample])['inputs'], trainer.device)
+            whole_batch_input = TensorMisc.to(trainer.train_loader.collate_fn([one_sample] * cfg.trainer.trainer_batch_size_per_rank)['inputs'], trainer.device)
+            
             temp_model = trainer.model_without_ddp
             temp_model.eval()
             
@@ -830,7 +833,7 @@ class ModelMisc:
                         
                     trainer.loggers.tensorboard_run.add_graph(
                         WriterWrappedModel(temp_model),
-                        input_data_one_sample,
+                        one_sample_batch_input,
                         )
             
             if cfg.info.torchinfo:
@@ -857,7 +860,7 @@ class ModelMisc:
                 with trainer.train_autocast():
                     print_str = torchinfo.summary(
                         TorchinfoWrappedModel(temp_model),
-                        input_data=TensorMisc.expand_one_sample_to_batch(input_data_one_sample, cfg.trainer.trainer_batch_size_per_rank),
+                        input_data=whole_batch_input,
                         col_names=torchinfo_columns,
                         depth=9,
                         verbose=0,
@@ -873,7 +876,7 @@ class ModelMisc:
                 print('\n', file=trainer.loggers.log_file)
                 
             trainer.loggers.log_file.flush()
-            del temp_model, input_data_one_sample
+            del temp_model, one_sample, one_sample_batch_input, whole_batch_input
             torch.cuda.empty_cache()
     
     @staticmethod
@@ -1225,21 +1228,26 @@ class SweepMisc:
 class TensorMisc:
     @staticmethod
     def to(data, device, non_blocking=False):
-        if isinstance(data, torch.Tensor):
-            return data.to(device, non_blocking=non_blocking)
-        elif getattr(data, 'not_to_cuda', False) or isinstance(data, (str, int, float)):
+        if isinstance(data, dict):
+            return {k: TensorMisc.to(data=v, device=device, non_blocking=non_blocking) for k, v in data.items()}
+        elif isinstance(data, (torch.Tensor, TensorMisc.BatchList)):
+            return data.to(device=device, non_blocking=non_blocking)
+        elif isinstance(data, (str, int, float)):
             return data
-        elif isinstance(data, tuple):
-            return tuple(TensorMisc.to(d, device, non_blocking) for d in data)
         elif isinstance(data, list):
             return [TensorMisc.to(d, device, non_blocking) for d in data]
-        elif isinstance(data, dict):
-            return {k: TensorMisc.to(v, device, non_blocking) for k, v in data.items()}
+        elif isinstance(data, tuple):
+            raise TypeError(f'Please use `list` instead of `tuple` in data as `pin_memory=True` will convert all tuples to lists')
         else:
-            raise TypeError(f'Unknown type: {type(data)}')
-        
-    class NotToCudaList(UserList):
-        not_to_cuda = True
+            raise TypeError(f'Tensormisc.to not implemented for Type: {type(data)} of Element: {data}')
+    
+    class BatchList(UserList):
+        def to(self, *arg, **kwargs):
+            return TensorMisc.BatchList([TensorMisc.to(x, *arg, **kwargs) for x in self])
+    
+    class NotToCudaBatchList(BatchList):
+        def to(self, *arg, **kwargs):
+            return self
         
     class GradCollector:
         def __init__(self, x):
@@ -1262,22 +1270,6 @@ class TensorMisc:
                 return data[index]
         elif isinstance(data, dict):
             return {k: TensorMisc.get_one_sample_from_batch(v, index, keep_batch_dim) for k, v in data.items()}
-        else:
-            raise TypeError(f'Unknown type: {type(data)}')
-    
-    @staticmethod
-    def expand_one_sample_to_batch(data, batch_size, have_batch_dim=True):
-        assert have_batch_dim, 'Only support expanding one sample to batch when have_batch_dim is True.'
-        if isinstance(data, torch.Tensor):
-            return data.expand(batch_size, *data.shape[1:])
-            # if have_batch_dim:
-            #     return data.expand(batch_size, *data.shape[1:])
-            # else:
-            #     return data.unsqueeze(0).expand(batch_size, *data.shape)
-        elif getattr(data, 'not_to_cuda', False):
-            return data * batch_size
-        elif isinstance(data, dict):
-            return {k: TensorMisc.expand_one_sample_to_batch(v, batch_size) for k, v in data.items()}
         else:
             raise TypeError(f'Unknown type: {type(data)}')
     
