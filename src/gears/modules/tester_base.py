@@ -100,11 +100,8 @@ class TesterBase:
         checkpoint = torch.load(self.cfg.tester.checkpoint_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model'])
         if self.ema_container is not None:
-            assert 'ema_container' in checkpoint or 'ema_model' in checkpoint, 'checkpoint does not contain "ema_container" or "ema_model".'
-            if 'ema_container' in checkpoint:
-                self.ema_container.load_state_dict(checkpoint['ema_container'])
-            else:  # FIXME: deprecated
-                self.ema_container.load_state_dict(checkpoint['ema_model'])
+            assert 'ema_container' in checkpoint, 'checkpoint does not contain "ema_container".'
+            self.ema_container.load_state_dict(checkpoint['ema_container'])
         # print(f'{config.mode} mode: Loading pth from', path)
         print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_val_metrics {checkpoint.get("best_val_metrics", {})}\nlast_val_metrics {checkpoint.get("last_val_metrics", {})}', '>'))
         if DistMisc.is_main_process():
