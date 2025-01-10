@@ -381,7 +381,7 @@ class PortalMisc:
                 ConfigMisc.auto_track_setattr(cfg, ['trainer', 'trainer_batch_size_total'],
                                               cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation)
                 ConfigMisc.auto_track_setattr(cfg, ['info', 'batch_info'],
-                                              f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}_{cfg.env.world_size}_{cfg.trainer.grad_accumulation}')
+                                              f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}x{cfg.env.world_size}x{cfg.trainer.grad_accumulation}')
                 
                 ConfigMisc.auto_track_setattr(cfg, ['trainer', 'name_optimizers'],
                                               [attr for attr in dir(cfg.trainer) if attr.startswith('optimizer')])
@@ -582,21 +582,26 @@ class PortalMisc:
             PortalMisc._print_config(cfg, force_all_rank=cfg.special.print_config_all_rank)
         seconds_remain = cfg.info.wandb.wandb_buffer_time - int(TimeMisc.diff_time_str(TimeMisc.get_time_string(), cfg.info.start_time))
         if DistMisc.is_main_process():
-            loggers.log_file.close()
-            print('log_file closed.')
             try:
+                if hasattr(loggers, 'log_file'):
+                    print('\nTrying to close log_file...')
+                    loggers.log_file.close()
+                    print('log_file closed.')
                 if hasattr(loggers, 'tensorboard_run'):
+                    print('\nTrying to close tensorboard...')
                     loggers.tensorboard_run.close()
                     print('tensorboard closed.')
                 if force:
                     DistMisc.destroy_process_group()
                     
                     if hasattr(loggers, 'wandb_run'):
+                        print('\nTrying to close wandb forcefully...')
                         loggers.wandb_run.finish(exit_code=-1)
                         print('wandb closed.')
                     exit(0)  # 0 for shutting down bash master_port sweeper
                 else:
                     if hasattr(loggers, 'wandb_run'):
+                        print('\nTrying to close wandb gracefully...')
                         if cfg.special.debug is None:
                             if seconds_remain > 0:
                                 for _ in tqdm(range(seconds_remain), desc='Waiting for wandb to upload all files...'):
