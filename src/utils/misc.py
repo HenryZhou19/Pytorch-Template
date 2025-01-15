@@ -1236,7 +1236,9 @@ class SweepMisc:
 class TensorMisc:
     @staticmethod
     def to(data, device, non_blocking=False):
-        if isinstance(data, dict):
+        if data is None:
+            return None
+        elif isinstance(data, dict):
             return {k: TensorMisc.to(data=v, device=device, non_blocking=non_blocking) for k, v in data.items()}
         elif isinstance(data, (torch.Tensor, TensorMisc.BatchList)):
             return data.to(device=device, non_blocking=non_blocking)

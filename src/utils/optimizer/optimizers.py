@@ -30,10 +30,10 @@ class IntegratedOptimizer:
             }
         return state_dict
     
-    def load_state_dict(self, state_dict, skip_optimizer=False, skips_scaler=False, skip_scheduler=False):
+    def load_state_dict(self, state_dict, skip_optimizer=False, skip_scaler=False, skip_scheduler=False):
         if not skip_optimizer:
             self.optimizer.load_state_dict(state_dict['optimizer'])
-        if not skips_scaler and self.scaler is not None:
+        if not skip_scaler and self.scaler is not None:
             assert 'scaler' in state_dict, 'the checkpoint does not contain "scaler".'
             self.scaler.load_state_dict(state_dict['scaler'])
         if not skip_scheduler:
