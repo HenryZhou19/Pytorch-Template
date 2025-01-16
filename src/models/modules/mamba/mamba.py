@@ -64,13 +64,13 @@ class MambaLayer(nn.Module):
         """
         
         if not self.fused_add_norm:
-            residual = (self.drop_path(hidden_states) + residual) if residual is not None else hidden_states
+            residual = (hidden_states + residual) if residual is not None else hidden_states
             hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
             if self.residual_in_fp32:
                 residual = residual.to(torch.float32)
         else:
             hidden_states, residual = layer_norm_fn(
-                self.drop_path(hidden_states),
+                hidden_states,
                 self.norm.weight,
                 self.norm.bias,
                 residual=residual,
@@ -80,7 +80,7 @@ class MambaLayer(nn.Module):
                 is_rms_norm=isinstance(self.norm, RMSNorm)
             )
         
-        hidden_states = self.mamba_block(hidden_states, inference_params=inference_params)
+        hidden_states = self.drop_path(self.mamba_block(hidden_states, inference_params=inference_params))
         return hidden_states, residual
     
     def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
