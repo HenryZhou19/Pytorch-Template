@@ -61,3 +61,6 @@ class ModelManager(object):
                 print('Not using EMA.')
 
         return ema_container
+
+    def build_postprocessor(self, verbose=True):
+        raise NotImplementedError

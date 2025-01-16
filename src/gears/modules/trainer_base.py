@@ -11,11 +11,12 @@ from typing import Dict, List, Union
 import torch
 from ema_pytorch import EMA
 
-from src.criterions import CriterionBase
+from src.criterions import CriterionBase, CriterionManager
+from src.datasets import DataManager
 from src.datasets.modules.data_module_base import DataLoaderX
-from src.models import ModelBase
+from src.models import ModelBase, ModelManager
 from src.utils.misc import *
-from src.utils.optimizer import IntegratedOptimizer
+from src.utils.optimizer import IntegratedOptimizer, OptimizerUtils
 from src.utils.progress_logger import *
 from src.utils.register import Register
 
@@ -28,20 +29,62 @@ class TrainerBase:
         self,
         cfg: SimpleNamespace,
         loggers: SimpleNamespace,
+        ):
+        super().__init__()
+        self.cfg = cfg
+        self.loggers = loggers
+        
+        # prepare for data
+        self.data_manager = DataManager(cfg, loggers)
+        train_loader = self.data_manager.build_dataloader(split='train')
+        val_loader = self.data_manager.build_dataloader(split='val')
+        
+        # prepare for model, postprocessor
+        self.model_manager = ModelManager(cfg, loggers)
+        model_without_ddp = self.model_manager.build_model()
+        # postprocessor = model_manager.build_postprocessor()
+        postprocessor = None
+        
+        # prepare for criterion
+        self.criterion_manager = CriterionManager(cfg, loggers)
+        criterion = self.criterion_manager.build_criterion()
+        
+        # model wrapper
+        model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
+        
+        # prepare for optimizers, le_schedulers, and scalers (cuda auto mixed precision(amp)) if needed, all in the integrated_optimizers
+        integrated_optimizers = OptimizerUtils.get_integrated_optimizers(cfg, model_without_ddp, train_loader)
+        
+        # prepare for EMA (must be called after the ddp_wrapper to avoid potential problems)
+        ema_container = self.model_manager.build_ema(model_without_ddp)
+        
+        self._prepare_for_training(
+            model=model,
+            ema_container=ema_container,
+            postprocessor=postprocessor,
+            criterion=criterion,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            integrated_optimizers=integrated_optimizers,
+            device=self.model_manager.device,
+            )
+    
+    def _prepare_for_training(
+        self,
         model: Union[ModelBase, torch.nn.parallel.DistributedDataParallel],
         ema_container: EMA,
+        postprocessor: None,
         criterion: CriterionBase,
         train_loader: DataLoaderX,
         val_loader: DataLoaderX,
         integrated_optimizers: List[IntegratedOptimizer],
         device: torch.device,
         ) -> None:
-        super().__init__()
-        self.cfg = cfg
-        self.loggers = loggers
+
         self.model = model
-        self.model_without_ddp: ModelBase = model.module if cfg.env.distributed else model
+        self.model_without_ddp: ModelBase = model.module if self.cfg.env.distributed else model
         self.ema_container = ema_container  # still in train mode (inited in ModelManager)
+        self.postprocessor = postprocessor
         self.criterion = criterion
         self.train_loader = train_loader
         self.val_loader = val_loader
