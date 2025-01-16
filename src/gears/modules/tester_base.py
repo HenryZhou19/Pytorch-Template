@@ -7,9 +7,10 @@ from types import SimpleNamespace
 import torch
 from ema_pytorch.ema_pytorch import EMA
 
-from src.criterions import CriterionBase
+from src.criterions import CriterionBase, CriterionManager
+from src.datasets import DataManager
 from src.datasets.modules.data_module_base import DataLoaderX
-from src.models import ModelBase
+from src.models import ModelBase, ModelManager
 from src.utils.misc import *
 from src.utils.progress_logger import *
 from src.utils.register import Register
@@ -23,23 +24,58 @@ class TesterBase:
         self,
         cfg: SimpleNamespace,
         loggers: SimpleNamespace,
-        model_without_ddp: ModelBase,
-        ema_container: EMA,
-        device: torch.device,
-        criterion: CriterionBase=None,
-        test_loader: DataLoaderX=None,
-        model_only_mode=False,
-        ) -> None:
+        model_only_mode: bool=False,
+        ):
         super().__init__()
         self.cfg = cfg
         self.loggers = loggers
+        self.model_only_mode = model_only_mode
+        
+        # prepare for data
+        self.data_manager = DataManager(cfg, loggers) if not self.model_only_mode else None
+        test_loader = self.data_manager.build_dataloader(split='test') if not self.model_only_mode else None
+        
+        # prepare for model, postprocessor
+        self.model_manager = ModelManager(cfg, loggers)
+        model_without_ddp = self.model_manager.build_model()
+        ema_container = self.model_manager.build_ema(model_without_ddp)
+        # postprocessor = model_manager.build_postprocessor()
+        postprocessor = None
+        
+        # prepare for criterion
+        self.criterion_manager = CriterionManager(cfg, loggers) if not self.model_only_mode else None
+        criterion = self.criterion_manager.build_criterion() if not self.model_only_mode else None
+        
+        # model wrapper
+        # no need for DDP in inference
+        
+        self._prepare_for_testing(
+            model_without_ddp=model_without_ddp,
+            ema_container=ema_container,
+            postprocessor=postprocessor,
+            criterion=criterion,
+            test_loader=test_loader,
+            device=self.model_manager.device,
+            )
+    
+    def _prepare_for_testing(
+        self,
+        model_without_ddp: ModelBase,
+        ema_container: EMA,
+        postprocessor: None,
+        criterion: CriterionBase,
+        test_loader: DataLoaderX,
+        device: torch.device,
+        ) -> None:
+        
         self.model = model_without_ddp
         self.ema_container = ema_container  # still in train mode (inited in ModelManager)
+        self.postprocessor = postprocessor
         self.device = device
         
         self.model.set_infer_mode(True)
         
-        if model_only_mode:
+        if self.model_only_mode:
             self.nn_module_list = [self.model]
             
             if self.ema_container is not None:
