@@ -47,8 +47,8 @@ trainer:
   sync_lr_with_batch_size: 0  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks, grad_accumulation] / sync_lr_with_batch_size)
   trainer_batch_size_total: TBD
   grad_accumulation: 1  # positive integer (keep it '1' in most cases)
-  infinite_dataloader: False  # if True, the dataloader will be infinite, which means the worker will keep loading data until the main process stops(may speed up the process when new epoch starts). Not recommended
-  fixed_length_dataloader: 0  # if > 0, the dataloader will be set to the fixed length, i.e. update steps per training epoch (one epoch's data may be truncated or repeated). Not work with infinite_dataloader
+  fixed_length_trainloader: 0  # if > 0, the dataloader will be set to the fixed length (update_steps = fixed_length_trainloader // grad_accumulation) per training epoch (one epoch's data may be truncated or repeated)
+  fixed_length_valloader: 0  # as above, but for validation
   ## batch_control ends
   trainer_breath_time: 0.0
   trainer_choice: default
