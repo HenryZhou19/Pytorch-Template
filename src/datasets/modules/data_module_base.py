@@ -110,21 +110,26 @@ class DataModuleBase:
         dataset = self.get_dataset(split)
         
         is_train = split=='train'
-        is_train_or_val = split in ['train', 'val']
+        is_val = split=='val'
+        is_test = split=='test'
         use_dist_sampler = True if split == 'train' else self.cfg.trainer.dist_eval
         
-        if is_train_or_val and getattr(self.cfg.trainer, 'infinite_dataloader', False):
-            DataloaderClass = InfiniteDataLoaderX
-        elif is_train and getattr(self.cfg.trainer, 'fixed_length_dataloader', 0) > 0:
+        if is_train and getattr(self.cfg.trainer, 'fixed_length_trainloader', 0) > 0:
             DataloaderClass = partial(
                 FixedLengthDataLoaderX,
-                total_batches_one_epoch=self.cfg.trainer.fixed_length_dataloader * self.cfg.trainer.grad_accumulation,
+                total_batches_one_epoch=self.cfg.trainer.fixed_length_trainloader,
+                total_epochs=self.cfg.trainer.epochs,
+                )
+        elif is_val and getattr(self.cfg.trainer, 'fixed_length_valloader', 0) > 0:
+            DataloaderClass = partial(
+                FixedLengthDataLoaderX,
+                total_batches_one_epoch=self.cfg.trainer.fixed_length_valloader,
                 total_epochs=self.cfg.trainer.epochs,
                 )
         else:
             DataloaderClass = DataLoaderX
             
-        batch_size=self.cfg.trainer.trainer_batch_size_per_rank if is_train_or_val else self.cfg.tester.tester_batch_size_per_rank
+        batch_size = self.cfg.tester.tester_batch_size_per_rank if is_test else self.cfg.trainer.trainer_batch_size_per_rank
         if split=='val' and self.cfg.special.single_eval:
             batch_size = 1
         
@@ -187,34 +192,6 @@ class DataLoaderX(DataLoader):
         
         if self.sampler is not None:
             self.sampler.set_epoch(self._current_epoch)
-            
-
-class InfiniteDataLoaderX(DataLoaderX):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._DataLoader__initialized = False
-        
-        assert self.batch_sampler is not None, 'batch_sampler should not be None'
-        self.batch_sampler = _InfiniteSampler(self.batch_sampler)
-        
-        self._DataLoader__initialized = True
-        self.iterator = super().__iter__()
-        
-    def __len__(self):
-        return len(self.batch_sampler.sampler)
-        
-    def __iter__(self):
-        for _ in range(len(self)):
-            yield next(self.iterator)
-
-
-class _InfiniteSampler:
-    def __init__(self, sampler):
-        self.sampler = sampler
-        
-    def __iter__(self):
-        while True:
-            yield from iter(self.sampler)
             
 
 class FixedLengthSampler:
