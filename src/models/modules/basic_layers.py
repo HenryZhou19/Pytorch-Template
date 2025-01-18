@@ -23,24 +23,64 @@ class MLP(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_seq_length, type='sinusoidal', dropout=0.1):
+    def __init__(self, d_pos, max_seq_length, type='learnable', init_magnitute=1.0, d_start_idx=0, drop_out=0.0):
         super().__init__()
-        if type == 'sinusoidal': 
-            position = torch.arange(0, max_seq_length, dtype=torch.float).unsqueeze(1)
-            div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-            pe = torch.zeros(max_seq_length, d_model)  # [L, d_model]
-            pe[:, 0::2] = torch.sin(position * div_term)
-            pe[:, 1::2] = torch.cos(position * div_term)
-            pe = pe.unsqueeze(0)  # [1(N), L, d_model]
+        if type is None:
+            type = 'none'
+            
+        if type == 'learnable':
+            self.pe = nn.Parameter(torch.randn(max_seq_length, d_pos) * init_magnitute)  # [L, d_model]
+            self.magnitude = None
+        elif type == 'sinusoidal': 
+            self._init_sinusoidal_pe(d_pos, max_seq_length)  # [L, d_model]
+            self.magnitude = None
+        elif type == 'scalable_sinusoidal':
+            self._init_sinusoidal_pe(d_pos, max_seq_length)  # [L, d_model]
+            self.magnitude = nn.Parameter(torch.ones(1, d_pos) * init_magnitute)  # [1, d_model]
+        elif type == 'none':
+            pe = torch.zeros(max_seq_length, d_pos)  # [L, d_model]
             self.register_buffer('pe', pe)
-        elif type == 'learnable':
-            self.pe = nn.Parameter(torch.zeros(1, max_seq_length, d_model))
+            self.magnitude = None
         
-        self.dropout = nn.Dropout(p=dropout)
+        self.d_pos = d_pos
+        self.max_seq_length = max_seq_length
+        self.d_start_idx = d_start_idx
+        assert self.d_start_idx >= 0, f'd_start_idx={d_start_idx} should be >= 0'
+        self.d_end_idx = d_start_idx + d_pos
+        if drop_out > 0.0:
+            self.dropout = nn.Dropout(drop_out)
+        else:    
+            self.dropout = nn.Identity()
+            
+    def _init_sinusoidal_pe(self, d_pos, max_seq_length):
+        position = torch.arange(0, max_seq_length, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_pos, 2).float() * (-math.log(10000.0) / d_pos))
+        pe = torch.zeros(max_seq_length, d_pos)  # [L, d_pos]
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+                
+    def _get_pe(self):
+        if self.magnitude is not None:
+            return self.pe * self.magnitude
+        else:
+            return self.pe
+    
+    def expand_pe(self, xx: torch.Tensor, seq_dim):
+        seq_length = xx.shape[seq_dim]        
+        assert seq_length <= self.max_seq_length, f'x.shape[{seq_dim}]={xx.shape[seq_dim]} > max_seq_length={self.max_seq_length}'
         
-    def forward(self, x):
-        x = x + self.pe[:, :x.size(1), :]  # [N, L, d_model]  # [N, L, d_model]
-        return self.dropout(x)
+        pe = self._get_pe()[:seq_length]  # [L, d_pos]
+        shape = [1] * len(xx.shape)
+        shape[seq_dim] = seq_length
+        shape[-1] = self.d_pos
+        return pe.reshape(shape).to(xx.dtype)
+        
+    def forward(self, x: torch.Tensor, seq_dim):  #  x: [..., L, ..., d_model]
+        assert self.d_end_idx <= x.shape[-1], f'd_end_idx={self.d_end_idx} should be <= x.shape[-1]={x.shape[-1]}'
+        xx = x[..., self.d_start_idx:self.d_end_idx]  # [..., L, ..., d_pos]
+        x[..., self.d_start_idx:self.d_end_idx] = xx + self.dropout(self.expand_pe(xx, seq_dim))
+        return x
 
 
 class PatchEmbedding2D(nn.Module):
