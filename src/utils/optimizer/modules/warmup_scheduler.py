@@ -28,38 +28,17 @@ class WarmUpFn:
         return getattr(WarmUpFn, warmup_type)
 
 
-class _AmpStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` before `optimizer.step()`' warning when using amp or grad_accumulation
-    @staticmethod
-    def with_counter(method, is_scaler_step=False):
-        instance_ref = weakref.ref(method.__self__)
-        func = method.__func__
-        cls = instance_ref().__class__
-        del method
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if is_scaler_step:
-                optimizer_in_scaler_call = args[0]
-                optimizer_in_scaler_call._step_count += 1
-            instance = instance_ref()
-            wrapped = func.__get__(instance, cls)
-            return wrapped(*args, **kwargs)
-        wrapper._with_counter = True
-        return wrapper
-    
-    def __init__(self, optimizer, scaler, do_grad_accumulation, last_epoch):
-        if scaler is not None:  # prevent _LRScheduler to wrap optimizer.step()
-            optimizer.step = self.with_counter(optimizer.step)  
+class _CustomedStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()` before `optimizer.step()`' warning when grad_accumulation
+    def __init__(self, optimizer, scaler, do_grad_accumulation, last_epoch): 
         super().__init__(optimizer, last_epoch)
-        if scaler is not None:  # wrap scaler.step() to replace the number of optimizer.step() calls
-            scaler.step = self.with_counter(scaler.step, is_scaler_step=True)
         if do_grad_accumulation:  # just avoid the warning when use grad_accumulation
-            optimizer._step_count = 1
+            setattr(optimizer, '_opt_called', True)
             
     def state_dict(self):
         return {key: value for key, value in self.__dict__.items() if key != 'optimizer' and key != 'warmup_fn'}
 
 
-class WarmUpVanillaLR(_AmpStepLR):
+class WarmUpVanillaLR(_CustomedStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
         assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
@@ -77,7 +56,7 @@ class WarmUpVanillaLR(_AmpStepLR):
         return [min_lr + alpha * (base_lr - min_lr) for base_lr, min_lr in zip(self.base_lrs, self.min_lrs)]
 
 
-class WarmUpCosineAnnealingLR(_AmpStepLR):
+class WarmUpCosineAnnealingLR(_CustomedStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
         assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
@@ -96,7 +75,7 @@ class WarmUpCosineAnnealingLR(_AmpStepLR):
         return [min_lr + alpha * (base_lr - min_lr) for base_lr, min_lr in zip(self.base_lrs, self.min_lrs)]
 
 
-class WarmUpLinearLR(_AmpStepLR):
+class WarmUpLinearLR(_CustomedStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
         assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
         self.T_max = T_max
@@ -115,7 +94,7 @@ class WarmUpLinearLR(_AmpStepLR):
         return [min_lr + alpha * (base_lr - min_lr) for base_lr, min_lr in zip(self.base_lrs, self.min_lrs)]
 
 
-class WarmUpMultiStepLR(_AmpStepLR):
+class WarmUpMultiStepLR(_CustomedStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, step_milestones: List[int], gamma, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
         assert list(step_milestones) == sorted(step_milestones), 'MultiStepLR milestones should be a list of increasing integers.'
         assert T_max > step_milestones[-1], 'T_max should be larger than the last milestone.'
@@ -137,7 +116,7 @@ class WarmUpMultiStepLR(_AmpStepLR):
         return [min_lr + alpha * (base_lr - min_lr) for base_lr, min_lr in zip(self.base_lrs, self.min_lrs)]
 
 
-class WarmupCosineAnnealingRestartLR(_AmpStepLR):
+class WarmupCosineAnnealingRestartLR(_CustomedStepLR):
     """
     Hacked from https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup/blob/master/cosine_annealing_warmup/scheduler.py
 
@@ -229,7 +208,7 @@ class WarmupCosineAnnealingRestartLR(_AmpStepLR):
         self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
         
         
-class WarmupCosineAnnealingMultiCycleLR(_AmpStepLR):
+class WarmupCosineAnnealingMultiCycleLR(_CustomedStepLR):
     """
     Hacked from https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup/blob/master/cosine_annealing_warmup/scheduler.py
 

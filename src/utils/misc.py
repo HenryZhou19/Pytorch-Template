@@ -778,7 +778,7 @@ class DistMisc:
             DistMisc.setup_for_distributed(True)
             
             if getattr(cfg.amp, 'amp_enabled', False):  # in train mode, check AMP
-                print(LoggerMisc.block_wrapper('AMP is not supported on CPU. Automatically turning off AMP by setting "cfg.amp.amp_enabled = False".', '#'))
+                print(LoggerMisc.block_wrapper('AMP is not supported on CPU currently. Automatically turning off AMP by setting "cfg.amp.amp_enabled = False".', '#'))
                 ConfigMisc.auto_track_setattr(cfg, ['amp', 'amp_enabled'], False)
             if cfg.env.pin_memory:
                 print(LoggerMisc.block_wrapper('Pin memory is not supported on CPU. Automatically turning off pin_memory by setting "cfg.env.pin_memory = False".', '#'))
@@ -1107,7 +1107,7 @@ class LoggerMisc:
                     # loggers.tensorboard_run.add_image('output_video', output_dict['output_video'], global_step=step)
     
     @staticmethod
-    def print_all_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread'], file=sys.stdout):
+    def print_all_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread', 'pt_elastic', 'python'], file=sys.stdout):
         p = psutil.Process()
         if get_parent:
             if specific_parent is not None and p.parent().name() not in specific_parent:
@@ -1118,7 +1118,7 @@ class LoggerMisc:
         print(LoggerMisc.block_wrapper(f'All sub-processes of {p.name()}:\n{all_processes}', s='#'), file=file)
     
     @staticmethod
-    def get_wandb_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread'], kill_all=False, kill_wait_time=60):
+    def get_wandb_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread', 'pt_elastic', 'python'], kill_all=False, kill_wait_time=60):
         p = psutil.Process()
         if get_parent:
             if specific_parent is not None and p.parent().name() not in specific_parent:

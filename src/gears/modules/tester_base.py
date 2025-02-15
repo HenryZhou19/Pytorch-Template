@@ -115,7 +115,7 @@ class TesterBase:
         else:
             raise ValueError(f'Unknown amp.amp_mode: {self.cfg.amp.amp_mode}')
         inference_amp_enabled = self.cfg.amp.amp_enabled and self.cfg.amp.amp_inference
-        self.inference_autocast = partial(torch.cuda.amp.autocast, enabled=inference_amp_enabled, dtype=dtype)
+        self.inference_autocast = partial(torch.amp.autocast, device_type='cuda', dtype=dtype, enabled=inference_amp_enabled)
     
     def _get_pbar(self):
         # called in "before_inference"
