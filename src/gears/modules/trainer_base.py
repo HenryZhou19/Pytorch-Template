@@ -165,8 +165,8 @@ class TrainerBase:
             raise ValueError(f'Unknown amp.amp_mode: {self.cfg.amp.amp_mode}')
         train_amp_enabled = self.cfg.amp.amp_enabled
         val_amp_enabled = self.cfg.amp.amp_enabled and self.cfg.amp.amp_val
-        self.train_autocast = partial(torch.cuda.amp.autocast, enabled=train_amp_enabled, dtype=dtype)
-        self.val_autocast = partial(torch.cuda.amp.autocast, enabled=val_amp_enabled, dtype=dtype)
+        self.train_autocast = partial(torch.amp.autocast, device_type='cuda', dtype=dtype, enabled=train_amp_enabled)
+        self.val_autocast = partial(torch.amp.autocast, device_type='cuda', dtype=dtype, enabled=val_amp_enabled)
     
     def _get_val_epochs(self):
         if self.cfg.trainer.eval_freq <= 0:

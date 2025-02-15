@@ -13,7 +13,7 @@ class IntegratedOptimizer:
         self.identifier: str = identifier
         
         self.optimizer: torch.optim.Optimizer = optimizer
-        self.scaler: torch.cuda.amp.GradScaler = scaler
+        self.scaler: torch.amp.GradScaler = scaler
         self.lr_scheduler: torch.optim.lr_scheduler._LRScheduler = lr_scheduler
         
         self.root_module: torch.nn.Module = root_module
@@ -183,7 +183,7 @@ class OptimizerUtils:
         
         # scaler
         if cfg.amp.amp_enabled and cfg.amp.amp_mode == 'fp16':
-            scaler = torch.cuda.amp.GradScaler(enabled=True)
+            scaler = torch.amp.GradScaler(device='cuda', enabled=True)
         else:
             scaler = None
         

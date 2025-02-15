@@ -6,7 +6,7 @@ from typing import Optional, Union
 
 import torch
 from mamba_ssm.ops.triton.layer_norm import layer_norm_fn, rms_norm_fn
-from timm.models.layers import DropPath
+from timm.layers import DropPath
 from torch import nn
 
 from src.utils.misc import DummyContextManager
@@ -173,7 +173,7 @@ class Mamba(nn.Module):
         disable_amp = torch.is_autocast_enabled() and self.no_amp
         if disable_amp:
             hidden_states = hidden_states.float()
-            context = partial(torch.cuda.amp.autocast, enabled=False)
+            context = partial(torch.amp.autocast, device_type='cuda', enabled=False)
         else:
             context = DummyContextManager
         

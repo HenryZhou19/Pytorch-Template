@@ -4,7 +4,7 @@
 import torch
 import torch.nn.functional as F
 from einops import rearrange
-from torch.cuda.amp import custom_bwd, custom_fwd
+from torch.amp import custom_bwd, custom_fwd
 
 try:
     import causal_conv1d_cuda
@@ -65,7 +65,7 @@ def _save_delta(delta, folder_path='./temp_delta_vis', verbose=False):
 class MambaInnerFn(torch.autograd.Function):
     
     @staticmethod
-    @custom_fwd
+    @custom_fwd(device_type='cuda')
     def forward(ctx, xz, conv1d_weight, conv1d_bias, x_proj_weight, delta_proj_weight,
                 A, B=None, C=None, D=None, delta_bias=None, B_proj_bias=None,
                 C_proj_bias=None, delta_softplus=True, checkpoint_lvl=1, save_delta=False):
@@ -119,7 +119,7 @@ class MambaInnerFn(torch.autograd.Function):
         return y
 
     @staticmethod
-    @custom_bwd
+    @custom_bwd(device_type='cuda')
     def backward(ctx, dy):
         """
         dy: (batch, dim, seqlen) i.e. (B, D, L)
