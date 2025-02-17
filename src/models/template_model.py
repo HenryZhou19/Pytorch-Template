@@ -86,13 +86,13 @@ class LeNet(ModelBase):
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
-        x = F.relu(self.conv1(x))
+        x = F.silu(self.conv1(x))
         x = F.max_pool2d(x, 2)
-        x = F.relu(self.conv2(x))
+        x = F.silu(self.conv2(x))
         x = F.max_pool2d(x, 2)
         x = x.view(-1, 16 * 4 * 4)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = F.silu(self.fc1(x))
+        x = F.silu(self.fc2(x))
         x = self.fc3(x)
         return {
             'pred_scores': x
@@ -115,13 +115,13 @@ class LeNetMultiOptimizer(ModelBase):
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
-        x = F.relu(self.convs[0](x))
+        x = F.silu(self.convs[0](x))
         x = F.max_pool2d(x, 2)
-        x = F.relu(self.convs[1](x))
+        x = F.silu(self.convs[1](x))
         x_conv_out = F.max_pool2d(x, 2)
         x = x_conv_out.view(-1, 16 * 4 * 4).detach()
-        x = F.relu(self.fcs[0](x))
-        x = F.relu(self.fcs[1](x))
+        x = F.silu(self.fcs[0](x))
+        x = F.silu(self.fcs[1](x))
         x = self.fcs[2](x)
         return {
             'conv_out': x_conv_out,
@@ -136,9 +136,9 @@ class LeNetConvs(nn.Module):
         self.conv2 = nn.Conv2d(6, 16, kernel_size=5)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
+        x = F.silu(self.conv1(x))
         x = F.max_pool2d(x, 2)
-        x = F.relu(self.conv2(x))
+        x = F.silu(self.conv2(x))
         x = F.max_pool2d(x, 2)
         return x
     
@@ -151,8 +151,8 @@ class LeNetFCs(nn.Module):
         self.fc3 = nn.Linear(84, 10)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = F.silu(self.fc1(x))
+        x = F.silu(self.fc2(x))
         x = self.fc3(x)
         return x
         
