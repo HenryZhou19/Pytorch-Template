@@ -5,7 +5,7 @@ from torch import nn
 
 
 class MLP(nn.Module):
-    def __init__(self, in_channel: int, out_channels: list, activation_layer: nn.Module=nn.GELU, dropout=0.0, final_activation=False) -> None:
+    def __init__(self, in_channel: int, out_channels: list, activation_layer: nn.Module=nn.SiLU, dropout=0.0, final_activation=False) -> None:
         super().__init__()
         self.mlp = nn.Sequential()
         for idx, out_channel in enumerate(out_channels):
@@ -17,9 +17,20 @@ class MLP(nn.Module):
             in_channel = out_channel
         self.out_channel = out_channels[-1]
         
-    def forward(self, x):
-        x = self.mlp(x)
-        return x
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.mlp(x)
+
+
+class DSMLP(nn.Module):
+    def __init__(self, in_channel: int, out_channels: int, inter_channels: int, activation_layer: nn.Module=nn.SiLU) -> None:
+        super().__init__()
+        self.w1 = nn.Linear(in_channel, inter_channels)
+        self.w2 = nn.Linear(inter_channels, out_channels)
+        self.w3 = nn.Linear(in_channel, inter_channels)
+        self.activation = activation_layer()
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(self.activation(self.w1(x)) * self.w3(x))
 
 
 class PositionalEncoding(nn.Module):

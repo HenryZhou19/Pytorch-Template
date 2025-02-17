@@ -7,10 +7,10 @@ class SimpleNet(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(2, 100),
             nn.BatchNorm1d(100),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Linear(100, 100),
             nn.BatchNorm1d(100),
-            nn.ReLU(),
+            nn.SiLU(),
         )
 
     def forward(self, x):
