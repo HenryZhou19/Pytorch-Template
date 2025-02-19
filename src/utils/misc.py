@@ -736,7 +736,12 @@ class DistMisc:
             if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:  # 
                 ConfigMisc.auto_track_setattr(cfg, ['env', 'world_size'], int(os.environ['WORLD_SIZE']))
                 ConfigMisc.auto_track_setattr(cfg, ['env', 'rank'], int(os.environ['RANK']))
-                ConfigMisc.auto_track_setattr(cfg, ['env', 'local_rank'], int(os.environ['LOCAL_RANK']))
+                if os.environ.get('LOCAL_RANK', None) is None:
+                    assert cfg.env.world_size == 1
+                    local_rank = 0
+                else:
+                    local_rank = int(os.environ['LOCAL_RANK'])
+                ConfigMisc.auto_track_setattr(cfg, ['env', 'local_rank'], local_rank)
             # elif 'SLURM_PROCID' in os.environ and 'SLURM_PTY_PORT' not in os.environ:
             #     ConfigMisc.auto_track_setattr(cfg, ['env', 'rank'], int(os.environ['SLURM_PROCID']))
             #     ConfigMisc.auto_track_setattr(cfg, ['env', 'local_rank'], cfg.env.rank % torch.cuda.device_count())
@@ -1062,7 +1067,7 @@ class LoggerMisc:
         
         def _trim(self, desc):
             desc = str(desc)
-            return disp_trim(desc, self.bar_main.ncols)
+            return disp_trim(desc, self.bar_main.ncols if self.bar_main.ncols is not None else 80)
         
         def set_postlines_str(self, desc: list, refresh=True):
             assert len(desc) == self.postlines
