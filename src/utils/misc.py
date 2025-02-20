@@ -1074,6 +1074,21 @@ class LoggerMisc:
             for bar_postline, d in zip(self.bar_postlines, desc):
                 bar_postline.set_description_str(self._trim(d), refresh)
     
+    class RedirectOutputContext:
+        def __init__(self, redir_out='/dev/null', mode='w'):
+            self.redir_out = redir_out
+            self._original_stdout = sys.stdout
+            self.mode = mode
+
+        def __enter__(self):
+            os.makedirs(os.path.dirname(self.redir_out), exist_ok=True)
+            self._file = open(self.redir_out, self.mode)
+            sys.stdout = self._file
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            sys.stdout = self._original_stdout
+            self._file.close()
+    
     @staticmethod
     def block_wrapper(input_object, s='=', block_width=80):
         str_input = str(input_object)
