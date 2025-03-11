@@ -480,7 +480,7 @@ class TrainerBase:
         
         for loss in loss_dict.values():
             if loss is not None:
-                if not math.isfinite(loss) and self.integrated_optimizer.scaler is None:
+                if not math.isfinite(loss) and self.integrated_optimizers[0].scaler is None:
                     LoggerMisc.get_wandb_pid(kill_all=True)
                     raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss}, stopping training.')
         
