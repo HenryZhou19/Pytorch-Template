@@ -6,24 +6,32 @@ from copy import deepcopy
 from functools import partial
 from glob import glob
 from types import SimpleNamespace
-from typing import Dict
+from typing import TYPE_CHECKING, Dict
 
-import deepspeed
-import torch
-from deepspeed.runtime.engine import DeepSpeedEngine
-from deepspeed.runtime.base_optimizer import DeepSpeedOptimizer
+from src.utils.misc import *
+
+if TYPE_CHECKING:
+    import deepspeed
+    import torch
+else:
+    os.environ['TRITON_LIBCUDA_PATH'] = '/usr/local/cuda/lib64/stubs/'
+    deepspeed = ImportMisc.LazyImporter('deepspeed')
+    torch = ImportMisc.LazyImporter('torch')
+    
 from ema_pytorch import EMA
 
 from src.criterions import CriterionBase, CriterionManager
 from src.datasets import DataManager
 from src.datasets.modules.data_module_base import DataLoaderX
 from src.models import ModelBase, ModelManager
-from src.utils.misc import *
 from src.utils.progress_logger import *
 
 
 class DeepspeedTrainerBase:
     registered_name: str
+    
+    # from deepspeed.runtime.engine import DeepSpeedEngine
+    # from deepspeed.runtime.base_optimizer import DeepSpeedOptimizer
     
     def __init__(
         self,
@@ -73,13 +81,13 @@ class DeepspeedTrainerBase:
     
     def _prepare_for_training(
         self,
-        ds_engine: DeepSpeedEngine,
+        ds_engine,
         ema_container: EMA,
         postprocessor: None,
         criterion: CriterionBase,
         train_loader: DataLoaderX,
         val_loader: DataLoaderX,
-        ds_optimizer: DeepSpeedOptimizer,
+        ds_optimizer,
         device: torch.device,
         ) -> None:
 
@@ -113,7 +121,7 @@ class DeepspeedTrainerBase:
         
         self.val_epoch_list = self._get_val_epochs()
           
-        self.nn_module_list = [self.model, self.criterion]
+        self.nn_module_list = [self.model_without_ddp, self.criterion]
         self.training = True
         
         if self.ema_container is not None:
@@ -130,7 +138,8 @@ class DeepspeedTrainerBase:
         if self.checkpoint_keep_interval > 0:
             os.makedirs(os.path.join(self.cfg.info.work_dir, 'checkpoint_keep_storage'), exist_ok=True)
         self.breath_time = self.cfg.trainer.trainer_breath_time  # XXX: avoid cpu being too busy
-    
+        self._init_autocast()
+        
     @property
     def epoch_loop(self):
         return range(self.start_epoch, self.total_epochs + 1)
@@ -139,19 +148,29 @@ class DeepspeedTrainerBase:
     def lr_groups(self):
         ## _no_wd ones are paired with normal ones, so no need to collect them here
         return_dict = {}
-        for integrated_optimizer in self.integrated_optimizers:
-            return_dict.update({f'lr_{integrated_optimizer.identifier}_' + param_group['group_name']: param_group['lr']
-                for param_group in integrated_optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')})
+        return_dict.update({f'lr_main': param_group['lr']
+                            for param_group in self.ds_optimizer.param_groups})
         return return_dict
     
     @property
     def wd_groups(self):
         ## _no_wd ones are paired with normal ones, so no need to collect them here
         return_dict = {}
-        for integrated_optimizer in self.integrated_optimizers:
-            return_dict.update({f'wd_{integrated_optimizer.identifier}_' + param_group['group_name']: param_group['weight_decay']
-                for param_group in integrated_optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')})
+        return_dict.update({f'wd_main': param_group['weight_decay']
+                            for param_group in self.ds_optimizer.param_groups})
         return return_dict
+    
+    def _init_autocast(self):
+        if self.cfg.amp.amp_mode == 'fp16':
+            dtype = torch.float16
+        elif self.cfg.amp.amp_mode == 'bf16':
+            dtype = torch.bfloat16
+        else:
+            raise ValueError(f'Unknown amp.amp_mode: {self.cfg.amp.amp_mode}')
+        train_amp_enabled = self.cfg.amp.amp_enabled
+        val_amp_enabled = self.cfg.amp.amp_enabled and self.cfg.amp.amp_val
+        self.train_autocast = partial(torch.amp.autocast, device_type='cuda', dtype=dtype, enabled=train_amp_enabled)
+        self.val_autocast = partial(torch.amp.autocast, device_type='cuda', dtype=dtype, enabled=val_amp_enabled)
     
     def _get_val_epochs(self):
         if self.cfg.trainer.eval_freq <= 0:
@@ -326,12 +345,12 @@ class DeepspeedTrainerBase:
         for nn_module in self.nn_module_list:
             nn_module.train()
         
-        for integrated_optimizer in self.integrated_optimizers:
-            ModelMisc.train_or_eval_submodules(
-                integrated_optimizer.root_module,
-                integrated_optimizer.freeze_modules,
-                False,
-            )
+        # for integrated_optimizer in self.integrated_optimizers:
+        #     ModelMisc.train_or_eval_submodules(
+        #         integrated_optimizer.root_module,
+        #         integrated_optimizer.freeze_modules,
+        #         False,
+        #     )
         self.training = True
     
     def _eval_mode(self):
@@ -345,18 +364,18 @@ class DeepspeedTrainerBase:
         if not is_resumed:
             self._load_pretrained_models()
         
-        for integrated_optimizer in self.integrated_optimizers:
-            ModelMisc.unfreeze_or_freeze_submodules(
-                integrated_optimizer.root_module,
-                integrated_optimizer.freeze_modules,
-                False,
-                )
+        # for integrated_optimizer in self.integrated_optimizers:
+        #     ModelMisc.unfreeze_or_freeze_submodules(
+        #         integrated_optimizer.root_module,
+        #         integrated_optimizer.freeze_modules,
+        #         False,
+        #         )
             
-            ModelMisc.unfreeze_or_freeze_params(
-                integrated_optimizer.root_module,
-                integrated_optimizer.freeze_params,
-                False,
-                )
+        #     ModelMisc.unfreeze_or_freeze_params(
+        #         integrated_optimizer.root_module,
+        #         integrated_optimizer.freeze_params,
+        #         False,
+        #         )
             
         ModelMisc.show_model_info(self.cfg, self)
         self._get_pbar()
@@ -377,8 +396,8 @@ class DeepspeedTrainerBase:
                 self.val_pbar.reset()
           
         self.step_count = 0
-        for integrated_optimizer in self.integrated_optimizers:
-            integrated_optimizer.zero_grad()
+        # for integrated_optimizer in self.integrated_optimizers:
+        #     integrated_optimizer.zero_grad()
         self._train_mode()
     
     def _after_first_train_iter(self, **kwargs):
@@ -446,7 +465,7 @@ class DeepspeedTrainerBase:
         loss = loss_dict['loss_main']
         self.ds_engine.backward(loss)
         
-        grad_norm_dict = {'grad_norm_main': _compute_grad_norm(self.ds_optimizer)}
+        grad_norm_dict = {'grad_norm_main': _compute_grad_norm()}
         
         self.ds_engine.step()
         
@@ -465,8 +484,8 @@ class DeepspeedTrainerBase:
             epoch_str=f'epoch: [{self.epoch}/{self.total_epochs}]',
             )
         mlogger.add_metrics([{
-            **{f'loss_{integrated_optimizer.identifier}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers},
-            **{f'grad_norm_{integrated_optimizer.identifier}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers},
+            **{f'loss_main': ValueMetric(high_prior=True)},
+            **{f'grad_norm_main': ValueMetric(high_prior=True, no_sync=True)},
             **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for lr_group in self.lr_groups.keys()},
             'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True),
             }])

@@ -373,6 +373,19 @@ class PortalMisc:
     
     @staticmethod
     def special_config_adjustment(cfg):
+        def _adapt_to_deepspeed_mode(cfg):
+            ConfigMisc.auto_track_setattr(cfg, ['trainer', 'deepspeed', 'gradient_accumulation_steps'],
+                                          cfg.trainer.grad_accumulation)
+            ConfigMisc.auto_track_setattr(cfg, ['trainer', 'deepspeed', 'train_micro_batch_size_per_gpu'],
+                                          cfg.trainer.trainer_batch_size_per_rank)
+            if cfg.amp.amp_enabled:
+                if cfg.amp.amp_mode == 'fp16':
+                    ConfigMisc.auto_track_setattr(cfg, ['trainer', 'deepspeed', 'fp16', 'enabled'], True)
+                elif cfg.amp.amp_mode == 'bf16':
+                    ConfigMisc.auto_track_setattr(cfg, ['trainer', 'deepspeed', 'bf16', 'enabled'], True)
+                else:
+                    raise ValueError(f'Invalid amp_mode: {cfg.amp.amp_mode}')
+            
         def _set_real_batch_size_and_lr(cfg):
             if not ConfigMisc.is_inference(cfg):  # for train and val
                 if cfg.trainer.grad_accumulation > 1:
@@ -384,7 +397,7 @@ class PortalMisc:
                                               f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}x{cfg.env.world_size}x{cfg.trainer.grad_accumulation}')
                 
                 ConfigMisc.auto_track_setattr(cfg, ['trainer', 'name_optimizers'],
-                                              [attr for attr in dir(cfg.trainer) if attr.startswith('optimizer')])
+                                              [attr for attr in dir(cfg.trainer) if attr.startswith('optimizer') or attr.startswith('deepspeed')])
                 if cfg.trainer.sync_lr_with_batch_size > 0:
                     for name_optimizer in cfg.trainer.name_optimizers:
                         optimizer_cfg = getattr(cfg.trainer, name_optimizer)
@@ -402,6 +415,8 @@ class PortalMisc:
                 ConfigMisc.auto_track_setattr(cfg, ['info', 'batch_info'],
                                               f'{cfg.tester.tester_batch_size_total}={cfg.tester.tester_batch_size_per_rank}_{cfg.env.world_size}')
         
+        if hasattr(cfg.trainer, 'deepspeed'):
+            _adapt_to_deepspeed_mode(cfg)
         _set_real_batch_size_and_lr(cfg)
         
         if cfg.special.debug == 'one_iter':  # 'one_iter' debug mode
