@@ -435,6 +435,7 @@ class TrainerBase:
         targets: dict = batch['targets']
         
         inputs['train_progress'] = self.trained_iters / self.total_iters
+        targets['train_progress'] = inputs['train_progress']
         
         if self.training:
             with self.train_autocast():
