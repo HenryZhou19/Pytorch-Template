@@ -3,9 +3,11 @@ import math
 import torch
 from torch import nn
 
+from src.models.modules.basic_functions import trunc_normal_init_linear_weights
+
 
 class MLP(nn.Module):
-    def __init__(self, in_channel: int, out_channels: list, activation_layer: nn.Module=nn.SiLU, dropout=0.0, final_activation=False) -> None:
+    def __init__(self, in_channel: int, out_channels: list, activation_layer: nn.Module=nn.SiLU, dropout=0.0, final_activation=False, trunc_normal_init=False) -> None:
         super().__init__()
         self.mlp = nn.Sequential()
         for idx, out_channel in enumerate(out_channels):
@@ -17,17 +19,23 @@ class MLP(nn.Module):
             in_channel = out_channel
         self.out_channel = out_channels[-1]
         
+        if trunc_normal_init:
+            self.apply(trunc_normal_init_linear_weights)
+        
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.mlp(x)
 
 
 class DSMLP(nn.Module):
-    def __init__(self, in_channel: int, out_channels: int, inter_channels: int, activation_layer: nn.Module=nn.SiLU) -> None:
+    def __init__(self, in_channel: int, out_channels: int, inter_channels: int, activation_layer: nn.Module=nn.SiLU, trunc_normal_init=False) -> None:
         super().__init__()
         self.w1 = nn.Linear(in_channel, inter_channels)
         self.w2 = nn.Linear(inter_channels, out_channels)
         self.w3 = nn.Linear(in_channel, inter_channels)
         self.activation = activation_layer()
+        
+        if trunc_normal_init:
+            self.apply(trunc_normal_init_linear_weights)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(self.activation(self.w1(x)) * self.w3(x))
@@ -50,7 +58,7 @@ class PositionalEncoding(nn.Module):
             self.magnitude = nn.Parameter(torch.ones(1, d_pos) * init_magnitute)  # [1, d_model]
         elif type == 'none':
             pe = torch.zeros(max_seq_length, d_pos)  # [L, d_model]
-            self.register_buffer('pe', pe)
+            self.register_buffer('pe', pe, persistent=False)
             self.magnitude = None
         
         self.d_pos = d_pos
@@ -69,7 +77,7 @@ class PositionalEncoding(nn.Module):
         pe = torch.zeros(max_seq_length, d_pos)  # [L, d_pos]
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+        self.register_buffer('pe', pe, persistent=False)
                 
     def _get_pe(self):
         if self.magnitude is not None:
