@@ -822,6 +822,8 @@ class ModelMisc:
             one_sample = trainer.train_loader.dataset[0]
             one_sample_batch_input = TensorMisc.to(trainer.train_loader.collate_fn([one_sample])['inputs'], trainer.device)
             whole_batch_input = TensorMisc.to(trainer.train_loader.collate_fn([one_sample] * cfg.trainer.trainer_batch_size_per_rank)['inputs'], trainer.device)
+            one_sample_batch_input['train_progress'] = 0.0
+            whole_batch_input['train_progress'] = 0.0
             
             temp_model = trainer.model_without_ddp
             temp_model.eval()
