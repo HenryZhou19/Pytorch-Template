@@ -435,6 +435,7 @@ class TrainerBase:
         targets: dict = batch['targets']
         
         inputs['train_progress'] = self.trained_iters / self.total_iters
+        targets['train_progress'] = inputs['train_progress']
         
         if self.training:
             with self.train_autocast():
@@ -480,7 +481,7 @@ class TrainerBase:
         
         for loss in loss_dict.values():
             if loss is not None:
-                if not math.isfinite(loss) and self.integrated_optimizer.scaler is None:
+                if not math.isfinite(loss) and self.integrated_optimizers[0].scaler is None:
                     LoggerMisc.get_wandb_pid(kill_all=True)
                     raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss}, stopping training.')
         

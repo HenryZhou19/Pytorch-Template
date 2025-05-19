@@ -232,14 +232,17 @@
             self.epoch_sample_count += ...
             ...
 
-            return loss, {
+            return {
+                # By default, only one optimizer is used, so loss_dict contains only 'loss_main'
+                'loss_main': loss
+                }, {
                 # all metrics here are scalars (float, torch's scalar, numpy's scalar) 
                 # referring to one sample with reduction='mean'
                 # all DDP things will be done outside for these metrics
                 'METRIC_1_NAME': metric_1  
                 'METRIC_2_NAME': metric_2
                 ...
-            }  # loss, metrics_dict
+            }  # loss_dict, metrics_dict
 
         # if some metrics can not be calculated by averaging the metrics of one sample (called automatically when an epoch ends)
         def _get_epoch_metrics_and_reset(self):

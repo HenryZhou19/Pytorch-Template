@@ -6,6 +6,20 @@ import torch
 from torch.autograd import Function
 
 
+def trunc_normal_init_linear_weights(module: torch.nn.Module, std: float = 0.02):
+    """
+    Initialize the weights of a linear layer with truncated normal distribution.
+    
+    Args:
+        module (torch.nn.Linear): The linear layer to initialize.
+        std (float): The standard deviation of the truncated normal distribution.
+    """
+    if isinstance(module, torch.nn.Linear):
+        torch.nn.init.trunc_normal_(module.weight, mean=0.0, std=std)
+        if module.bias is not None:
+            torch.nn.init.zeros_(module.bias)
+
+
 class DifferentiableBinarization(Function):
     """
     __class__.apply(x) -> y

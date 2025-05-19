@@ -1,3 +1,5 @@
+import math
+
 from torch import nn
 
 from src.utils.misc import DistMisc, LoggerMisc
@@ -24,9 +26,9 @@ class CriterionBase(nn.Module):
             self.primary_criterion = 'ema_' + self.primary_criterion  # use 'ema_xxx' as primary criterion
             
         if cfg.criterion.primary_criterion_higher_better:
-            self.choose_better_fn = lambda now, stored: now > stored  # higher better  
+            self.choose_better_fn = lambda now, stored: now > stored or math.isnan(stored)  # higher better  
         else:
-            self.choose_better_fn = lambda now, stored: now < stored  # lower better
+            self.choose_better_fn = lambda now, stored: now < stored or math.isnan(stored)  # lower better
             
     def set_ema_mode(self, ema_mode):
         self.ema_mode = ema_mode

@@ -95,7 +95,7 @@ class LastConv(nn.Module):
 
 
 class UNetXd(nn.Module):
-    def __init__(self, in_channels, layer_out_channels=[64, 128, 256, 512], final_out_channels=None, dimension=2, use_conv_transpose=False, padding_mode='zeros', res_in_block=True):
+    def __init__(self, in_channels, layer_out_channels=[64, 128, 256, 512], final_out_channels=None, dimension=2, use_conv_transpose=False, padding_mode='zeros', res_in_block=True, features_out=False):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         if final_out_channels is None:
@@ -109,6 +109,8 @@ class UNetXd(nn.Module):
             UpSampling(layer_out_channels[i], layer_out_channels[i - 1], layer_out_channels[i - 1], dimension, use_conv_transpose, padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1, 0, -1)
         ])
         self.out_conv = LastConv(layer_out_channels[0], final_out_channels, dimension)
+        
+        self.features_out = features_out
 
     def forward(self, x):
         # down
@@ -118,12 +120,21 @@ class UNetXd(nn.Module):
             down_out_list.append(down_layer(down_out_list[-1]))
 
         # up
-        x = down_out_list.pop()
-        for up_layer in self.up_layers:
-            x = up_layer(x, down_out_list.pop())
-        x = self.out_conv(x)
-        
-        return x
+        if self.features_out:
+            feature_list = []
+            x = down_out_list.pop()
+            feature_list.append(x)
+            for up_layer in self.up_layers:
+                x = up_layer(x, down_out_list.pop())
+                feature_list.append(x)
+            x = self.out_conv(x)
+            return x, feature_list
+        else:
+            x = down_out_list.pop()
+            for up_layer in self.up_layers:
+                x = up_layer(x, down_out_list.pop())
+            x = self.out_conv(x)
+            return x
 
 
 class TimeUpscaleUNet3d(nn.Module):

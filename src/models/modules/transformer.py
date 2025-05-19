@@ -42,7 +42,7 @@ class TransformerEncoderLayer(nn.Module):
         super().__init__()
         
         self.self_attn = MHAttention(d_model, num_heads, dropout, batch_first)
-        self.ffn = MLP(d_model, [d_ffn, d_model], nn.SiLU, dropout)
+        self.ffn = MLP(d_model, [d_ffn, d_model], nn.SiLU, dropout, trunc_normal_init=True)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.norm_first = norm_first
@@ -66,7 +66,7 @@ class TransformerDecoderLayer(nn.Module):
         
         self.self_attn = MHAttention(d_model, num_heads, dropout, batch_first)
         self.cross_attn = MHAttention(d_model, num_heads, dropout, batch_first)
-        self.ffn = MLP(d_model, [d_ffn, d_model], nn.SiLU, dropout)
+        self.ffn = MLP(d_model, [d_ffn, d_model], nn.SiLU, dropout, trunc_normal_init=True)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.norm3 = nn.LayerNorm(d_model)
