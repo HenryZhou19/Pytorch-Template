@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import ema_pytorch
 import torch
-from ema_pytorch.ema_pytorch import EMA
+from ema_pytorch import EMA
 
 from src.utils.misc import ImportMisc
 
