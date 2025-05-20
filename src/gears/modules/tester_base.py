@@ -5,7 +5,7 @@ from functools import partial
 from types import SimpleNamespace
 
 import torch
-from ema_pytorch.ema_pytorch import EMA
+from ema_pytorch import EMA
 
 from src.criterions import CriterionBase, CriterionManager
 from src.datasets import DataManager

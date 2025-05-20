@@ -25,6 +25,7 @@ info:
 
 tester:
   train_cfg_path: to_be_specified  # XXX: required
+  custom_infer_work_dir: null  # if not specified (null as None), use `train_work_dir/inference_results`
   ## batch_control
   tester_batch_size_per_rank: null  # override this in main config
   ## batch_control ends
