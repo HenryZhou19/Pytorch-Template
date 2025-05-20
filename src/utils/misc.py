@@ -293,7 +293,7 @@ class PortalMisc:
                 print(LoggerMisc.block_wrapper(f'Main project files are successfully copied to "{destination_dir}"'))
     
     @staticmethod
-    def combine_train_infer_configs(infer_cfg, use_train_seed=True, custom_work_dir=None):
+    def combine_train_infer_configs(infer_cfg, use_train_seed=True, custom_infer_work_dir=None):
         ## 1. simply combine the train_cfg and infer_cfg, using infer_cfg to overwrite train_cfg
         cfg = ConfigMisc.read_from_yaml(infer_cfg.tester.train_cfg_path)  # config in training
         train_seed_base = cfg.seed_base
@@ -319,9 +319,9 @@ class PortalMisc:
             assert os.path.exists(cfg.tester.checkpoint_path), f'Checkpoint path "{cfg.tester.checkpoint_path}" not found.'
         
         ## 4. set work_dir for inference (default: train_work_dir/inference_results)
-        if custom_work_dir is not None:
+        if cfg.tester.custom_infer_work_dir is not None:
             ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'],
-                                          os.path.join(custom_work_dir, LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True)))
+                                          os.path.join(cfg.tester.custom_infer_work_dir, LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True)))
         else:
             ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'],
                                           cfg.info.train_work_dir + '/inference_results/' + LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True))
