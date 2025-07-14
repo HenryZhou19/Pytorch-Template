@@ -1135,25 +1135,37 @@ class LoggerMisc:
             if specific_parent is not None and p.parent().name() not in specific_parent:
                 return
             p = p.parent()
-        p_children = p.children(recursive=True)
-        all_processes = '\n'.join([f'    PID: {str(p.pid):9s}Name: {p.name():34s}Parent\'s PID: {p.parent().pid}' for p in [p] + p_children])
+        p_list = [p] + p.children(recursive=True)
+        str_line_list = []
+        for p_temp in p_list:
+            try:
+                str_line = f'    PID: {str(p_temp.pid):9s}Name: {p_temp.name():34s}Parent\'s PID: {p_temp.parent().pid}'
+                str_line_list.append(str_line)
+            except Exception as e:
+                print(f'Error when getting process info of PID {p_temp.pid}:\n\t{e}', file=file)
+        
+        all_processes = '\n'.join(str_line_list)
         print(LoggerMisc.block_wrapper(f'All sub-processes of {p.name()}:\n{all_processes}', s='#'), file=file)
     
     @staticmethod
     def get_wandb_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread', 'pt_elastic', 'python'], kill_all=False, kill_wait_time=60):
         p = psutil.Process()
-        if get_parent:
-            if specific_parent is not None and p.parent().name() not in specific_parent:
-                return
-            p = p.parent()
-        p_children = p.children(recursive=True)
         wandb_pid_list = []
-        for p in p_children:
-            if 'wandb' in p.name():
-                wandb_pid_list.append(p.pid)
-                if kill_all:
-                    os.kill(p.pid, signal.SIGTERM)
-                    print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running.', s='#'))
+        try:
+            if get_parent:
+                if specific_parent is not None and p.parent().name() not in specific_parent:
+                    return
+                p = p.parent()
+            p_children = p.children(recursive=True)
+            for p in p_children:
+                if 'wandb' in p.name():
+                    wandb_pid_list.append(p.pid)
+                    if kill_all:
+                        os.kill(p.pid, signal.SIGTERM)
+                        print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running.', s='#'))
+        except Exception as e:
+            print(f'Error when getting wandb\'s pid:\n\t{e}')
+                
         return wandb_pid_list
     
     @staticmethod
