@@ -3,7 +3,9 @@ import math
 import torch
 from torch import nn
 
-from src.models.modules.basic_functions import trunc_normal_init_linear_weights
+from .basic_functions import (adapt_conv_2d_load_from_state_dict,
+                              adapt_conv_3d_load_from_state_dict,
+                              trunc_normal_init_linear_weights)
 
 
 class MLP(nn.Module):
@@ -39,6 +41,88 @@ class DSMLP(nn.Module):
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(self.activation(self.w1(x)) * self.w3(x))
+
+
+class SoftMoE(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        num_experts=4,
+        noisy_gating=True,  # noisy gating (improves load balancing)
+        gate_noise_std=1.0,  # noise std for noisy gating
+        aux_loss_coef=0.01,  # coefficient of load-balance loss
+        external_experts=True,  # use external experts (if False, use inner default expert)
+        hidden_dim=None,  # hidden dimension of experts (only used if external_experts=False)
+        output_dim=None,  # output dimension of experts (only used if external_experts=False)
+        external_gate=True,  # external gate (if None, use inner default gate)
+    ):
+        super().__init__()
+        self.input_dim = input_dim
+        self.num_experts = num_experts
+        self.noisy_gating = noisy_gating
+        self.gate_noise_std = gate_noise_std
+        self.aux_loss_coef = aux_loss_coef
+        self.external_experts = external_experts
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.external_gate = external_gate
+        
+        # Experts
+        if self.external_experts:
+            self.experts = None
+        else:
+            self.experts = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(input_dim, hidden_dim),
+                    nn.SiLU(),
+                    nn.Linear(hidden_dim, output_dim)
+                )
+            ])
+        
+        # Gate
+        if self.external_gate:
+            self.gate = None
+        else:
+            self.gate = nn.Linear(input_dim, num_experts)
+
+    def noisy_gates(self, x, gate_logits):
+        if self.external_gate:
+            assert gate_logits is not None, "When using external gate, gate_logits must be provided."
+        else:
+            gate_logits = self.gate(x)
+        if self.training and self.noisy_gating:
+            gate_logits = gate_logits + torch.randn_like(gate_logits) * self.gate_noise_std
+        return gate_logits
+
+    def forward(self, x, expert_outputs: list=None, gate_logits: torch.Tensor=None):
+        """
+        input: [..., D]
+        output: [..., output_dim]
+        """
+        shape = x.shape[:-1]
+        gate_logits = self.noisy_gates(x, gate_logits)                           # [..., num_experts]
+        gate_weights = nn.functional.softmax(gate_logits, dim=-1)               # [..., num_experts]
+        
+        
+        if self.external_experts:
+            assert expert_outputs is not None, "When using external experts, expert_outputs must be provided."
+        else:
+            # Compute each expert output
+            expert_outputs = []
+            for expert in self.experts:
+                expert_outputs.append(expert(x))         # [..., output_dim]
+        
+        expert_outputs = torch.stack(expert_outputs, dim=-2)          # [..., num_experts, output_dim]
+        moe_output = torch.sum(gate_weights.unsqueeze(-1) * expert_outputs, dim=-2)  # [..., output_dim]
+
+        # load balance loss（soft)
+        if not self.training:
+            return moe_output, None
+        
+        load = gate_weights.mean(dim=tuple(range(len(shape))))      # (num_experts,)
+        moe_aux_loss = (load * load).sum() * self.aux_loss_coef
+
+        return moe_output, moe_aux_loss
 
 
 class PositionalEncoding(nn.Module):
@@ -134,6 +218,17 @@ class PatchEmbedding2D(nn.Module):
             x = x.flatten(1, -2)  # [N, grid_size[0], grid_size[1], embed_dim] -> [N, num_patches, embed_dim]
         x = self.norm(x)
         return x
+    
+    def _load_from_state_dict(
+        self, state_dict, prefix, local_metadata,
+        strict, missing_keys, unexpected_keys, error_msgs,
+        ):
+        key = prefix + "proj.weight"
+        state_dict = adapt_conv_2d_load_from_state_dict(state_dict, key, self.proj.weight)
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+            )
 
 
 class PatchEmbedding3D(nn.Module):
@@ -169,3 +264,13 @@ class PatchEmbedding3D(nn.Module):
             x = x.flatten(1, -2)  # [N, grid_size[0], grid_size[1], grid_size[2], embed_dim] -> [N, num_patches, embed_dim]
         x = self.norm(x)
         return x
+
+    def _load_from_state_dict(
+        self, state_dict, prefix, local_metadata,
+        strict, missing_keys, unexpected_keys, error_msgs,
+        ):
+        state_dict = adapt_conv_3d_load_from_state_dict(state_dict, prefix + "proj.", self.proj)
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+            )
