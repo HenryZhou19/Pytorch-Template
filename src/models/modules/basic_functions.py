@@ -3,6 +3,7 @@ from typing import Union
 
 import numpy as np
 import torch
+from torch import nn
 from torch.autograd import Function
 
 
@@ -149,3 +150,143 @@ def multi_dim_repeat_interleave(tensor: torch.Tensor, repeats: Union[list, tuple
             continue
         tensor = tensor.repeat_interleave(repeat, dim=dim)
     return tensor
+
+
+def adapt_conv_2d_load_from_state_dict(state_dict, module_prefix, current_module, strict=False):
+    weight_key = module_prefix + 'weight'
+    current_weight = current_module.weight
+    if weight_key in state_dict:
+        loaded_weight = state_dict[weight_key]
+        c_out, c_in, kh, kw = current_weight.shape
+        
+        try:
+            c_out_l, c_in_l, kh_l, kw_l = loaded_weight.shape
+            with torch.no_grad():
+                if c_out_l != c_out:
+                    if c_out_l > c_out:
+                        loaded_weight = loaded_weight[:c_out]
+                    else:
+                        pad_shape = (c_out - c_out_l, c_in_l, kh_l, kw_l)
+                        loaded_weight = torch.cat([loaded_weight, loaded_weight.new_zeros(pad_shape)], dim=0)
+                
+                if c_in != c_in_l:
+                    if c_in_l == 1 and c_in > 1:
+                        loaded_weight = loaded_weight / c_in
+                        loaded_weight = loaded_weight.repeat(1, c_in, 1, 1)
+                    elif c_in == 1 and c_in_l > 1:
+                        loaded_weight = loaded_weight.mean(dim=1, keepdim=True)
+                    elif c_in > c_in_l:
+                        pad_shape = (loaded_weight.shape[0], c_in - c_in_l, loaded_weight.shape[2], loaded_weight.shape[3])
+                        loaded_weight = torch.cat([loaded_weight, loaded_weight.new_zeros(pad_shape)], dim=1)
+                    else:  # c_in < c_in_l
+                        loaded_weight = loaded_weight[:, :c_in, ...]
+                
+                if (kh, kw) != (kh_l, kw_l):
+                    loaded_weight = nn.functional.interpolate(loaded_weight, size=(kh, kw), mode='bilinear', align_corners=False)
+                
+                loaded_weight = loaded_weight.to(dtype=current_weight.dtype, device=current_weight.device)
+        except:
+            if strict:
+                raise ValueError(f"Failed to adapt conv2d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}.")
+            else:
+                warnings.warn(f"Failed to adapt conv2d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}. The weights will not be loaded.")
+                loaded_weight = current_weight
+
+        state_dict[weight_key] = loaded_weight
+    
+    if current_module.bias is not None:
+        bias_key = module_prefix + 'bias'
+        current_bias = current_module.bias
+        if bias_key in state_dict:
+            loaded_bias = state_dict[bias_key]
+            c_out = current_bias.shape
+            
+            try:
+                c_out_l = loaded_bias.shape
+                with torch.no_grad():
+                    if c_out_l != c_out:
+                        if c_out_l > c_out:
+                            loaded_bias = loaded_bias[:c_out]
+                        else:
+                            pad_shape = (c_out - c_out_l,)
+                            loaded_bias = torch.cat([loaded_bias, loaded_bias.new_zeros(pad_shape)], dim=0)
+            except:
+                if strict:
+                    raise ValueError(f"Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}.")
+                else:
+                    warnings.warn(f"Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}. The weights will not be loaded.")
+                    loaded_bias = current_bias
+        
+            state_dict[bias_key] = loaded_bias
+        
+    return state_dict
+
+
+def adapt_conv_3d_load_from_state_dict(state_dict, module_prefix, current_module, strict=False):
+    weight_key = module_prefix + 'weight'
+    current_weight = current_module.weight
+    if weight_key in state_dict:
+        loaded_weight = state_dict[weight_key]
+        c_out, c_in, kd, kh, kw = current_weight.shape
+        
+        try:
+            c_out_l, c_in_l, kd_l, kh_l, kw_l = loaded_weight.shape
+            with torch.no_grad():
+                if c_out_l != c_out:
+                    if c_out_l > c_out:
+                        loaded_weight = loaded_weight[:c_out]
+                    else:
+                        pad_shape = (c_out - c_out_l, c_in_l, kd_l, kh_l, kw_l)
+                        loaded_weight = torch.cat([loaded_weight, loaded_weight.new_zeros(pad_shape)], dim=0)
+                
+                if c_in != c_in_l:
+                    if c_in_l == 1 and c_in > 1:
+                        loaded_weight = loaded_weight / c_in
+                        loaded_weight = loaded_weight.repeat(1, c_in, 1, 1, 1)
+                    elif c_in == 1 and c_in_l > 1:
+                        loaded_weight = loaded_weight.mean(dim=1, keepdim=True)
+                    elif c_in > c_in_l:
+                        pad_shape = (loaded_weight.shape[0], c_in - c_in_l, loaded_weight.shape[2], loaded_weight.shape[3], loaded_weight.shape[4])
+                        loaded_weight = torch.cat([loaded_weight, loaded_weight.new_zeros(pad_shape)], dim=1)
+                    else:  # c_in < c_in_l
+                        loaded_weight = loaded_weight[:, :c_in, ...]
+                
+                if (kd, kh, kw) != (kd_l, kh_l, kw_l):
+                    loaded_weight = nn.functional.interpolate(loaded_weight, size=(kd, kh, kw), mode='trilinear', align_corners=False)
+                
+                loaded_weight = loaded_weight.to(dtype=current_weight.dtype, device=current_weight.device)
+        except:
+            if strict:
+                raise ValueError(f"Failed to adapt conv3d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}.")
+            else:
+                warnings.warn(f"Failed to adapt conv3d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}. The weights will not be loaded.")
+                loaded_weight = current_weight
+
+        state_dict[weight_key] = loaded_weight
+    
+    if current_module.bias is not None:
+        bias_key = module_prefix + 'bias'
+        current_bias = current_module.bias
+        if bias_key in state_dict:
+            loaded_bias = state_dict[bias_key]
+            c_out = current_bias.shape
+            
+            try:
+                c_out_l = loaded_bias.shape
+                with torch.no_grad():
+                    if c_out_l != c_out:
+                        if c_out_l > c_out:
+                            loaded_bias = loaded_bias[:c_out]
+                        else:
+                            pad_shape = (c_out - c_out_l,)
+                            loaded_bias = torch.cat([loaded_bias, loaded_bias.new_zeros(pad_shape)], dim=0)
+            except:
+                if strict:
+                    raise ValueError(f"Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}.")
+                else:
+                    warnings.warn(f"Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}. The weights will not be loaded.")
+                    loaded_bias = current_bias
+        
+            state_dict[bias_key] = loaded_bias
+        
+    return state_dict
