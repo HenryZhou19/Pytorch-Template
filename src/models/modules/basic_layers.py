@@ -5,6 +5,7 @@ from torch import nn
 
 from .basic_functions import (adapt_conv_2d_load_from_state_dict,
                               adapt_conv_3d_load_from_state_dict,
+                              adapt_L_C_parameter_load_from_state_dict,
                               trunc_normal_init_linear_weights)
 
 
@@ -145,6 +146,7 @@ class PositionalEncoding(nn.Module):
             self.register_buffer('pe', pe, persistent=False)
             self.magnitude = None
         
+        self.pos_type = type
         self.d_pos = d_pos
         self.max_seq_length = max_seq_length
         self.d_start_idx = d_start_idx
@@ -184,6 +186,17 @@ class PositionalEncoding(nn.Module):
         xx = x[..., self.d_start_idx:self.d_end_idx]  # [..., L, ..., d_pos]
         x[..., self.d_start_idx:self.d_end_idx] = xx + self.dropout(self.expand_pe(xx, seq_dim))
         return x
+    
+    def _load_from_state_dict(
+        self, state_dict, prefix, local_metadata,
+        strict, missing_keys, unexpected_keys, error_msgs,
+        ):
+        if self.pos_type == 'learnable':
+            state_dict = adapt_L_C_parameter_load_from_state_dict(state_dict, prefix + "pe", self.pe)
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+        )
 
 
 class PatchEmbedding2D(nn.Module):
