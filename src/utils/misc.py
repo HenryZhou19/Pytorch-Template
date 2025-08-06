@@ -1198,7 +1198,7 @@ class SweepMisc:
             msg['From'] = device_name
             msg['To'] = 'Base'
             msg['Subject'] = f'{device_name}: {subject}'
-            mail_msg = '''<p>{}</p>'''.format(message)
+            mail_msg = '''<p>{}</p>'''.format(message.replace('\n', '<br>'))
             msg.attach(MIMEText(mail_msg, 'html', 'utf-8'))
 
             try:
@@ -1264,6 +1264,7 @@ class SweepMisc:
             email_message = 'Finished.'
         finally:
             if if_send_email:
+                email_message = f"WORK DIR: {getattr(cfg.info, 'work_dir', 'unknown work_dir')}\n\n{email_message}"
                 SweepMisc._send_email(cfg, email_subject, email_message)   
 
 

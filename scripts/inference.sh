@@ -154,7 +154,11 @@ fi
 
 current_time=$(date +%s)
 new_time=$((current_time + seconds_to_wait))
-formatted_new_time=$(date -d "@$new_time" "+%Y-%m-%d %H:%M:%S")
+if date -d @0 > /dev/null 2>&1; then
+  formatted_new_time=$(date -d "@$new_time" "+%Y-%m-%d %H:%M:%S")
+else
+  formatted_new_time=$(date -r "$new_time" "+%Y-%m-%d %H:%M:%S")
+fi
 
 echo "now: $(date "+%Y-%m-%d %H:%M:%S")"
 echo "waiting for ${seconds_to_wait} seconds..."
