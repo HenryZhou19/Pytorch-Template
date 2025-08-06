@@ -17,6 +17,7 @@ class ModelBase(nn.Module):
         self.infer_mode = False
         self.cfg = cfg
         self.do_grad_checkpoint = cfg.trainer.grad_checkpoint
+        self.no_state_modules = dict()
         
         self.custom_inited = False
         
@@ -34,6 +35,12 @@ class ModelBase(nn.Module):
             return checkpoint.checkpoint(func, *args, use_reentrant=False, **kwargs)
         else:
             return func(*args, **kwargs)
+        
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        for module in self.no_state_modules.values():
+            module.to(*args, **kwargs)
+        return self
     
     @staticmethod
     def _fn_custom_init(module, **kwargs):
