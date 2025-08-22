@@ -10,12 +10,13 @@ from .basic_functions import (adapt_conv_2d_load_from_state_dict,
 
 
 class MLP(nn.Module):
-    def __init__(self, in_channel: int, out_channels: list, activation_layer: nn.Module=nn.SiLU, dropout=0.0, final_activation=False, trunc_normal_init=False) -> None:
+    def __init__(self, in_channel: int, out_channels: list, activation_layer: nn.Module=nn.SiLU, norm_layer=nn.Identity, dropout=0.0, final_activation=False, trunc_normal_init=False) -> None:
         super().__init__()
         self.mlp = nn.Sequential()
         for idx, out_channel in enumerate(out_channels):
             self.mlp.append(nn.Linear(in_channel, out_channel))
             if idx < len(out_channels) - 1 or final_activation:
+                self.mlp.append(norm_layer(out_channel))
                 self.mlp.append(activation_layer())
             if dropout > 0.0:
                 self.mlp.append(nn.Dropout(dropout))
