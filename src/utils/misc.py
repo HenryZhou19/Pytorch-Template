@@ -1178,45 +1178,11 @@ class LoggerMisc:
 
 class SweepMisc:
     @staticmethod
-    def _send_email(cfg, subject, message='No-reply'):
-        if DistMisc.is_main_process():
-            import smtplib
-            from email.mime.multipart import MIMEMultipart
-            from email.mime.text import MIMEText
-            
-            email_host = cfg.special.email_host
-            email_sender = cfg.special.email_sender
-            email_password = cfg.special.email_password
-            email_receiver = cfg.special.email_receiver
-            try:
-                import socket
-                device_name = socket.gethostname()
-            except:
-                device_name = 'Unknown Device'
-
-            msg = MIMEMultipart()
-            msg['From'] = device_name
-            msg['To'] = 'Base'
-            msg['Subject'] = f'{device_name}: {subject}'
-            mail_msg = '''<p>{}</p>'''.format(message.replace('\n', '<br>'))
-            msg.attach(MIMEText(mail_msg, 'html', 'utf-8'))
-
-            try:
-                smtp = smtplib.SMTP_SSL(email_host, 465)
-                smtp.login(email_sender, email_password)
-                smtp.sendmail(email_sender, email_receiver, msg.as_string())
-                print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) sent successfully.'))
-            except Exception as e:
-                print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) failed to send. Error: {e}'))
-            finally:
-                smtp.quit()
-    
-    @staticmethod
     def _do_sweep(cfg, portal_fn):
         if hasattr(cfg, 'trainer'):
             if cfg.trainer.resume is not None:
                 print(LoggerMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', '$'))
-                portal_fn(cfg)
+                _ = portal_fn(cfg)
                 exit()
         else:
             assert hasattr(cfg, 'tester'), 'Sweep mode can only be used in phase of training or inference.'
@@ -1236,36 +1202,88 @@ class SweepMisc:
             for chained_k, v in combination.items():
                 k_list = chained_k.split('//')
                 ConfigMisc.setattr_for_nested_namespace(cfg_now, k_list, v, track_modifications=True, mod_dict_key_prefix='sweep')
-            portal_fn(cfg_now)
+            _ = portal_fn(cfg_now)
     
     @staticmethod
     def init_sweep_mode(cfg, portal_fn):
-        if_send_email = getattr(cfg.special, 'send_email', False)
-        email_subject='Elusive Error'
-        email_message='Unexpected exit.'
+        portal_fn_with_notification = SweepMisc.portal_fn_with_notification(portal_fn)
         
-        try:
-            if cfg.sweep.sweep_enabled:
-                SweepMisc._do_sweep(cfg, portal_fn)
-            else:
-                portal_fn(cfg)
-        
-        except Exception as e:
-            email_subject = 'Error'
-            email_message = str(e)
-            raise e
-        except KeyboardInterrupt:
-            email_subject = 'Interrupted'
-            email_message = 'KeyboardInterrupt.'
-            if not getattr(cfg.special, 'email_when_interrupted', False):
-                if_send_email = False
+        if cfg.sweep.sweep_enabled:
+            SweepMisc._do_sweep(cfg, portal_fn_with_notification)
         else:
-            email_subject = 'Success'
-            email_message = 'Finished.'
+            _ = portal_fn_with_notification(cfg)
+
+    @staticmethod
+    def _send_email(cfg, subject, message='No-reply'):
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        
+        email_host = cfg.special.email_host
+        email_sender = cfg.special.email_sender
+        email_password = cfg.special.email_password
+        email_receiver = cfg.special.email_receiver
+        try:
+            import socket
+            device_name = socket.gethostname()
+        except:
+            device_name = 'Unknown Device'
+
+        msg = MIMEMultipart()
+        msg['From'] = device_name
+        msg['To'] = 'Base'
+        msg['Subject'] = f'{device_name}: {subject}'
+        mail_msg = '''<p>{}</p>'''.format(message.replace('\n', '<br>'))
+        msg.attach(MIMEText(mail_msg, 'html', 'utf-8'))
+
+        try:
+            smtp = smtplib.SMTP_SSL(email_host, 465)
+            smtp.login(email_sender, email_password)
+            smtp.sendmail(email_sender, email_receiver, msg.as_string())
+            result = None
+            
+        except Exception as e:
+            result = e
+            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) failed to send. Error: {e}.\n\n{message}'))
         finally:
-            if if_send_email:
-                email_message = f"WORK DIR: {getattr(cfg.info, 'work_dir', 'unknown work_dir')}\n\n{email_message}"
-                SweepMisc._send_email(cfg, email_subject, email_message)   
+            smtp.quit()
+        return result
+                
+    @staticmethod
+    def portal_fn_with_notification(func):
+        def wrapper(cfg, *args, **kwargs):
+            if_send_email = getattr(cfg.special, 'send_email', False)
+            subject = 'Elusive Error'
+            message = 'Unexpected exit.'
+            try:
+                cfg = func(cfg, *args, **kwargs)
+            except Exception as e:
+                subject = 'Error'
+                message = str(e)
+                raise
+            except KeyboardInterrupt:
+                subject = 'Interrupted'
+                message = 'KeyboardInterrupt.'
+                if not getattr(cfg.special, 'email_when_interrupted', False):
+                    if_send_email = False
+                raise
+            else:
+                subject = 'Success'
+                message = 'Finished.'
+            finally:
+                if DistMisc.is_main_process():
+                    work_dir = getattr(cfg.info, 'work_dir', 'unknown work_dir')
+                    message_with_work_dir = f'WORK DIR: {work_dir}\n\n{message}'
+                    if if_send_email:
+                        email_result = SweepMisc._send_email(cfg, subject, message_with_work_dir)
+                        if email_result is None:
+                            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) sent successfully.\n\n{message_with_work_dir}'))
+                        else:
+                            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) failed to send. Error: {e}.\n\n{message_with_work_dir}\n\nError: {email_result}'))
+                    else:
+                        print(LoggerMisc.block_wrapper(message_with_work_dir))
+            return cfg
+        return wrapper
 
 
 class TensorMisc:
