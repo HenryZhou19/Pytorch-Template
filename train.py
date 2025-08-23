@@ -30,6 +30,8 @@ def train_portal(cfg):
     
     # end everything
     PortalMisc.end_everything(cfg, loggers)
+    
+    return cfg
 
 
 if __name__ == '__main__':
