@@ -11,7 +11,7 @@ seconds_to_wait=0
 show_help() {
 cat << EOF
 discription:
-    Run the training and evaluation process with the given config file and other options on multiple machines.
+    Run the training and evaluation process with the given config file and other options on multiple machines (static rendezvous mode).
     Use 'train.py' as the entry.
 
 usage:
@@ -76,6 +76,7 @@ run_cmd() {
   --node_rank=$node_rank \
   --master_addr=$master_addr \
   --master_port=$master_port \
+  --rdzv-conf=timeout=36000 \
   train.py ${params[@]}
 }
 

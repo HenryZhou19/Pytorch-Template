@@ -288,3 +288,63 @@ class PatchEmbedding3D(nn.Module):
             state_dict, prefix, local_metadata, strict,
             missing_keys, unexpected_keys, error_msgs,
             )
+
+
+class PatchReconstruction2D(nn.Module):
+    def __init__(self, in_channels, out_channels, patch_size):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.patch_size = patch_size
+        
+        self.patch_reconstruct = nn.ConvTranspose2d(
+            in_channels=self.in_channels,
+            out_channels=self.out_channels,
+            kernel_size=self.patch_size,
+            stride=self.patch_size,
+            bias=True,
+            )
+        
+    def forward(self, x: torch.Tensor):  # [N, CC, HH, WW] -> [N, C, H, W]
+        x = self.patch_reconstruct(x)  # [N, C, H, W]
+        return x
+    
+    def _load_from_state_dict(
+        self, state_dict, prefix, local_metadata,
+        strict, missing_keys, unexpected_keys, error_msgs,
+        ):
+        state_dict = adapt_conv_2d_load_from_state_dict(state_dict, prefix + "patch_reconstruct.", self.patch_reconstruct)
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+            )
+
+
+class PatchReconstruction3D(nn.Module):
+    def __init__(self, in_channels, out_channels, patch_size):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.patch_size = patch_size
+        
+        self.patch_reconstruct = nn.ConvTranspose3d(
+            in_channels=self.in_channels,
+            out_channels=self.out_channels,
+            kernel_size=self.patch_size,
+            stride=self.patch_size,
+            bias=True,
+            )
+        
+    def forward(self, x: torch.Tensor):  # [N, CC, DD, HH, WW] -> [N, C, D, H, W]
+        x = self.patch_reconstruct(x)  # [N, C, D, H, W]
+        return x
+    
+    def _load_from_state_dict(
+        self, state_dict, prefix, local_metadata,
+        strict, missing_keys, unexpected_keys, error_msgs,
+        ):
+        state_dict = adapt_conv_3d_load_from_state_dict(state_dict, prefix + "patch_reconstruct.", self.patch_reconstruct)
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+            )

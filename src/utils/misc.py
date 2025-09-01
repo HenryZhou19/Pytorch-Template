@@ -64,12 +64,14 @@ if TYPE_CHECKING:
     import yaml
     from torch import distributed as dist
     from torch import nn
+    from torch.distributed.nn import functional as dist_F
 else:
     np = ImportMisc.LazyImporter('numpy')
     psutil = ImportMisc.LazyImporter('psutil')
     torch = ImportMisc.LazyImporter('torch')
     yaml = ImportMisc.LazyImporter('yaml')
     dist = ImportMisc.LazyImporter('torch.distributed')
+    dist_F = ImportMisc.LazyImporter('torch.distributed.nn.functional')
     nn = ImportMisc.LazyImporter('torch.nn')
 
 
@@ -646,10 +648,10 @@ class DistMisc:
             time.sleep(DistMisc.get_rank() * sleep_interval)
     
     @staticmethod
-    def all_gather(x, concat_out=False):
+    def all_gather(x, concat_out=False, auto_grad=False):
         '''
         x: [N, *]
-        N can be different on different processes
+        N can be different on different processes when auto_grad=False
         Make sure (*) is the same shape on all processes
         '''
         x: torch.Tensor
@@ -657,13 +659,14 @@ class DistMisc:
         if world_size == 1:
             x_list = [x]
         else:
-            N = torch.tensor(x.shape[0], dtype=torch.int, device=x.device)
-            N_list = [torch.zeros(1, dtype=torch.int, device=x.device) for _ in range(world_size)]
-            dist.all_gather(N_list, N)
-                
-            x_list = [torch.empty(N.item(), *x.shape[1:], dtype=x.dtype, device=x.device) for N in N_list]
-            dist.all_gather(x_list, x)
-        
+            if auto_grad:
+                x_list = list(dist_F.all_gather(x))
+            else:
+                N = torch.tensor(x.shape[0], dtype=torch.int, device=x.device)
+                N_list = [torch.zeros(1, dtype=torch.int, device=x.device) for _ in range(world_size)]
+                dist.all_gather(N_list, N)
+                x_list = [torch.empty(N.item(), *x.shape[1:], dtype=x.dtype, device=x.device) for N in N_list]
+                dist.all_gather(x_list, x)
         if concat_out:
             return torch.cat(x_list, dim=0)
         else:
@@ -931,11 +934,11 @@ class ModelMisc:
         module: nn.Module
         for name, child in module.named_children():
             if isinstance(child, nn.BatchNorm3d):
-                setattr(module, name, nn.InstanceNorm3d(child.num_features))
+                setattr(module, name, nn.InstanceNorm3d(child.num_features, affine=True))
             elif isinstance(child, nn.BatchNorm2d):
-                setattr(module, name, nn.InstanceNorm2d(child.num_features))
+                setattr(module, name, nn.InstanceNorm2d(child.num_features, affine=True))
             elif isinstance(child, nn.BatchNorm1d):
-                setattr(module, name, nn.InstanceNorm1d(child.num_features))
+                setattr(module, name, nn.InstanceNorm1d(child.num_features, affine=True))
             else:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
     
