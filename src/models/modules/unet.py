@@ -1,3 +1,5 @@
+from functools import partial
+
 import torch
 import torch.nn as nn
 
@@ -12,6 +14,7 @@ class ConvBlock(nn.Module):
             NormXd = nn.BatchNorm2d if dimension == 2 else nn.BatchNorm3d
         elif norm == 'instance':
             NormXd = nn.InstanceNorm2d if dimension == 2 else nn.InstanceNorm3d
+            NormXd = partial(NormXd, affine=True)
         else:
             # XXX: if using other norm modules, bias may be needed in ConvXd
             raise NotImplementedError('Unsupported norm type')
@@ -36,7 +39,7 @@ class ConvBlock(nn.Module):
 
 
 class DownSampling(nn.Module):
-    def __init__(self, in_channels, out_channels, dimension, padding_mode='zeros', no_down_dim=None, res_in_block=True):
+    def __init__(self, in_channels, out_channels, dimension, no_down_dim=None, activation_layer=nn.SiLU, norm='batch', padding_mode='zeros', res_in_block=True):
         super().__init__()
         assert dimension in [2, 3], 'Unsupported dimension'
         MaxPoolXd = nn.MaxPool2d if dimension == 2 else nn.MaxPool3d
@@ -49,8 +52,8 @@ class DownSampling(nn.Module):
         kernel_size = tuple(kernel_size)  
         stride = kernel_size
         self.unet_down = nn.Sequential(
-            MaxPoolXd(kernel_size=kernel_size, stride=stride),
-            ConvBlock(in_channels, out_channels, dimension, padding_mode=padding_mode, res_in_block=res_in_block)
+            MaxPoolXd(kernel_size=kernel_size, stride=stride, ceil_mode=True),
+            ConvBlock(in_channels, out_channels, dimension, activation_layer=activation_layer, norm=norm, padding_mode=padding_mode, res_in_block=res_in_block)
         )
 
     def forward(self, x):
@@ -103,7 +106,7 @@ class UNetXd(nn.Module):
 
         self.in_conv = ConvBlock(in_channels, layer_out_channels[0], dimension, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
-            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], dimension, padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
+            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], dimension, padding_mode=padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
         ])
         self.up_layers = nn.ModuleList([
             UpSampling(layer_out_channels[i], layer_out_channels[i - 1], layer_out_channels[i - 1], dimension, use_conv_transpose, padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1, 0, -1)
@@ -149,7 +152,7 @@ class TimeUpscaleUNet3d(nn.Module):
 
         self.in_conv = ConvBlock(in_channels, layer_out_channels[0], 3, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
-            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode, no_down_dim=2, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
+            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, no_down_dim=2, padding_mode=padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
         ])
         self.special_up = nn.ModuleList([
             nn.ConvTranspose3d(layer_out_channels[i],
@@ -193,7 +196,7 @@ class TimeDownscaleUNet3d(nn.Module):
 
         self.in_conv = ConvBlock(in_channels, layer_out_channels[0], 3, padding_mode=padding_mode, res_in_block=res_in_block)
         self.down_layers = nn.ModuleList([
-            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
+            DownSampling(layer_out_channels[i], layer_out_channels[i + 1], 3, padding_mode=padding_mode, res_in_block=res_in_block) for i in range(len(layer_out_channels) - 1)
         ])
         self.special_down = nn.ModuleList([
             nn.MaxPool3d(
