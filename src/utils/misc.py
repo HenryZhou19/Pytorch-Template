@@ -181,6 +181,44 @@ class ConfigMisc:
                 setattr(cfg_base, name, value)
     
     @staticmethod
+    def check_difference_between_nested_namespaces(cfg_base, cfg_new, ignore_root_attributes, ignore_attributes):
+        differences = []
+        
+        def compare(cfg1, cfg2, path=''):
+            keys1 = set(vars(cfg1).keys())
+            keys2 = set(vars(cfg2).keys())
+            all_keys = keys1.union(keys2)
+            
+            for key in all_keys:
+                new_path = f'{path}.{key}' if path else key
+                if new_path in ignore_attributes:
+                    continue
+                
+                if key not in keys1:
+                    differences.append((new_path, 'added', None, getattr(cfg2, key)))
+                elif key not in keys2:
+                    differences.append((new_path, 'removed', getattr(cfg1, key), None))
+                else:
+                    val1 = getattr(cfg1, key)
+                    val2 = getattr(cfg2, key)
+                    if isinstance(val1, SimpleNamespace) and isinstance(val2, SimpleNamespace):
+                        compare(val1, val2, new_path)
+                    elif val1 != val2:
+                        differences.append((new_path, 'modified', val1, val2))
+        
+        for attr in vars(cfg_new).keys():
+            if attr in ignore_root_attributes:
+                continue
+            val_base = getattr(cfg_base, attr, None)
+            val_new = getattr(cfg_new, attr, None)
+            if isinstance(val_base, SimpleNamespace) and isinstance(val_new, SimpleNamespace):
+                compare(val_base, val_new, attr)
+            elif val_base != val_new:
+                differences.append((attr, 'modified', val_base, val_new))
+        
+        return differences
+    
+    @staticmethod
     def setattr_for_nested_namespace(cfg, name_list, value, track_modifications=False, mod_dict_key_prefix=''):
         namespace_now = cfg
         for name in name_list[:-1]:
@@ -295,7 +333,7 @@ class PortalMisc:
                 print(LoggerMisc.block_wrapper(f'Main project files are successfully copied to "{destination_dir}"'))
     
     @staticmethod
-    def combine_train_infer_configs(infer_cfg, use_train_seed=True, custom_infer_work_dir=None):
+    def combine_train_infer_configs(infer_cfg, use_train_seed=True):
         ## 1. simply combine the train_cfg and infer_cfg, using infer_cfg to overwrite train_cfg
         cfg = ConfigMisc.read_from_yaml(infer_cfg.tester.train_cfg_path)  # config in training
         train_seed_base = cfg.seed_base
@@ -337,9 +375,32 @@ class PortalMisc:
     def resume_or_new_train_dir(cfg):  # only for train
         assert hasattr(cfg.env, 'distributed')
         if cfg.trainer.resume is not None:  # read 'work_dir', 'start_time' from the .yaml file
-            print(LoggerMisc.block_wrapper(f'Resuming from: {cfg.trainer.resume}, reading existing configs...', '>'))
+            ### Assert critial params are the same, but others can be changed(e.g. info...)
+            ### Here a warning is given, and user should check manually, allowing more flexibility.
+            print(LoggerMisc.block_wrapper(f'Resuming from: {cfg.trainer.resume}, reading existing configs...\n\033[31mWarning: Please make sure critical parameters(model, data, optimizer, scheduler, ...) are the same manually (in most cases).\033[0m', '>'))
             cfg_old = ConfigMisc.read_from_yaml(cfg.trainer.resume)
-            # XXX: assert critial params are the same, but others can be changed(e.g. info...)
+            cfg_differences = ConfigMisc.check_difference_between_nested_namespaces(
+                cfg_base=cfg_old,
+                cfg_new=cfg,
+                ignore_root_attributes=cfg.special.resume_ignore_root_attributes,
+                ignore_attributes=cfg.special.resume_ignore_attributes,
+                )
+            DistMisc.avoid_print_mess(1.0)
+            if len(cfg_differences) > 0:
+                print(f'Rank: {DistMisc.get_rank()}\nDifferences found between the old and new configs:\n\texcept {cfg.special.resume_ignore_root_attributes} at root level\n\tand {cfg.special.resume_ignore_attributes} in full paths', force=True)
+                for diff in cfg_differences:
+                    key_path, change_type, old_value, new_value = diff
+                    if change_type == 'added':
+                        print(f'  \033[32m[Added]\033[0m {key_path}: {new_value}', force=True)
+                    elif change_type == 'removed':
+                        print(f'  \033[31m[Removed]\033[0m {key_path}: {old_value}', force=True)
+                    elif change_type == 'modified':
+                        print(f'  \033[34m[Modified]\033[0m {key_path}: {old_value} -> {new_value}', force=True)
+                if not cfg.trainer.force_resume:
+                    print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\nConfigs are different. Please check and modify the new config.\n If you are sure to resume with these differences, set "trainer.force_resume" to True.', '#'), force=True)
+                    exit(1)
+                else:
+                    print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\n\033[33mWarning: Ignoring the mismatch of critical params and continuing to resume as "trainer.force_resume" is set to True.\033[0m', '#'), force=True)
             work_dir = cfg_old.info.work_dir
             ConfigMisc.auto_track_setattr(cfg, ['info', 'resume_start_time'], cfg.info.start_time)
             ConfigMisc.auto_track_setattr(cfg, ['info', 'start_time'], cfg_old.info.start_time)
@@ -415,8 +476,7 @@ class PortalMisc:
             
         if cfg.special.single_eval:
             ConfigMisc.auto_track_setattr(cfg, ['trainer', 'dist_eval'], False)
-
-
+    
     @staticmethod
     def save_configs(cfg):
         if DistMisc.is_main_process():
@@ -643,7 +703,7 @@ class DistMisc:
     
     @staticmethod
     def avoid_print_mess(sleep_interval=0.1):
-        if DistMisc.is_dist_avail_and_initialized():  # 
+        if DistMisc.is_dist_avail_and_initialized():
             dist.barrier()
             time.sleep(DistMisc.get_rank() * sleep_interval)
     

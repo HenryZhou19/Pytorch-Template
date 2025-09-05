@@ -30,7 +30,6 @@ trainer:
   sync_lr_with_batch_size: 64  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks, grad_accumulation] / sync_lr_with_batch_size)
   ## batch_control ends
   trainer_choice: default
-  resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
   epochs: 20
   real_epochs: null  # if not None, do early stopping based on real_epochs (scheduler is still based on epochs)
   optimizer_1:

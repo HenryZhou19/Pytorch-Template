@@ -24,5 +24,7 @@ special:
   print_save_config_ignore: [sweep]
   logger_config_ignore: [config, env, info, sweep, special]
   extra_name: null  # null for no extra name
+  resume_ignore_root_attributes: [info, special, sweep, modified_cfg_dict]
+  resume_ignore_attributes: [env.rank, env.local_rank, trainer.resume, trainer.force_resume]
 
 seed_base: 42

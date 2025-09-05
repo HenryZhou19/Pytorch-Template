@@ -3,6 +3,7 @@ script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$script_dir/.."
 
 outputs_path="./outputs"
+BIND_ALL=false
 SPEC=false
 PATH_SPEC=""
 
@@ -21,6 +22,10 @@ options:
     [-p value], -outputs_path
         Set the path to the outputs folder. The tensorboard logs in the outputs folder and all its subfolders will be visualized.
         Default: "./outputs"
+
+    [-ba], --bind_all
+        If set, bind all the tensorboard logs in the outputs folder and its subfolders.
+        Default: False (only bind the tensorboard logs in the outputs folder)
 EOF
 }
 
@@ -37,6 +42,10 @@ while [[ $# -gt 0 ]]; do
     -p|--outputs_path)
       outputs_path="$2"
       shift 2
+      ;;
+    -ba|--bind_all)
+      BIND_ALL=true
+      shift
       ;;
     # -s|--do_spec)
     #   SPEC=true
@@ -59,9 +68,17 @@ if $SPEC; then
       fi
     fi
   done
-  tensorboard --logdir_spec "$PATH_SPEC"
+  if $BIND_ALL; then
+    tensorboard --logdir_spec "$PATH_SPEC" --bind_all
+  else
+    tensorboard --logdir_spec "$PATH_SPEC"
+  fi
 else
   cd "$outputs_path"
   current_dir=$(pwd)
-  tensorboard --logdir "$current_dir"
+  if $BIND_ALL; then
+    tensorboard --logdir "$current_dir" --bind_all
+  else
+    tensorboard --logdir "$current_dir"
+  fi
 fi
