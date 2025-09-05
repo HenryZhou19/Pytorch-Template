@@ -612,7 +612,7 @@ class TrainerBase:
             
             self._after_one_epoch()
             
-            if self.epoch in self.val_epoch_list:
+            if len(self.val_loader) > 0 and self.epoch in self.val_epoch_list:
                 
                 self._before_validation()
                 

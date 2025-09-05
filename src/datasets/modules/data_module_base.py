@@ -107,45 +107,49 @@ class DataModuleBase:
     
     def get_dataloader(self, split: str):
         assert split in ['train', 'val', 'test'], f'Invalid split {split}'
-        dataset = self.get_dataset(split)
-        
         is_train = split=='train'
         is_val = split=='val'
         is_test = split=='test'
-        use_dist_sampler = True if split == 'train' else self.cfg.trainer.dist_eval
-        
-        if is_train and getattr(self.cfg.trainer, 'fixed_length_trainloader', 0) > 0:
-            DataloaderClass = partial(
-                FixedLengthDataLoaderX,
-                total_batches_one_epoch=self.cfg.trainer.fixed_length_trainloader,
-                total_epochs=self.cfg.trainer.epochs,
-                )
-        elif is_val and getattr(self.cfg.trainer, 'fixed_length_valloader', 0) > 0:
-            DataloaderClass = partial(
-                FixedLengthDataLoaderX,
-                total_batches_one_epoch=self.cfg.trainer.fixed_length_valloader,
-                total_epochs=self.cfg.trainer.epochs,
-                )
+        if is_train:
+            fixed_length_loader = getattr(self.cfg.trainer, 'fixed_length_trainloader', -1)
+        elif is_val:
+            fixed_length_loader = getattr(self.cfg.trainer, 'fixed_length_valloader', -1)
         else:
-            DataloaderClass = DataLoaderX
-            
-        batch_size = self.cfg.tester.tester_batch_size_per_rank if is_test else self.cfg.trainer.trainer_batch_size_per_rank
-        if split=='val' and self.cfg.special.single_eval:
-            batch_size = 1
+            fixed_length_loader = -1  # -1 means normal dataloader, not fixed-length or zero-length dataloader
         
-        return DataloaderClass(
-            dataset=dataset,
-            batch_size=batch_size,
-            sampler=self.get_sampler(dataset, is_train, use_dist_sampler),
-            pin_memory=self.cfg.env.pin_memory,
-            collate_fn=self.collate_fn,
-            num_workers=self.cfg.env.num_workers,
-            worker_init_fn=self.get_worker_init_fn(),
-            generator=self.get_generator(),
-            prefetch_factor=self.cfg.env.prefetch_factor if self.cfg.env.num_workers > 0 else None,
-            persistent_workers=True if self.cfg.env.num_workers > 0 else False,
-            drop_last=is_train,
-        )
+        if fixed_length_loader == 0:  # use negative value to indicate a zero-length dataloader
+            assert is_val, 'Only val dataloader can be set to zero-length dataloader'
+            return EmptyDataLoader()
+        else:
+            dataset = self.get_dataset(split)
+            use_dist_sampler = True if split == 'train' else self.cfg.trainer.dist_eval
+            
+            if fixed_length_loader > 0:
+                DataloaderClass = partial(
+                    FixedLengthDataLoaderX,
+                    total_batches_one_epoch=self.cfg.trainer.fixed_length_loader,
+                    total_epochs=self.cfg.trainer.epochs,
+                    )
+            else:  # fixed_length_loader < 0
+                DataloaderClass = DataLoaderX
+                
+            batch_size = self.cfg.tester.tester_batch_size_per_rank if is_test else self.cfg.trainer.trainer_batch_size_per_rank
+            if split=='val' and self.cfg.special.single_eval:
+                batch_size = 1
+            
+            return DataloaderClass(
+                dataset=dataset,
+                batch_size=batch_size,
+                sampler=self.get_sampler(dataset, is_train, use_dist_sampler),
+                pin_memory=self.cfg.env.pin_memory,
+                collate_fn=self.collate_fn,
+                num_workers=self.cfg.env.num_workers,
+                worker_init_fn=self.get_worker_init_fn(),
+                generator=self.get_generator(),
+                prefetch_factor=self.cfg.env.prefetch_factor if self.cfg.env.num_workers > 0 else None,
+                persistent_workers=True if self.cfg.env.num_workers > 0 else False,
+                drop_last=is_train,
+            )
     
     @staticmethod
     def _worker_init_fn(worker_id, rank_seed):
@@ -241,3 +245,14 @@ class FixedLengthDataLoaderX(DataLoaderX):
             now_length += len_raw_index_sampler
     
         return FixedLengthSampler(raw_index_sampler_list, self._total_batches_one_epoch)
+    
+
+class EmptyDataLoader:
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def __iter__(self):
+        return iter([])
+    
+    def __len__(self):
+        return 0

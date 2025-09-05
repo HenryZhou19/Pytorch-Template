@@ -233,7 +233,7 @@ class MetricLogger(object):
                     if idx % self.print_freq == 0:
                         step = self.print_freq        
                     else:
-                        step = self.iter_len % self.print_freq
+                        step = int(self.iter_len % self.print_freq)
                     self.pbar.update(n=step)
                     self.pbar.refresh()
 
