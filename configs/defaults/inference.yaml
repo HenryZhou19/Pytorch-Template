@@ -9,7 +9,7 @@ info:
   name_tags: [special.extra_name]
   wandb:
     wandb_enabled: True
-    wandb_resume_enabled: False  # if True, wandb run will have the same ID when resuming an existing training work
+    wandb_resume_enabled: True  # if True, wandb run will have the same ID when resuming an existing training work
     wandb_watch_model: False  # do not use if it's unnecessary
     wandb_watch_freq: 100
     wandb_buffer_time: 300  # seconds

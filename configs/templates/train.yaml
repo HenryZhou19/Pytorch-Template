@@ -30,7 +30,6 @@ trainer:
   sync_lr_with_batch_size: 0  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks, grad_accumulation] / sync_lr_with_batch_size)
   ## batch_control ends
   trainer_choice: default
-  resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
   pretrained_models: null  # None or a dict of pretrained models {name1: path1, name2: path2, ...}
   load_from_ema: True
   epochs: 10
