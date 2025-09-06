@@ -16,7 +16,6 @@ class ModelBase(nn.Module):
         self.ema_mode = False
         self.infer_mode = False
         self.cfg = cfg
-        self.do_grad_checkpoint = cfg.trainer.grad_checkpoint
         self.no_state_modules = dict()
         
         self.custom_inited = False
@@ -29,12 +28,6 @@ class ModelBase(nn.Module):
         
     def print_states(self, prefix='', force=True):
         print(f'{prefix}Model --- training mode: {self.training}, infer_mode: {self.infer_mode}, ema_mode: {self.ema_mode}', force=force)
-                    
-    def _grad_checkpoint(self, func, *args, **kwargs):
-        if self.do_grad_checkpoint and self.training:
-            return checkpoint.checkpoint(func, *args, use_reentrant=False, **kwargs)
-        else:
-            return func(*args, **kwargs)
         
     def to(self, *args, **kwargs):
         super().to(*args, **kwargs)
