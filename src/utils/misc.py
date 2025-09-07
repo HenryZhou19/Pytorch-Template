@@ -65,6 +65,7 @@ if TYPE_CHECKING:
     from torch import distributed as dist
     from torch import nn
     from torch.distributed.nn import functional as dist_F
+    from torch.utils import checkpoint as torch_checkpoint
 else:
     np = ImportMisc.LazyImporter('numpy')
     psutil = ImportMisc.LazyImporter('psutil')
@@ -73,6 +74,7 @@ else:
     dist = ImportMisc.LazyImporter('torch.distributed')
     dist_F = ImportMisc.LazyImporter('torch.distributed.nn.functional')
     nn = ImportMisc.LazyImporter('torch.nn')
+    torch_checkpoint = ImportMisc.LazyImporter('torch.utils.checkpoint')
 
 
 class ConfigMisc:
@@ -1090,6 +1092,13 @@ class ModelMisc:
             print(f'No re-init for {module}\'s {param_name}')
             return False
         return True
+    
+    @staticmethod         
+    def grad_checkpoint(enabled, func, *args, **kwargs):
+        if enabled:
+            return torch_checkpoint.checkpoint(func, *args, use_reentrant=False, **kwargs)
+        else:
+            return func(*args, **kwargs)
 
 
 class LoggerMisc:

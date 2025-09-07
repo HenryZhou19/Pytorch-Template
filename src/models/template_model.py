@@ -31,7 +31,7 @@ class SimpleModel(ModelBase):
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
-        # x = self._grad_checkpoint(self.backbone, x)
+        # x = ModelMisc.grad_checkpoint(self.training, self.backbone, x)
         x = self.backbone(x)
         x = self.head(x)
         return {
