@@ -127,7 +127,7 @@ class DataModuleBase:
             if fixed_length_loader > 0:
                 DataloaderClass = partial(
                     FixedLengthDataLoaderX,
-                    total_batches_one_epoch=self.cfg.trainer.fixed_length_loader,
+                    total_batches_one_epoch=fixed_length_loader,
                     total_epochs=self.cfg.trainer.epochs,
                     )
             else:  # fixed_length_loader < 0
