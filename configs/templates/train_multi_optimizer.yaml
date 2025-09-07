@@ -47,6 +47,8 @@ trainer:
       warmup_steps: -1  # if warmup_steps >= 0, override warmup_epochs
       # lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
       # warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
+      wd_end_scale: 1.0  # use cosine scheduler for wd from wd_xxx to wd_xxx * wd_end_scale for all param_groups
+
   optimizer_2:
     identifier: fcs
     optimizer_choice: adamw
@@ -62,7 +64,7 @@ trainer:
       warmup_steps: -1  # if warmup_steps >= 0, override warmup_epochs
       # lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
       # warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
-
+      wd_end_scale: 1.0  # use cosine scheduler for wd from wd_xxx to wd_xxx * wd_end_scale for all param_groups
 
 sweep:
   sweep_enabled: False

@@ -114,7 +114,7 @@ def load_tif_images(filepath, gray_out=False) -> np.ndarray:
         return np.ndarray [C(RGB)=3, frame_length, H, W] uint8
     """
     assert filepath.endswith('tif') or filepath.endswith('tiff')
-    _, array_tuple = cv2.imreadmulti('C2-!220118 cos7 wt er endo int2s 015.tif', flags=cv2.IMREAD_UNCHANGED)
+    _, array_tuple = cv2.imreadmulti(filepath, flags=cv2.IMREAD_UNCHANGED)
     array_list = []
     for image_array in array_tuple:
         array_list.append(_convert_cv2_image_array(image_array, gray_out))

@@ -2,19 +2,20 @@ from typing import List
 
 import torch
 
-from src.models.modules.model_base import ModelBase
 from src.utils.misc import LoggerMisc
 
+from .modules.warmup_scheduler import BasicScheduler
 from .schedulers import SchedulerUtils
 
 
 class IntegratedOptimizer:
-    def __init__(self, identifier, optimizer, lr_scheduler, scaler, root_module, max_grad_norm, modules_for_grad_norm, freeze_modules, freeze_params):
+    def __init__(self, identifier, optimizer, lr_scheduler, wd_scale_scheduler, scaler, root_module, max_grad_norm, modules_for_grad_norm, freeze_modules, freeze_params):
         self.identifier: str = identifier
         
         self.optimizer: torch.optim.Optimizer = optimizer
         self.scaler: torch.amp.GradScaler = scaler
         self.lr_scheduler: torch.optim.lr_scheduler._LRScheduler = lr_scheduler
+        self.wd_scale_scheduler: BasicScheduler = wd_scale_scheduler
         
         self.root_module: torch.nn.Module = root_module
         self.max_grad_norm: float = max_grad_norm
@@ -22,11 +23,14 @@ class IntegratedOptimizer:
         self.freeze_modules: list = freeze_modules
         self.freeze_params: list = freeze_params
         
+        self._special_init()
+        
     def state_dict(self):
         state_dict = {
             'optimizer': self.optimizer.state_dict(),
             'scaler': self.scaler.state_dict() if self.scaler is not None else None,
             'lr_scheduler': self.lr_scheduler.state_dict(),
+            'wd_scale_scheduler': self.wd_scale_scheduler.state_dict(),
             }
         return state_dict
     
@@ -38,6 +42,7 @@ class IntegratedOptimizer:
             self.scaler.load_state_dict(state_dict['scaler'])
         if not skip_scheduler:
             self.lr_scheduler.load_state_dict(state_dict['lr_scheduler'])
+            self.wd_scale_scheduler.load_state_dict(state_dict['wd_scale_scheduler'])
         
     def optimize(self, fn_before_step=None):
         grad_norm = None
@@ -68,6 +73,19 @@ class IntegratedOptimizer:
     
     def step(self, closure=None):
         self.optimizer.step(closure)
+        
+    def _special_init(self):
+        self.wd_scale_scheduler.reset_index()
+        wd_scale = self.wd_scale_scheduler.step()
+        for param_group in self.param_groups:
+            param_group['weight_decay_base'] = param_group['weight_decay']
+            param_group['weight_decay'] = wd_scale * param_group['weight_decay_base'] 
+        
+    def schedulers_step(self):
+        self.lr_scheduler.step()
+        wd_value = self.wd_scale_scheduler.step()
+        for param_group in self.param_groups:
+            param_group['weight_decay'] = wd_value * param_group['weight_decay_base']
     
 
 class OptimizerUtils:
@@ -189,11 +207,14 @@ class OptimizerUtils:
         
         # prepare for lr_scheduler
         lr_scheduler = SchedulerUtils.get_warmup_lr_scheduler(cfg, optimizer_cfg, optimizer, scaler, train_loader)
+        # prepare for wd_scheduler
+        wd_scale_scheduler = SchedulerUtils.get_warmup_wd_scale_scheduler(cfg, optimizer_cfg, train_loader)
         
         integrated_optimizer = IntegratedOptimizer(
             identifier=optimizer_identifier,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
+            wd_scale_scheduler=wd_scale_scheduler,
             scaler=scaler,
             root_module=root_module,
             max_grad_norm=max_grad_norm,

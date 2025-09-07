@@ -502,7 +502,7 @@ class TrainerBase:
             grad_norm_dict = _optimize()
         
         for integrated_optimizer in self.integrated_optimizers:
-            integrated_optimizer.lr_scheduler.step()  # update all lr_scheduler after each iter
+            integrated_optimizer.schedulers_step()  # update all lr_schedulers and wd_scale_schedulers after each iter
         self.trained_iters += 1
         return grad_norm_dict
         
@@ -521,6 +521,7 @@ class TrainerBase:
             **{f'loss_{integrated_optimizer.identifier}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers},
             **{f'grad_norm_{integrated_optimizer.identifier}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers},
             **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for lr_group in self.lr_groups.keys()},
+            **{wd_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for wd_group in self.wd_groups.keys()},
             'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True),
             }])
         first_iter = True
@@ -531,6 +532,7 @@ class TrainerBase:
             mlogger.update_metrics(
                 sample_count=batch['batch_size'],
                 **self.lr_groups,
+                **self.wd_groups,
                 **loss_dict,
                 **metrics_dict,
             )
@@ -553,7 +555,7 @@ class TrainerBase:
                 self._after_first_train_iter()
         
         mlogger.add_epoch_metrics(**self.criterion.forward_epoch_metrics())
-        self.train_outputs = mlogger.output_dict(no_avg_list=[*self.lr_groups.keys(), 'epoch'], sync=True, final_print=True)
+        self.train_outputs = mlogger.output_dict(no_avg_list=[*self.lr_groups.keys(), *self.wd_groups.keys(), 'epoch'], sync=True, final_print=True)
     
     def _evaluate(self):
         cfg = self.cfg
