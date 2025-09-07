@@ -1,6 +1,3 @@
-import math
-from typing import Literal
-
 import torch
 
 from .modules.warmup_scheduler import *
@@ -76,76 +73,23 @@ class SchedulerUtils:
             return WarmUpMultiStepLR(**kwargs)
         else:
             raise ValueError(f'Unknown scheduler choice: {cfg_for_optimizer.scheduler.scheduler_choice}')
-    
-    
-    class SimpleWarmUpCosineAnnealingScheduler:
+        
+    @staticmethod
+    def get_warmup_wd_scale_scheduler(cfg, cfg_for_optimizer, train_loader) -> BasicScheduler:
         '''
-        If need a scheduler that can be used without the optimizer, use this class.
-        
-        Special case: A scheduler without cosine annealing (only with the warmup phase)
-            can be achieved by setting ``T_warmup == T_max`` when ``dataloader == None``.
-            or just setting ``warmup_epochs == epochs`` when ``dataloader`` is provided.
-            Warning: In the end, ``T_warmup" is actually set to ``T_max - 1`` to make it valid.
+        A scheduler that only scales the weight decay during the warmup phase.
+        Currently, only a cosine warmup from start_value to end_value is supported.
+        Note: This is a scaler only, which will multiply the basic weight decay value in the IntegratedOptimizer.
         '''
-        def __init__(
-            self,
-            base_value,
-            min_value,
-            dataloader=None,
-            epochs=None,
-            warmup_epochs=0,
-            T_max=None,
-            T_warmup=0,
-            warmup_fn: Literal["no_warmup", "constant", "linear", 'exponential', 'cosine']='linear',
-            current_index=-1,
-            ):
-            
-            if dataloader is not None:
-                assert epochs is not None, 'epochs should be provided if dataloader is provided.'
-                print('The dataloader is provided, "T_max" and "T_warmup" will be calculated based on the dataloader with "epochs" and "warmup_epochs".')
-                      
-                len_dataloader = len(dataloader)
-                T_max = epochs * len_dataloader
-                T_warmup = warmup_epochs * len_dataloader
-                if warmup_epochs == epochs:
-                    T_warmup = T_max - 1
-                    print('The warmup_epochs is equal to epochs, so the T_warmup will be set to T_max - 1, making it a warmup only scheduler.')
-            else:
-                assert T_max is not None, 'T_max should be provided if dataloader is not provided.'
-                if T_warmup == T_max:
-                    T_warmup = T_max - 1
-                    print('The T_warmup is equal to T_max, so the T_warmup will be set to T_max - 1, making it a warmup only scheduler.')
-            
-            assert 0 <= T_warmup < T_max, 'T_warmup should be in the range of [0, T_max).'
-            self.base_value = base_value
-            self.min_value = min_value
-            self.T_max = T_max
-            self.T_warmup = T_warmup
-            self.warmup_fn = WarmUpFn.get_warmup_fn(warmup_fn)
-            self.current_index = current_index
+        len_train_loader = len(train_loader)
+        T_max = cfg.trainer.epochs * len_train_loader
+        wd_start_scale = getattr(cfg_for_optimizer.scheduler, 'wd_start_scale', 1.0)
+        wd_end_scale = getattr(cfg_for_optimizer.scheduler, 'wd_end_scale', 1.0)
         
-        def reset_index(self, index=-1):
-            self.current_index = index
-        
-        def _get_value(self, specific_index=None):
-            if specific_index is not None:
-                index = specific_index
-            else:
-                index = self.current_index
-            assert 0 <= index < self.T_max, 'Index out of range.'
-            if index < self.T_warmup:
-                alpha = self.warmup_fn(index, self.T_warmup)
-            else:
-                alpha = float(index - self.T_warmup) / (self.T_max - self.T_warmup)
-                alpha = 0.5 + 0.5 * math.cos(math.pi * alpha)
-            return self.min_value + alpha * (self.base_value - self.min_value)
-        
-        def next(self):
-            self.current_index += 1
-            return self._get_value()
-        
-        def get_all_as_list(self):
-            return [self._get_value(i) for i in range(self.T_max)]
-        
-        def __call__(self):
-            return self.next()
+        kwargs = {
+            'start_value': wd_start_scale,
+            'end_value': wd_end_scale,
+            'T_max': T_max,
+            'warmup_fn': WarmUpFn.get_warmup_fn('cosine'),
+        }
+        return SimpleWarmupScheduler(**kwargs) 

@@ -1,9 +1,8 @@
 import math
-import weakref
 from bisect import bisect_right
-from functools import wraps
 from typing import List
 
+import numpy as np
 from torch.optim.lr_scheduler import _LRScheduler
 
 __all__ = [
@@ -14,15 +13,18 @@ __all__ = [
     'WarmUpMultiStepLR',
     'WarmupCosineAnnealingRestartLR',
     'WarmupCosineAnnealingMultiCycleLR',
+    'BasicScheduler',
+    'SimpleWarmupScheduler',
+    'SimpleWarmUpAnnealingScheduler',
     ]
 
 
 class WarmUpFn:
-    no_warmup = lambda last_epoch, T_warmup: 1.0
-    constant = lambda last_epoch, T_warmup: 0.0
-    linear = lambda last_epoch, T_warmup: float(last_epoch) / T_warmup
-    exponential = lambda last_epoch, T_warmup, gamma=5.0: math.exp(gamma * float(last_epoch) / T_warmup - gamma)
-    cosine = lambda last_epoch, T_warmup: 0.5 * (1.0 - math.cos(math.pi * float(last_epoch) / T_warmup))
+    no_warmup = lambda idx, total: 1.0
+    constant = lambda idx, total: 0.0
+    linear = lambda idx, total: float(idx) / total
+    exponential = lambda idx, total, gamma=5.0: math.exp(gamma * float(idx) / total - gamma)
+    cosine = lambda idx, total: 0.5 * (1.0 - math.cos(math.pi * float(idx) / total))
     
     def get_warmup_fn(warmup_type):
         return getattr(WarmUpFn, warmup_type)
@@ -287,3 +289,147 @@ class WarmupCosineAnnealingMultiCycleLR(_CustomedStepLR):
             param_group['lr'] = lr
             
         self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
+        
+        
+class BasicScheduler:
+    def __init__(self, T_max, current_index=-1):
+        self.T_max = T_max
+        self.current_index = current_index
+
+    def _calc_all(self, indices):
+        raise NotImplementedError
+
+    def _calc_value(self, index):
+        raise NotImplementedError
+
+    def reset_index(self, index=-1):
+        self.current_index = index
+
+    def __getitem__(self, index):
+        return self._calc_value(index)
+
+    def __call__(self):
+        return self.step()
+
+    def __next__(self):
+        return self.step()
+
+    def step(self):
+        self.current_index += 1
+        if self.current_index >= self.T_max:
+            # raise StopIteration
+            return self[self.T_max - 1]
+        return self[self.current_index]
+
+    def get_all_as_list(self):
+        try:
+            return self._calc_all(range(self.T_max))
+        except NotImplementedError:
+            print('Batch calculate not implemented, fallback to _calc_value loop.')
+            return [self._calc_value(i) for i in range(self.T_max)]
+        
+    def state_dict(self):
+        return {'current_index': self.current_index}
+    
+    def load_state_dict(self, state_dict):
+        self.current_index = state_dict.get('current_index', -1)
+
+
+class SimpleWarmupScheduler(BasicScheduler):
+    def __init__(
+        self,
+        start_value,
+        end_value,
+        T_max,
+        warmup_fn,
+        current_index=-1,
+    ):
+        super().__init__(T_max, current_index=current_index)
+        self.start_value = start_value
+        self.end_value = end_value
+        self.warmup_fn = warmup_fn
+
+    def _calc_value(self, index):
+        assert 0 <= index < self.T_max, 'Index out of range'
+        alpha = self.warmup_fn(index, self.T_max)
+        return self.start_value + alpha * (self.end_value - self.start_value)
+
+    def _calc_all(self, indices):
+        indices = np.array(indices)
+        res = np.empty_like(indices, dtype=float)
+        res[:] = [
+            self.start_value +
+            self.warmup_fn(i, self.T_max) * (self.end_value - self.start_value)
+            for i in indices
+        ]
+        return res.tolist()
+
+
+class SimpleWarmUpAnnealingScheduler(BasicScheduler):
+    def __init__(
+        self,
+        start_value,
+        base_value,
+        end_value,
+        T_max,
+        T_warmup,
+        warmup_fn,
+        annealing_type,
+        current_index=-1,
+    ):
+        super().__init__(T_max, current_index=current_index)
+        assert 0 <= T_warmup < T_max
+        self.start_value = start_value
+        self.base_value = base_value
+        self.end_value = end_value
+        self.T_warmup = T_warmup
+        self.annealing_type = annealing_type
+        self.warmup_fn = warmup_fn
+
+    def _annealing(self, alpha):
+        if self.annealing_type == 'cosine':
+            return 0.5 + 0.5 * math.cos(math.pi * alpha)
+        elif self.annealing_type == 'linear':
+            return 1.0 - alpha
+        else:
+            raise ValueError(f"Unknown annealing_type: {self.annealing_type}")
+
+    def _calc_value(self, index):
+        assert 0 <= index < self.T_max, 'Index out of range'
+        if index < self.T_warmup:
+            # warmup: start_value->base_value
+            alpha = self.warmup_fn(index, self.T_warmup)
+            return self.start_value + alpha * (self.base_value - self.start_value)
+        else:
+            # annealing: base_value->end_value
+            anneal_total = self.T_max - self.T_warmup
+            alpha = float(index - self.T_warmup) / anneal_total
+            anneal_weight = self._annealing(alpha)
+            return self.end_value + anneal_weight * (self.base_value - self.end_value)
+
+    def _calc_all(self, indices):
+        indices = np.array(indices)
+        res = np.empty_like(indices, dtype=float)
+        warmup_mask = indices < self.T_warmup
+        anneal_mask = ~warmup_mask
+
+        # Warmup phase
+        res[warmup_mask] = [
+            self.start_value +
+            self.warmup_fn(i, self.T_warmup) * (self.base_value - self.start_value)
+            for i in indices[warmup_mask]
+        ]
+
+        # Annealing phase
+        if np.any(anneal_mask):
+            anneal_total = self.T_max - self.T_warmup
+            alpha = (indices[anneal_mask] - self.T_warmup) / anneal_total
+            if self.annealing_type == 'cosine':
+                anneal_weight = 0.5 + 0.5 * np.cos(np.pi * alpha)
+            elif self.annealing_type == 'linear':
+                anneal_weight = 1.0 - alpha
+            else:
+                raise ValueError(f"Unknown annealing_type: {self.annealing_type}")
+            res[anneal_mask] = self.end_value + anneal_weight * (self.base_value - self.end_value)
+
+        return res.tolist()

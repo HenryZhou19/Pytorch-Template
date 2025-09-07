@@ -52,6 +52,7 @@ trainer:
       warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
       # lr_min_factor: 0.0  # default
       # warmup_type: linear  # default
+      wd_end_scale: 1.0  # use cosine scheduler for wd from wd_xxx to wd_xxx * wd_end_scale for all param_groups
 
 sweep:
   sweep_enabled: True
