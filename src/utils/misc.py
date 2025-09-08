@@ -438,6 +438,13 @@ class PortalMisc:
     
     @staticmethod
     def special_config_adjustment(cfg):
+        def _sync_lr(original_lr, trainer_batch_size_total, sync_lr_with_batch_size, mode='linear'):
+            if mode == 'linear':
+                return original_lr * float(trainer_batch_size_total) / sync_lr_with_batch_size
+            elif mode == 'sqrt':
+                # 4 is a magic number...
+                return 4 * (original_lr * (float(trainer_batch_size_total) / sync_lr_with_batch_size) ** 0.5)
+        
         def _set_real_batch_size_and_lr(cfg):
             if not ConfigMisc.is_inference(cfg):  # for train and val
                 if cfg.trainer.grad_accumulation > 1:
@@ -454,13 +461,13 @@ class PortalMisc:
                     for name_optimizer in cfg.trainer.name_optimizers:
                         optimizer_cfg = getattr(cfg.trainer, name_optimizer)
                         ConfigMisc.auto_track_setattr(cfg, ['trainer', name_optimizer, 'lr_default'],
-                                                    optimizer_cfg.lr_default * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
+                                                      _sync_lr(optimizer_cfg.lr_default, cfg.trainer.trainer_batch_size_total, cfg.trainer.sync_lr_with_batch_size, mode=getattr(cfg.trainer, 'sync_lr_mode', 'linear')))
                         if hasattr(optimizer_cfg, 'param_groups'):
                             lr_mark = 'lr_'
                             for k, v in vars(optimizer_cfg.param_groups).items():
                                 if k.startswith(lr_mark):
                                     ConfigMisc.auto_track_setattr(cfg, ['trainer', 'optimizer', 'param_groups', k],
-                                                                v * float(cfg.trainer.trainer_batch_size_total) / cfg.trainer.sync_lr_with_batch_size)
+                                                                    _sync_lr(v, cfg.trainer.trainer_batch_size_total, cfg.trainer.sync_lr_with_batch_size, mode=getattr(cfg.trainer, 'sync_lr_mode', 'linear')))
             else: # for inference
                 ConfigMisc.auto_track_setattr(cfg, ['tester', 'tester_batch_size_total'],
                                               cfg.tester.tester_batch_size_per_rank * cfg.env.world_size)
