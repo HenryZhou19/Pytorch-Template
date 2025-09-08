@@ -1,0 +1,22 @@
+# conda create -n pytorch-template python=3.12
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch
+torchvision
+
+wheel
+hjson
+numpy<2.0.0
+opencv-python
+tensorboard
+torchinfo
+tqdm
+wandb
+ema-pytorch==0.4.5
+
+## project requirements
+scikit-learn
+scikit-image
+matplotlib
+pandas
+torchmetrics
+timm

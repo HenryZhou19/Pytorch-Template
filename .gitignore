@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.idea/
+.vscode/launch.json
+.venv/
+
+configs/no_sync
+data
+dataset
+outputs*
+temp_*
+sym_link_*

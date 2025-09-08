@@ -1,0 +1,73 @@
+config:  # main config (in this file) overrides additional configs
+  additional:  # add additional config file paths --- the order matters (later ones overwrite previous ones, then the main config (this file) overwrites them, and finally the command line arguments overwrite all)
+  - configs/defaults/shared.yaml
+  - configs/defaults/train_multi_optimizer.yaml
+
+special:
+  extra_name: template_multi_optimizer  # null for no extra name
+
+info:
+  output_dir: ./outputs/template/
+  project_name: template
+
+data:
+  dataset: mnist
+  split_rate: 0.8
+
+model:
+  model_choice: lenet_multi_optimizer_v2
+  backbone: default
+
+criterion:
+  criterion_choice: lenet_multi_optimizer  # default as 'model.model_choice'
+  loss: ce
+  primary_criterion: loss_fcs  # null (None) to use loss as primary_criterion
+  primary_criterion_higher_better: False  # XXX: important for choosing best model
+
+trainer:
+  ## batch_control
+  trainer_batch_size_per_rank: 64
+  sync_lr_with_batch_size: 64  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks, grad_accumulation] / sync_lr_with_batch_size)
+  ## batch_control ends
+  trainer_choice: default
+  epochs: 20
+  real_epochs: null  # if not None, do early stopping based on real_epochs (scheduler is still based on epochs)
+  optimizer_1:
+    identifier: convs
+    optimizer_choice: adamw
+    lr_default: 4.0e-4
+    wd_default: 1.0e-2
+    max_grad_norm: 1.0  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
+    modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
+    freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
+    freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
+    scheduler:
+      scheduler_choice: linear  # multistep, cosine, linear, cosine_restart
+      warmup_epochs: 1
+      warmup_steps: -1  # if warmup_steps >= 0, override warmup_epochs
+      # lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
+      # warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
+      wd_end_scale: 1.0  # use cosine scheduler for wd from wd_xxx to wd_xxx * wd_end_scale for all param_groups
+
+  optimizer_2:
+    identifier: fcs
+    optimizer_choice: adamw
+    lr_default: 1.0e-4
+    wd_default: 1.0e-4
+    max_grad_norm: .inf  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
+    modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
+    freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
+    freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
+    scheduler:
+      scheduler_choice: linear  # multistep, cosine, linear, cosine_restart
+      warmup_epochs: 1
+      warmup_steps: -1  # if warmup_steps >= 0, override warmup_epochs
+      # lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
+      # warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
+      wd_end_scale: 1.0  # use cosine scheduler for wd from wd_xxx to wd_xxx * wd_end_scale for all param_groups
+
+sweep:
+  sweep_enabled: False
+  sweep_params:  # use '//' as the connector for sub-params
+    trainer//optimizer_1//lr_default: [2.0e-4, 4.0e-4]
+    trainer//optimizer_1//scheduler//scheduler_choice: [linear, cosine]

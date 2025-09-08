@@ -1,0 +1,81 @@
+amp:
+  amp_enabled: True
+  amp_val: True
+  amp_mode: fp16  # fp16, bf16
+
+env:
+  seed_with_rank: True
+  cuda_deterministic: False
+  find_unused_parameters: True
+
+info: # info & wandb
+  start_time : TBD
+  work_dir: TBD
+  task_type: Train  # Pretrain, Train, Pretrain_Re, Train_Re, ...
+  batch_info: TBD
+  name_tags: [special.extra_name, model.model_choice, data.dataset, info.batch_info]
+  wandb:
+    wandb_enabled: True
+    wandb_tags: [info.start_time]
+    wandb_resume_enabled: True  # if True, wandb run will have the same ID when resuming an existing training work
+    wandb_watch_model: False  # do not use if it's unnecessary
+    wandb_watch_freq: 100
+    wandb_buffer_time: 300  # seconds
+  tensorboard:
+    tensorboard_enabled: True
+    tensorboard_graph: False
+  iter_log_freq: 10  # <= 0 means only log when an epoch ends
+  cli_log_freq: 1
+  global_tqdm: True
+  torchinfo: True  # print model info to logs.log
+  print_param_names: True
+  print_module_states: False
+
+model:
+  ema:
+    ema_enabled: False
+    ema_type: EMA
+    ema_beta: 0.9999
+    ema_update_after_step: 100
+    ema_update_every: 10
+    ema_power: 0.75
+    ema_primary_criterion: True
+
+trainer:
+  ## batch_control
+  trainer_batch_size_per_rank: null  # override this in main config
+  sync_lr_with_batch_size: 0  # XXX: if > 0, sync lr with batchsize (lr_real = lr_config * batch_size_total[all_ranks, grad_accumulation] / sync_lr_with_batch_size)
+  trainer_batch_size_total: TBD
+  grad_accumulation: 1  # positive integer (keep it '1' in most cases)
+  fixed_length_trainloader: -1  # if >= 0, the dataloader will be set to the fixed length (update_steps = fixed_length_trainloader // grad_accumulation) per training epoch (one epoch's data may be truncated or repeated); if < 0, the dataloader will use the full length of the dataset; 0 is not allowed for trainloader
+  fixed_length_valloader: -1  # as above, but for validation
+  ## batch_control ends
+  trainer_breath_time: 0.0
+  trainer_choice: default
+  resume: null  # if setting to an existing cfg.yaml, make sure critical params(model, data, optimizer, scheduler, ...) are the same
+  force_resume: False  # if True, ignore the mismatch of critical params when resuming
+  pretrained_models: null  # None or a dict of pretrained models {name1: path1, name2: path2, ...}
+  load_from_ema: True
+  dist_eval: True
+  eval_freq: 1  # <= 0 means only evaluate when all epochs end
+  checkpoint_last_interval: 1  # must > 0. save the last checkpoint every {checkpoint_last_interval} epochs (keep latest)
+  checkpoint_keep_interval: 0  # if > 0, save the checkpoint every {checkpoint_keep_interval} epochs (keep all)
+  name_optimizers: TBD
+  optimizer_1:
+    identifier: module1
+    max_grad_norm: .inf  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
+    modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
+    freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
+    freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
+    scheduler:
+      lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
+      warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
+  optimizer_2:
+    identifier: module2
+    max_grad_norm: .inf  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
+    modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
+    freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
+    freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
+    scheduler:
+      lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
+      warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
