@@ -104,3 +104,8 @@ class ModelBase(nn.Module):
     def forward(self, inputs: dict) -> dict:
         raise NotImplementedError
         
+    def before_one_epoch(self, *args, **kwargs):
+        pass
+    
+    def before_all_epochs(self, *args, **kwargs):
+        pass

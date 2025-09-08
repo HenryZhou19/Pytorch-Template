@@ -9,7 +9,7 @@ from .modules.trainer_base import TrainerBase, trainer_register
 
 @trainer_register('multi_cycle')
 class MultiCycleTrainer(TrainerBase):
-    def _before_all_epochs(self, **kwargs):
+    def _before_all_epochs(self, *args, **kwargs):
         assert len(self.integrated_optimizers) == 1 and self.integrated_optimizers[0].identifier == 'main', "Only one optimizer (main) is supported for MultiCycleTrainer of this version"
         
         def _clean_cycle_modules(modules):
@@ -29,12 +29,10 @@ class MultiCycleTrainer(TrainerBase):
         print(LoggerMisc.block_wrapper(f'Cycle modules list: {self.cycle_modules_list}'))
         self.min_hold_memory_mb = self.cfg.trainer.min_hold_memory_mb
         
-    def _before_one_epoch(self, **kwargs):
-        # self.epoch == 0 here before the first epoch
+    def _before_one_epoch(self, *args, **kwargs):
         super()._before_one_epoch(**kwargs)
-        # self.epoch == self.epoch + 1 after the "super.()..."
-        
-        self.new_cycle = (self.epoch == 1)
+        # self.finished_train_epochs == 0 here before the first epoch
+        self.new_cycle = (self.finished_train_epochs == 0)
         
         if self.cycle_type != self.integrated_optimizers[0].lr_scheduler.cycle_type:
             self.cycle_type = self.integrated_optimizers[0].lr_scheduler.cycle_type
@@ -43,6 +41,7 @@ class MultiCycleTrainer(TrainerBase):
                 self.ema_container.copy_params_from_ema_to_model()
             
             self.new_cycle = True
+            print(LoggerMisc.block_wrapper(f'Starting Epoch {self.finished_train_epochs + 1}: Cycle Type {self.cycle_type}'))
 
         self._set_cycle_train_mode(self.model_without_ddp, self.cycle_type, self.cycle_modules_list)
 
@@ -52,12 +51,12 @@ class MultiCycleTrainer(TrainerBase):
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
         
-    def _after_first_train_iter(self, **kwargs):
+    def _after_first_train_iter(self, *args, **kwargs):
         super()._after_first_train_iter(**kwargs)
         
         if self.new_cycle and self.cfg.env.device == 'cuda':
             _, max_allocated_mb, reserved_mb, _ = TensorMisc.get_gpu_memory_usage(verbose=False)
-            print(LoggerMisc.block_wrapper(f'Epoch {self.epoch}: Cycle Type {self.cycle_type}\n\tMax allocated memory: {max_allocated_mb:.2f} MB\n\tReserved memory: {reserved_mb:.2f} MB\n'))
+            print(LoggerMisc.block_wrapper(f'Epoch {self.finished_train_epochs + 1}: Cycle Type {self.cycle_type}\n\tMax allocated memory: {max_allocated_mb:.2f} MB\n\tReserved memory: {reserved_mb:.2f} MB\n'))
             if reserved_mb < self.min_hold_memory_mb:
                 self.memory_tensor = TensorMisc.allocate_memory_to_tensor(self.min_hold_memory_mb - reserved_mb)
     

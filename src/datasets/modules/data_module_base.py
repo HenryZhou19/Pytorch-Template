@@ -105,6 +105,9 @@ class DataModuleBase:
             batch['batch_size'] = len(data)
         return batch  # batch: dataloader's output
     
+    def get_collate_fn(self):
+        return self.collate_fn
+    
     def get_dataloader(self, split: str):
         assert split in ['train', 'val', 'test'], f'Invalid split {split}'
         is_train = split=='train'
@@ -142,7 +145,7 @@ class DataModuleBase:
                 batch_size=batch_size,
                 sampler=self.get_sampler(dataset, is_train, use_dist_sampler),
                 pin_memory=self.cfg.env.pin_memory,
-                collate_fn=self.collate_fn,
+                collate_fn=self.get_collate_fn(),
                 num_workers=self.cfg.env.num_workers,
                 worker_init_fn=self.get_worker_init_fn(),
                 generator=self.get_generator(),
@@ -153,10 +156,10 @@ class DataModuleBase:
     
     @staticmethod
     def _worker_init_fn(worker_id, rank_seed):
-            signal.signal(signal.SIGINT, signal.SIG_IGN)
-            worker_seed = rank_seed + worker_id
-            random.seed(worker_seed)
-            np.random.seed(worker_seed)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        worker_seed = rank_seed + worker_id
+        random.seed(worker_seed)
+        np.random.seed(worker_seed)
     
     def get_worker_init_fn(self):
         return partial(DataModuleBase._worker_init_fn, rank_seed=self.cfg.seed_base + self.cfg.env.num_workers * DistMisc.get_rank())
@@ -183,6 +186,7 @@ class DataLoaderX(DataLoader):
         super().__init__(*args, **kwargs)
         self.init_args = args
         self.init_kwargs = kwargs
+        self._current_epoch = -1
         
     def reinit_batch_size(self, batch_size):
         if 'batch_size' in self.init_kwargs:
@@ -193,8 +197,7 @@ class DataLoaderX(DataLoader):
     
     def sampler_set_epoch(self, epoch):
         self._current_epoch = epoch
-        
-        if self.sampler is not None:
+        if self.sampler is not None and hasattr(self.sampler, 'set_epoch'):
             self.sampler.set_epoch(self._current_epoch)
             
 

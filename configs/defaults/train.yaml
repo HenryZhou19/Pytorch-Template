@@ -1,7 +1,7 @@
 amp:
   amp_enabled: True
   amp_val: True
-  amp_mode: fp16  # fp16, bf16
+  amp_mode: bf16  # fp16, bf16
 
 env:
   seed_with_rank: True

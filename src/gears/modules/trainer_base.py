@@ -91,7 +91,7 @@ class TrainerBase:
         self.integrated_optimizers = integrated_optimizers
         self.device = device
         self.start_epoch = 1
-        self.epoch = self.start_epoch - 1
+        self.finished_train_epochs = self.start_epoch - 1
         self.train_outputs = {}
         self.last_val_metrics = {}
         self.best_val_metrics = {}
@@ -103,15 +103,15 @@ class TrainerBase:
         
         self.gradient_accumulation_steps = self.cfg.trainer.grad_accumulation
         self.do_gradient_accumulation = self.gradient_accumulation_steps > 1
-        self.train_len = len(self.train_loader)
-        self.val_len = len(self.val_loader)
+        self.trainloader_len = len(self.train_loader)
+        self.valloader_len = len(self.val_loader)
         
-        self.trained_iters = 0
+        self.finished_backward_iters = 0
         self.total_epochs = self.cfg.trainer.epochs
         real_total_epochs = getattr(self.cfg.trainer, 'real_epochs', None)
         if real_total_epochs is not None:
             self.total_epochs = real_total_epochs
-        self.total_iters = self.total_epochs * self.train_len
+        self.total_iters = self.total_epochs * self.trainloader_len
         
         self.val_epoch_list = self._get_val_epochs()
           
@@ -125,6 +125,13 @@ class TrainerBase:
             assert hasattr(self.ema_criterion, 'ema_mode'), 'ema_criterion doesn\'t have ema_mode attribute, which means the criterion is not a CriterionBase instance.'
             self.ema_criterion.set_ema_mode(True)
             self.ema_criterion.eval()
+            
+            self.ema_module_list = [self.ema_container.ema_model, self.ema_criterion]
+        else:
+            self.ema_criterion = None
+            self.ema_module_list = []
+            
+        self.all_module_list = self.nn_module_list + self.ema_module_list
         
         self.checkpoint_last_interval = self.cfg.trainer.checkpoint_last_interval  # save the last checkpoint every {checkpoint_last_interval} epochs (keep latest)
         assert self.checkpoint_last_interval > 0, 'checkpoint_last_interval should be a positive integer.'
@@ -155,6 +162,15 @@ class TrainerBase:
             return_dict.update({f'wd_{integrated_optimizer.identifier}_' + param_group['group_name']: param_group['weight_decay']
                 for param_group in integrated_optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')})
         return return_dict
+                
+    @property
+    def train_progress_dict(self):
+        return {
+            'finished_backward_iters': self.finished_backward_iters,
+            'total_iters': self.total_iters,
+            'finished_train_epochs': self.finished_train_epochs,
+            'total_epochs': self.total_epochs,
+        }
         
     def _init_autocast(self):
         if self.cfg.amp.amp_mode == 'fp16':
@@ -182,22 +198,22 @@ class TrainerBase:
         if DistMisc.is_main_process():
             epoch_finished = self.start_epoch - 1
             train_pbar = LoggerMisc.MultiTQDM(
-                total=self.total_iters if self.cfg.info.global_tqdm else self.train_len,
+                total=self.total_iters if self.cfg.info.global_tqdm else self.trainloader_len,
                 dynamic_ncols=True,
                 colour='green',
                 position=0,
                 maxinterval=math.inf,
-                initial=epoch_finished * self.train_len,
+                initial=epoch_finished * self.trainloader_len,
             )
             train_pbar.set_description_str('Train')
             print('')
             val_pbar = LoggerMisc.MultiTQDM(
-                total=len(self.val_epoch_list) * self.val_len if self.cfg.info.global_tqdm else self.val_len,
+                total=len(self.val_epoch_list) * self.valloader_len if self.cfg.info.global_tqdm else self.valloader_len,
                 dynamic_ncols=True,
                 colour='green',
                 position=0,
                 maxinterval=math.inf,
-                initial=len([x for x in self.val_epoch_list if x <= epoch_finished]) * self.val_len,
+                initial=len([x for x in self.val_epoch_list if x <= epoch_finished]) * self.valloader_len,
             )
             val_pbar.set_description_str('Eval ')
             print('')
@@ -212,17 +228,22 @@ class TrainerBase:
             assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
             checkpoint = torch.load(checkpoint_path[0], map_location='cpu')
             self.model_without_ddp.load_state_dict(checkpoint['model'])
+            self.criterion.load_state_dict(checkpoint['criterion'])
             if self.ema_container is not None:
                 assert 'ema_container' in checkpoint, 'checkpoint does not contain "ema_container".'
+                assert checkpoint['ema_container'] is not None, '"ema_container" in checkpoint is None, which means the checkpoint is not trained with ema.'
                 self.ema_container.load_state_dict(checkpoint['ema_container'])
+                assert 'ema_criterion' in checkpoint, 'checkpoint does not contain "ema_criterion".'
+                assert checkpoint['ema_criterion'] is not None, '"ema_criterion" in checkpoint is None, which means the checkpoint is not trained with ema.'
+                self.ema_criterion.load_state_dict(checkpoint['ema_criterion'])
             for integrated_optimizer in self.integrated_optimizers:
                 integrated_optimizer.load_state_dict(checkpoint[f'integrated_optimizer_{integrated_optimizer.identifier}'])
             self.start_epoch = checkpoint['epoch'] + 1
             if DistMisc.is_main_process():
                 self.best_val_metrics = checkpoint.get('best_val_metrics', {})
                 self.last_val_metrics = checkpoint.get('last_val_metrics', {})
-            self.trained_iters = checkpoint['epoch'] * self.train_len
-            self.epoch = self.start_epoch - 1  # will be the same as {checkpoint['epoch'] + 1} by doing '+1' in "before_one_epoch"
+            self.finished_backward_iters = checkpoint['epoch'] * self.trainloader_len
+            self.finished_train_epochs = self.start_epoch - 1  # will be the same as {checkpoint['epoch'] + 1} by doing '+1' in "after_one_epoch"
         else:
             print(LoggerMisc.block_wrapper('New trainer.', '>'))
         print(f'Start from epoch: {self.start_epoch}')
@@ -235,47 +256,79 @@ class TrainerBase:
                 self.ema_model = model
         
         def _load_pretrained_model(model_path, pretrain_model_name):
+            checkpoint = torch.load(model_path, map_location='cpu')
             if self.cfg.trainer.load_from_ema:  # use state_dict[EMA] to load
-                checkpoint = torch.load(model_path, map_location='cpu')
-                key = 'ema_container'
-                assert key in checkpoint, f'checkpoint does not contain "{key}", but "load_from_ema" is True.'
+                model_key, criterion_key = 'ema_container', 'ema_criterion'
+                assert model_key in checkpoint, f'checkpoint does not contain "{model_key}", but "load_from_ema" is True.'
+                assert checkpoint[model_key] is not None, f'"{model_key}" in checkpoint is None, which means the checkpoint is not trained with ema.'
+                assert criterion_key in checkpoint, f'checkpoint does not contain "{criterion_key}", but "load_from_ema" is True.'
+                assert checkpoint[criterion_key] is not None, f'"{criterion_key}" in checkpoint is None, which means the checkpoint is not trained with ema.'
                 
-                print(f'\nLoading {pretrain_model_name} (key="{key}") from {model_path}')
-                state_dict = checkpoint[key]
-                state_dict.pop('initted', None)
-                state_dict.pop('step', None)
+                print(f'\nLoading {pretrain_model_name} (key="[{model_key}, {criterion_key}]") from {model_path}')
+                model_state_dict = checkpoint[model_key]
+                model_state_dict.pop('initted', None)
+                model_state_dict.pop('step', None)
                 if self.ema_container is not None:
                     ModelMisc.load_state_dict_with_more_info(
                         self.ema_container,
-                        state_dict,
+                        model_state_dict,
                         strict=False,
                         print_keys_level=2,
                         )
-                    print(f'EMA container exists. Process of param & buffer copying:\n\tstate_dict[EMA] -> ema_container -> online_model')
+                    ModelMisc.load_state_dict_with_more_info(
+                        self.ema_criterion,
+                        checkpoint[criterion_key],
+                        strict=False,
+                        print_keys_level=1,
+                        )
                     self.ema_container.copy_params_from_ema_to_model()
+                    self.criterion.load_state_dict(self.ema_criterion.state_dict())
+                    print(f'EMA container exists for this run.'
+                          '\nSteps of model param & buffer copying:\n\tstate_dict[EMA_container] -> ema_container -> online_model\n'
+                          'Steps of criterion buffer copying:\n\tstate_dict[EMA_criterion] -> ema_criterion -> online_criterion')
                 else:
                     fake_ema_container = FakeEMA(self.model_without_ddp)
                     ModelMisc.load_state_dict_with_more_info(
                         fake_ema_container,
-                        state_dict,
+                        model_state_dict,
                         strict=False,
                         print_keys_level=1,
                         )
-                    print(f'No EMA. Process of param & buffer copying:\n\tstate_dict[EMA] -> fake_ema_container -> online_model')
+                    ModelMisc.load_state_dict_with_more_info(
+                        self.criterion,
+                        checkpoint[criterion_key],
+                        strict=False,
+                        print_keys_level=1,
+                        )
+                    print(f'No EMA for this run.\n'
+                          'Steps of model param & buffer copying:\n\tstate_dict[EMA_container] -> fake_ema_container -> online_model\n'
+                          'Steps of criterion buffer copying:\n\tstate_dict[EMA_criterion] -> online_criterion')
                     del fake_ema_container
             else:  # use state_dict[model] to load
+                model_key, criterion_key = 'model', 'criterion'
                 print(f'\nLoading {pretrain_model_name} (key="model") from {model_path}')
                 ModelMisc.load_state_dict_with_more_info(
                     self.model_without_ddp,
-                    torch.load(model_path, map_location='cpu')['model'],
+                    checkpoint[model_key],
+                    strict=False,
+                    print_keys_level=1,
+                    )
+                ModelMisc.load_state_dict_with_more_info(
+                    self.criterion,
+                    checkpoint[criterion_key],
                     strict=False,
                     print_keys_level=1,
                     )
                 if self.ema_container is not None:
-                    print(f'EMA container exists. Process of param & buffer copying:\n\tstate_dict[online] -> online_model -> ema_container')
                     self.ema_container.copy_params_from_model_to_ema()
+                    self.ema_criterion.load_state_dict(self.criterion.state_dict())
+                    print(f'EMA container exists for this run.\n'
+                          'Steps of model param & buffer copying:\n\tstate_dict[ONLINE_model] -> online_model -> ema_container\n'
+                          'Steps of criterion buffer copying:\n\tstate_dict[ONLINE_criterion] -> online_criterion -> ema_criterion')
                 else:
-                    print(f'No EMA. Process of param & buffer copying:\n\tstate_dict[online] -> online_model')
+                    print(f'No EMA for this run.\n'
+                          'Steps of model param & buffer copying:\n\tstate_dict[ONLINE_model] -> online_model\n'
+                          'Steps of criterion buffer copying:\n\tstate_dict[ONLINE_criterion] -> online_criterion')
         
         if getattr(self.cfg.trainer, 'pretrained_models', None) is not None:
             for pretrain_model_name, pretrained_model_path in ConfigMisc.nested_namespace_to_nested_dict(self.cfg.trainer.pretrained_models).items():
@@ -283,13 +336,13 @@ class TrainerBase:
                     _load_pretrained_model(pretrained_model_path, pretrain_model_name)
     
     @staticmethod
-    def _save_or_update_checkpoint(save_dict, work_dir, epoch_finished, label):
+    def _save_or_update_checkpoint(save_dict, work_dir, finished_train_epochs, label):
         # label: 'last' or 'best'
         checkpoint_path_list = glob(os.path.join(work_dir, f'checkpoint_{label}_epoch_*.pth'))
         if len(checkpoint_path_list) > 1:
             warnings.warn(f'Found {len(checkpoint_path_list)} {label} checkpoints, please check.')
         max_saved_temp_epoch = max([int(os.path.basename(checkpoint_path).split('_')[-1].split('.')[0]) for checkpoint_path in checkpoint_path_list] + [0])
-        new_path = os.path.join(work_dir, f'checkpoint_{label}_epoch_{epoch_finished}.pth')
+        new_path = os.path.join(work_dir, f'checkpoint_{label}_epoch_{finished_train_epochs}.pth')
         if max_saved_temp_epoch == 0:
             torch.save(save_dict, new_path)
         else:
@@ -300,22 +353,23 @@ class TrainerBase:
     def _save_checkpoint(self):
         # called in "after_one_epoch"
         if DistMisc.is_main_process():
-            epoch_finished = self.epoch
-            save_last = epoch_finished % self.checkpoint_last_interval == 0
-            save_keep = epoch_finished % self.checkpoint_keep_interval == 0 if self.checkpoint_keep_interval > 0 else False
+            save_last = self.finished_train_epochs % self.checkpoint_last_interval == 0
+            save_keep = self.finished_train_epochs % self.checkpoint_keep_interval == 0 if self.checkpoint_keep_interval > 0 else False
             
             if save_last or save_keep:
                 save_dict = {
                     'model': self.model_without_ddp.state_dict(),
                     'ema_container': self.ema_container.state_dict() if self.ema_container is not None else None,
+                    'criterion': self.criterion.state_dict(),
+                    'ema_criterion': self.ema_criterion.state_dict() if self.ema_container is not None else None,
                     **{f'integrated_optimizer_{integrated_optimizer.identifier}': integrated_optimizer.state_dict() for integrated_optimizer in self.integrated_optimizers},
                     'last_val_metrics': self.last_val_metrics,
-                    'epoch': epoch_finished,
+                    'epoch': self.finished_train_epochs,
                 }
             if save_last:
-                self._save_or_update_checkpoint(save_dict, self.cfg.info.work_dir, epoch_finished, 'last')
+                self._save_or_update_checkpoint(save_dict, self.cfg.info.work_dir, self.finished_train_epochs, 'last')
             if save_keep:
-                keep_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_keep_storage/checkpoint_keep_epoch_{epoch_finished}.pth')
+                keep_path = os.path.join(self.cfg.info.work_dir, f'checkpoint_keep_storage/checkpoint_keep_epoch_{self.finished_train_epochs}.pth')
                 torch.save(save_dict, keep_path)
     
     def _save_checkpoint_only_best_model(self):
@@ -324,17 +378,17 @@ class TrainerBase:
             self.best_val_metrics, last_is_best = self.criterion.choose_best(
                 self.last_val_metrics, self.best_val_metrics
             )
-            
-            epoch_finished = self.epoch
-            
+                        
             if last_is_best:
                 save_dict = {
                     'model': self.model_without_ddp.state_dict(),
                     'ema_container': self.ema_container.state_dict() if self.ema_container is not None else None,
+                    'criterion': self.criterion.state_dict(),
+                    'ema_criterion': self.ema_criterion.state_dict() if self.ema_container is not None else None,
                     'best_val_metrics': self.best_val_metrics,
-                    'epoch': epoch_finished,
+                    'epoch': self.finished_train_epochs,
                 }
-                self._save_or_update_checkpoint(save_dict, self.cfg.info.work_dir, epoch_finished, 'best')
+                self._save_or_update_checkpoint(save_dict, self.cfg.info.work_dir, self.finished_train_epochs, 'best')
     
     def _train_mode(self):
         # called in "before_one_epoch"
@@ -355,7 +409,7 @@ class TrainerBase:
             nn_module.eval()
         self.training = False
     
-    def _before_all_epochs(self, **kwargs):
+    def _before_all_epochs(self, *args, **kwargs):
         is_resumed = self._resume_training()
         if not is_resumed:
             self._load_pretrained_models()
@@ -375,12 +429,16 @@ class TrainerBase:
             
         ModelMisc.show_model_info(self.cfg, self)
         self._get_pbar()
+        
+        # try to call the "before_all_epochs" function of all root modules
+        for nn_module in self.all_module_list:
+            if hasattr(nn_module, 'before_all_epochs'):
+                nn_module.before_all_epochs(self.train_progress_dict)
     
-    def _before_one_epoch(self, **kwargs):
-        self.epoch += 1
-        if self.cfg.env.distributed:
-            # shuffle data for each epoch (here needs epoch start from 0)
-            self.train_loader.sampler_set_epoch(self.epoch - 1)  
+    def _before_one_epoch(self, *args, **kwargs):
+        # shuffle data for each epoch (here needs epoch start from 0)
+        # specially called for DistributedSampler
+        self.train_loader.sampler_set_epoch(self.finished_train_epochs)  
         
         DistMisc.barrier()
 
@@ -391,20 +449,27 @@ class TrainerBase:
                 self.train_pbar.reset()
                 self.val_pbar.reset()
           
-        self.step_count = 0
+        self.gradient_accumulation_count = 0
         for integrated_optimizer in self.integrated_optimizers:
             integrated_optimizer.zero_grad()
         self._train_mode()
+        
+        # try to call the "before_one_epoch" function of all root modules
+        for nn_module in self.all_module_list:
+            if hasattr(nn_module, 'before_one_epoch'):
+                nn_module.before_one_epoch(self.train_progress_dict)
     
-    def _after_first_train_iter(self, **kwargs):
+    def _after_first_train_iter(self, *args, **kwargs):
         pass
     
-    def _after_one_epoch(self, **kwargs):
-        LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.trained_iters)
+    def _after_one_epoch(self, *args, **kwargs):
+        self.finished_train_epochs += 1
+        
+        LoggerMisc.logging(self.loggers, 'train_epoch', self.train_outputs, self.finished_backward_iters)
         
         self._save_checkpoint()
     
-    def _before_validation(self, **kwargs):
+    def _before_validation(self, *args, **kwargs):
         DistMisc.barrier()
         
         if DistMisc.is_main_process():
@@ -412,20 +477,20 @@ class TrainerBase:
             
         self._eval_mode()
     
-    def _after_first_validation_iter(self, **kwargs):
+    def _after_first_validation_iter(self, *args, **kwargs):
         pass
     
-    def _after_validation(self, **kwargs):
-        LoggerMisc.logging(self.loggers, 'val_epoch', self.last_val_metrics, self.trained_iters)
+    def _after_validation(self, *args, **kwargs):
+        LoggerMisc.logging(self.loggers, 'val_epoch', self.last_val_metrics, self.finished_backward_iters)
         
         self._save_checkpoint_only_best_model()
     
-    def _after_all_epochs(self, **kwargs):
+    def _after_all_epochs(self, *args, **kwargs):
         DistMisc.barrier()
         
         if DistMisc.is_main_process():
             self.train_pbar.close()
-            self.val_pbar.close() 
+            self.val_pbar.close()
     
     def _forward(self, batch: dict):
         time.sleep(self.breath_time)
@@ -434,8 +499,8 @@ class TrainerBase:
         inputs: dict = batch['inputs']
         targets: dict = batch['targets']
         
-        inputs['train_progress'] = self.trained_iters / self.total_iters
-        targets['train_progress'] = inputs['train_progress']
+        inputs.update(self.train_progress_dict)
+        targets.update(self.train_progress_dict)
         
         if self.training:
             with self.train_autocast():
@@ -489,21 +554,22 @@ class TrainerBase:
                     loss /= self.gradient_accumulation_steps  # Assume that all losses are mean-reduction. (Otherwise meaningless)
                     
         if self.do_gradient_accumulation:
-            self.step_count += 1
+            self.gradient_accumulation_count += 1
         
         _backward()
         
-        # if self.do_gradient_accumulation and (self.trained_iters % self.train_len != 0):  # not the last iter of the epoch
+        # if self.do_gradient_accumulation and (self.finish_backward_iters % self.trainloader_len != 0):  # not the last iter of the epoch
         if self.do_gradient_accumulation:  # just drop the last few steps if not divisible
-            if self.step_count % self.gradient_accumulation_steps == 0:
+            if self.gradient_accumulation_count % self.gradient_accumulation_steps == 0:
                 grad_norm_dict = _optimize()
-                self.step_count = 0
+                self.gradient_accumulation_count = 0
         else:
             grad_norm_dict = _optimize()
         
         for integrated_optimizer in self.integrated_optimizers:
             integrated_optimizer.schedulers_step()  # update all lr_schedulers and wd_scale_schedulers after each iter
-        self.trained_iters += 1
+        
+        self.finished_backward_iters += 1
         return grad_norm_dict
         
     def _train_one_epoch(self):
@@ -515,7 +581,7 @@ class TrainerBase:
             loggers=loggers,
             pbar=self.train_pbar,  
             header='Train',
-            epoch_str=f'epoch: [{self.epoch}/{self.total_epochs}]',
+            epoch_str=f'epoch: [{self.finished_train_epochs + 1}/{self.total_epochs}]',
             )
         mlogger.add_metrics([{
             **{f'loss_{integrated_optimizer.identifier}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers},
@@ -540,15 +606,15 @@ class TrainerBase:
             grad_norm_dict = self._backward_and_step(loss_dict)
             
             mlogger.update_metrics(
-                epoch=self.trained_iters / self.train_len,
+                epoch=self.finished_backward_iters / self.trainloader_len,
             )
             for key, grad_norm in grad_norm_dict.items():
                 if grad_norm is not None:
                     mlogger.update_metrics(**{key: grad_norm})
             
             if cfg.info.iter_log_freq > 0:
-                if self.trained_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
-                    LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), self.trained_iters)
+                if self.finished_backward_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
+                    LoggerMisc.logging(loggers, 'train_iter', mlogger.output_dict(no_avg_list=['all']), self.finished_backward_iters)
             
             if first_iter:
                 first_iter = False
@@ -565,7 +631,7 @@ class TrainerBase:
             loggers=self.loggers,
             pbar=self.val_pbar,  
             header='Eval ',
-            epoch_str=f'epoch: [{self.epoch}/{self.total_epochs}]',
+            epoch_str=f'epoch: [{self.finished_train_epochs}/{self.total_epochs}]',
             )
         mlogger.add_metrics([{f'loss_{integrated_optimizer.identifier}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers}])
         first_iter = True
@@ -588,8 +654,8 @@ class TrainerBase:
             mlogger.add_epoch_metrics(**self.ema_criterion.forward_epoch_metrics())
         self.last_val_metrics = mlogger.output_dict(sync=self.dist_eval, final_print=True)
         
-    def _print_module_states(self, prefix):
-        print(f'\n[{prefix}] epoch {self.epoch}:')
+    def _print_module_states(self, prefix, after_train_before_val=False):
+        print(f'\n[{prefix}] epoch {self.finished_train_epochs if after_train_before_val else self.finished_train_epochs + 1} --- module states:', force=True)
         DistMisc.avoid_print_mess()
         print(f'\tRank {DistMisc.get_rank()}:', force=True)
         print(f'\t\tOnline:', force=True)
@@ -614,13 +680,13 @@ class TrainerBase:
             
             self._after_one_epoch()
             
-            if len(self.val_loader) > 0 and self.epoch in self.val_epoch_list:
+            if len(self.val_loader) > 0 and self.finished_train_epochs in self.val_epoch_list:
                 
                 self._before_validation()
                 
                 if self.dist_eval or DistMisc.is_main_process():
                     if self.cfg.info.print_module_states:
-                        self._print_module_states('Eval')
+                        self._print_module_states('Eval', after_train_before_val=True)
                     self._evaluate()
                     
                 self._after_validation()

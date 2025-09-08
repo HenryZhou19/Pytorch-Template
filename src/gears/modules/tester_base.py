@@ -137,6 +137,7 @@ class TesterBase:
         self.model.load_state_dict(checkpoint['model'])
         if self.ema_container is not None:
             assert 'ema_container' in checkpoint, 'checkpoint does not contain "ema_container".'
+            assert checkpoint['ema_container'] is not None, '"ema_container" in checkpoint is None, which means the checkpoint is not trained with ema.'
             self.ema_container.load_state_dict(checkpoint['ema_container'])
         # print(f'{config.mode} mode: Loading pth from', path)
         print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_val_metrics {checkpoint.get("best_val_metrics", {})}\nlast_val_metrics {checkpoint.get("last_val_metrics", {})}', '>'))
@@ -152,16 +153,16 @@ class TesterBase:
             nn_module.eval()
         # self.training = False
     
-    def _before_inference(self, **kwargs):
+    def _before_inference(self, *args, **kwargs):
         self._load_model()
         self._get_pbar()
         
         self._eval_mode()
     
-    def _after_first_inference_iter(self, **kwargs):
+    def _after_first_inference_iter(self, *args, **kwargs):
         pass
     
-    def _after_inference(self, **kwargs):
+    def _after_inference(self, *args, **kwargs):
         LoggerMisc.logging(self.loggers,  'infer', self.test_metrics, None)
         
         if DistMisc.is_main_process():          

@@ -122,7 +122,7 @@ class MetricLogger(object):
             # self.metrics[k] = SmoothedValue()  # as default
             self.metrics[k].append_one_value(v, sample_count)
             
-    def add_epoch_metrics(self, **kwargs):
+    def add_epoch_metrics(self, *args, **kwargs):
         for k, v in kwargs.items():
             if isinstance(v, (torch.Tensor, np.ndarray, np.number)):
                 v = v.item()
