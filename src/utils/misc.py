@@ -12,7 +12,7 @@ from copy import deepcopy
 from glob import glob
 from math import inf
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 from tqdm import tqdm
 from tqdm.utils import disp_trim
@@ -698,6 +698,17 @@ class PortalMisc:
 
 
 class DistMisc:
+    ReduceOp = {
+        'SUM': dist.ReduceOp.SUM,
+        'AVG': dist.ReduceOp.AVG,
+        'PRODUCT': dist.ReduceOp.PRODUCT,
+        'MIN': dist.ReduceOp.MIN,
+        'MAX': dist.ReduceOp.MAX,
+        'BAND': dist.ReduceOp.BAND,
+        'BOR': dist.ReduceOp.BOR,
+        'BXOR': dist.ReduceOp.BXOR,
+    }
+    
     @staticmethod
     def barrier():
         if DistMisc.is_dist_avail_and_initialized():
@@ -708,31 +719,6 @@ class DistMisc:
         if DistMisc.is_dist_avail_and_initialized():
             dist.barrier()
             time.sleep(DistMisc.get_rank() * sleep_interval)
-    
-    @staticmethod
-    def all_gather(x, concat_out=False, auto_grad=False):
-        '''
-        x: [N, *]
-        N can be different on different processes when auto_grad=False
-        Make sure (*) is the same shape on all processes
-        '''
-        x: torch.Tensor
-        world_size = DistMisc.get_world_size()
-        if world_size == 1:
-            x_list = [x]
-        else:
-            if auto_grad:
-                x_list = list(dist_F.all_gather(x))
-            else:
-                N = torch.tensor(x.shape[0], dtype=torch.int, device=x.device)
-                N_list = [torch.zeros(1, dtype=torch.int, device=x.device) for _ in range(world_size)]
-                dist.all_gather(N_list, N)
-                x_list = [torch.empty(N.item(), *x.shape[1:], dtype=x.dtype, device=x.device) for N in N_list]
-                dist.all_gather(x_list, x)
-        if concat_out:
-            return torch.cat(x_list, dim=0)
-        else:
-            return x_list
     
     @staticmethod
     def reduce_dict(input_dict, average=True):
@@ -749,18 +735,65 @@ class DistMisc:
             reduced_dict = {k: v for k, v in zip(names, values)}
         return reduced_dict
     
-    @staticmethod
-    def reduce(tensor, op='mean'):
-        world_size = DistMisc.get_world_size()
-        if world_size < 2:
-            return tensor
-        tensor = tensor.clone()
-        dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
-        if op == 'mean':
-            tensor = tensor.float() / world_size
-        elif op == 'sum':
-            pass
-        return tensor
+    class AsyncOrGradReduce:
+        def __init__(self, tensor: torch.Tensor, op='avg', async_op=False, auto_grad=False):
+            self.world_size = DistMisc.get_world_size()
+            self.reduced = tensor.clone()
+            self.op = DistMisc.ReduceOp[op.upper()]
+            self.async_op = async_op
+            self.auto_grad = auto_grad
+            self.work = None
+            if self.auto_grad:
+                assert not self.async_op, 'torch.distributed.nn.functional.all_reduce does not support async_op=True'
+            if self.world_size >= 2:
+                if self.auto_grad:
+                    self.reduced = dist_F.all_reduce(self.reduced, op=self.op)
+                else:
+                    self.work = dist.all_reduce(self.reduced, op=self.op, async_op=async_op)
+            
+        def wait_for_work(self):
+            if self.work is not None:
+                self.work.wait()
+            return self.reduced
+
+        def __call__(self) -> torch.Tensor:
+            return self.wait_for_work()
+        
+    class AsyncOrGradGather:
+        def __init__(self, tensor: torch.Tensor, async_op=False, auto_grad=False, concat_dim=None):
+            self.world_size = DistMisc.get_world_size()
+            self.tensor = tensor.clone()
+            self.async_op = async_op
+            self.auto_grad = auto_grad
+            self.concat_dim = concat_dim
+            self.work = None
+            self.gathered = None
+
+            if self.auto_grad:
+                assert not self.async_op, 'torch.distributed.nn.functional.all_gather does not support async_op=True'
+            if self.world_size == 1:
+                self.gathered = [self.tensor]
+            else:
+                if self.auto_grad:
+                    self.gathered = list(dist_F.all_gather(self.tensor))
+                else:
+                    dtype, device, shape = self.tensor.dtype, self.tensor.device, self.tensor.shape
+                    N = torch.tensor(shape[0], dtype=torch.int, device=device)
+                    N_list = [torch.zeros(1, dtype=torch.int, device=device) for _ in range(self.world_size)]
+                    dist.all_gather(N_list, N)
+                    self.gathered = [torch.empty(N.item(), *shape[1:], dtype=dtype, device=device) for N in N_list]
+                    self.work = dist.all_gather(self.gathered, self.tensor, async_op=async_op)
+
+        def wait_for_work(self):
+            if self.work is not None:
+                self.work.wait()
+            if self.concat_dim is None:
+                return self.gathered
+            else:
+                return torch.cat(self.gathered, dim=self.concat_dim)
+
+        def __call__(self) -> List[torch.Tensor] | torch.Tensor:
+            return self.wait_for_work()
     
     @ staticmethod
     def is_dist_avail_and_initialized():
@@ -887,8 +920,8 @@ class ModelMisc:
             one_sample = trainer.train_loader.dataset[0]
             one_sample_batch_input = TensorMisc.to(trainer.train_loader.collate_fn([one_sample])['inputs'], trainer.device)
             whole_batch_input = TensorMisc.to(trainer.train_loader.collate_fn([one_sample] * cfg.trainer.trainer_batch_size_per_rank)['inputs'], trainer.device)
-            one_sample_batch_input['train_progress'] = 0.0
-            whole_batch_input['train_progress'] = 0.0
+            one_sample_batch_input.update(trainer.train_progress_dict)
+            whole_batch_input.update(trainer.train_progress_dict)
             
             temp_model = trainer.model_without_ddp
             temp_model.eval()

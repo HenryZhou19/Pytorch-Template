@@ -42,7 +42,7 @@ class _CustomedStepLR(_LRScheduler):  # remove the 'call of `lr_scheduler.step()
 
 class WarmUpVanillaLR(_CustomedStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
-        assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
+        assert T_max > T_warmup, f'T_max: {T_max} should be larger than T_warmup: {T_warmup}.'
         self.T_max = T_max
         self.T_warmup = T_warmup
         self.warmup_fn = warmup_fn
@@ -60,7 +60,7 @@ class WarmUpVanillaLR(_CustomedStepLR):
 
 class WarmUpCosineAnnealingLR(_CustomedStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
-        assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
+        assert T_max > T_warmup, f'T_max: {T_max} should be larger than T_warmup: {T_warmup}.'
         self.T_max = T_max
         self.T_warmup = T_warmup
         self.warmup_fn = warmup_fn
@@ -79,7 +79,7 @@ class WarmUpCosineAnnealingLR(_CustomedStepLR):
 
 class WarmUpLinearLR(_CustomedStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
-        assert T_max > T_warmup, 'T_max should be larger than T_warmup.'
+        assert T_max > T_warmup, f'T_max: {T_max} should be larger than T_warmup: {T_warmup}.'
         self.T_max = T_max
         self.T_warmup = T_warmup
         self.warmup_fn = warmup_fn
@@ -98,9 +98,9 @@ class WarmUpLinearLR(_CustomedStepLR):
 
 class WarmUpMultiStepLR(_CustomedStepLR):
     def __init__(self, optimizer, scaler, do_grad_accumulation, step_milestones: List[int], gamma, T_max, T_warmup, lr_min_factor, warmup_fn, last_epoch=-1):
-        assert list(step_milestones) == sorted(step_milestones), 'MultiStepLR milestones should be a list of increasing integers.'
-        assert T_max > step_milestones[-1], 'T_max should be larger than the last milestone.'
-        assert T_warmup < step_milestones[0], 'T_warmup should be smaller than the first milestone.'
+        assert list(step_milestones) == sorted(step_milestones), f'MultiStepLR milestones: {list(step_milestones)} should be a list of increasing integers.'
+        assert T_max > step_milestones[-1], f'T_max: {T_max} should be larger than the last milestone: {step_milestones[-1]}.'
+        assert T_warmup < step_milestones[0], f'T_warmup: {T_warmup} should be smaller than the first milestone: {step_milestones[0]}.'
         self.milestones = step_milestones
         self.gamma = gamma
         self.T_max = T_max
@@ -137,8 +137,8 @@ class WarmupCosineAnnealingRestartLR(_CustomedStepLR):
         gamma: float = 1.0,
         last_epoch: int = -1,
     ):
-        assert T_warmup < first_cycle_steps, 'T_warmup should be smaller than first_cycle_steps.'
-        assert cycle_mult >= 1.0, 'cycle_mult should be greater than or equal to 1.'
+        assert T_warmup < first_cycle_steps, f'T_warmup: {T_warmup} should be smaller than first_cycle_steps: {first_cycle_steps}.'
+        assert cycle_mult >= 1.0, f'cycle_mult: {cycle_mult} should be greater than or equal to 1.'
         
         self.first_cycle_steps = first_cycle_steps  # first cycle step size
         self.cycle_mult = cycle_mult  # cycle steps magnification
@@ -229,7 +229,7 @@ class WarmupCosineAnnealingMultiCycleLR(_CustomedStepLR):
         last_epoch: int = -1,
     ):
         for cycle_steps in cycle_steps_list:
-            assert T_warmup < cycle_steps, 'T_warmup should be smaller than cycle_steps.'
+            assert T_warmup < cycle_steps, f'T_warmup: {T_warmup} should be smaller than cycle_steps: {cycle_steps}.'
 
         self.cycle_steps_list = cycle_steps_list
         self.T_warmup = T_warmup
@@ -341,16 +341,17 @@ class SimpleWarmupScheduler(BasicScheduler):
         start_value,
         end_value,
         T_max,
-        warmup_fn,
+        warmup_type='linear',
         current_index=-1,
     ):
         super().__init__(T_max, current_index=current_index)
         self.start_value = start_value
         self.end_value = end_value
-        self.warmup_fn = warmup_fn
+        self.warmup_type = warmup_type
+        self.warmup_fn = WarmUpFn.get_warmup_fn(self.warmup_type)
 
     def _calc_value(self, index):
-        assert 0 <= index < self.T_max, 'Index out of range'
+        assert 0 <= index < self.T_max, f'Index: {index} out of range: [0, {self.T_max})'
         alpha = self.warmup_fn(index, self.T_max)
         return self.start_value + alpha * (self.end_value - self.start_value)
 
@@ -373,18 +374,19 @@ class SimpleWarmUpAnnealingScheduler(BasicScheduler):
         end_value,
         T_max,
         T_warmup,
-        warmup_fn,
-        annealing_type,
+        warmup_type='linear',
+        annealing_type='cosine',
         current_index=-1,
     ):
         super().__init__(T_max, current_index=current_index)
-        assert 0 <= T_warmup < T_max
+        assert 0 <= T_warmup < T_max, f'T_warmup: {T_warmup} should be in [0, T_max: {T_max})'
         self.start_value = start_value
         self.base_value = base_value
         self.end_value = end_value
         self.T_warmup = T_warmup
         self.annealing_type = annealing_type
-        self.warmup_fn = warmup_fn
+        self.warmup_type = warmup_type
+        self.warmup_fn = WarmUpFn.get_warmup_fn(self.warmup_type)
 
     def _annealing(self, alpha):
         if self.annealing_type == 'cosine':
@@ -395,7 +397,7 @@ class SimpleWarmUpAnnealingScheduler(BasicScheduler):
             raise ValueError(f"Unknown annealing_type: {self.annealing_type}")
 
     def _calc_value(self, index):
-        assert 0 <= index < self.T_max, 'Index out of range'
+        assert 0 <= index < self.T_max, f'Index: {index} out of range: [0, {self.T_max})'
         if index < self.T_warmup:
             # warmup: start_value->base_value
             alpha = self.warmup_fn(index, self.T_warmup)

@@ -12,28 +12,28 @@ class Trainer(TrainerBase):
     def _eval_mode(self):
         super()._eval_mode()
     
-    def _before_all_epochs(self, **kwargs):
+    def _before_all_epochs(self, *args, **kwargs):
         super()._before_all_epochs(**kwargs)
     
-    def _before_one_epoch(self, **kwargs):
+    def _before_one_epoch(self, *args, **kwargs):
         super()._before_one_epoch(**kwargs)
     
-    def _after_first_train_iter(self, **kwargs):
+    def _after_first_train_iter(self, *args, **kwargs):
         super()._after_first_train_iter(**kwargs)
     
-    def _after_one_epoch(self, **kwargs):
+    def _after_one_epoch(self, *args, **kwargs):
         super()._after_one_epoch(**kwargs)
     
-    def _before_validation(self, **kwargs):
+    def _before_validation(self, *args, **kwargs):
         super()._before_validation(**kwargs)
     
-    def _after_first_validation_iter(self, **kwargs):
+    def _after_first_validation_iter(self, *args, **kwargs):
         super()._after_first_validation_iter(**kwargs)
     
-    def _after_validation(self, **kwargs):
+    def _after_validation(self, *args, **kwargs):
         super()._after_validation(**kwargs)
     
-    def _after_all_epochs(self, **kwargs):
+    def _after_all_epochs(self, *args, **kwargs):
         super()._after_all_epochs(**kwargs)
     
     def _forward(self, batch: dict):
@@ -54,13 +54,13 @@ class Tester(TesterBase):
     def _eval_mode(self):
         super()._eval_mode()
     
-    def _before_inference(self, **kwargs):
+    def _before_inference(self, *args, **kwargs):
         super()._before_inference(**kwargs)
     
-    def _after_first_inference_iter(self, **kwargs):
+    def _after_first_inference_iter(self, *args, **kwargs):
         super()._after_first_inference_iter(**kwargs)
     
-    def _after_inference(self, **kwargs):
+    def _after_inference(self, *args, **kwargs):
         super()._after_inference(**kwargs)
     
     def _forward(self, batch: dict):

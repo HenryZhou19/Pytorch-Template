@@ -90,6 +90,6 @@ class SchedulerUtils:
             'start_value': wd_start_scale,
             'end_value': wd_end_scale,
             'T_max': T_max,
-            'warmup_fn': WarmUpFn.get_warmup_fn('cosine'),
+            'warmup_type': 'cosine',
         }
         return SimpleWarmupScheduler(**kwargs) 
