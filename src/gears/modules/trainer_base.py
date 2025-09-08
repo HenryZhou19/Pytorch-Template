@@ -410,10 +410,6 @@ class TrainerBase:
         self.training = False
     
     def _before_all_epochs(self, *args, **kwargs):
-        is_resumed = self._resume_training()
-        if not is_resumed:
-            self._load_pretrained_models()
-        
         for integrated_optimizer in self.integrated_optimizers:
             ModelMisc.unfreeze_or_freeze_submodules(
                 integrated_optimizer.root_module,
@@ -426,14 +422,22 @@ class TrainerBase:
                 integrated_optimizer.freeze_params,
                 False,
                 )
-            
-        ModelMisc.show_model_info(self.cfg, self)
-        self._get_pbar()
         
         # try to call the "before_all_epochs" function of all root modules
         for nn_module in self.all_module_list:
             if hasattr(nn_module, 'before_all_epochs'):
                 nn_module.before_all_epochs(self.train_progress_dict)
+            if hasattr(nn_module, 'module'):  # for DDP-wrapped modules
+                if hasattr(nn_module.module, 'before_all_epochs'):
+                    nn_module.module.before_all_epochs(self.train_progress_dict)
+                
+        ModelMisc.show_model_info(self.cfg, self)
+        
+        is_resumed = self._resume_training()
+        if not is_resumed:
+            self._load_pretrained_models()
+        
+        self._get_pbar()
     
     def _before_one_epoch(self, *args, **kwargs):
         # shuffle data for each epoch (here needs epoch start from 0)
@@ -458,6 +462,9 @@ class TrainerBase:
         for nn_module in self.all_module_list:
             if hasattr(nn_module, 'before_one_epoch'):
                 nn_module.before_one_epoch(self.train_progress_dict)
+            if hasattr(nn_module, 'module'):  # for DDP-wrapped modules
+                if hasattr(nn_module.module, 'before_one_epoch'):
+                    nn_module.module.before_one_epoch(self.train_progress_dict)
     
     def _after_first_train_iter(self, *args, **kwargs):
         pass
@@ -650,7 +657,7 @@ class TrainerBase:
                 self._after_first_validation_iter()
         
         mlogger.add_epoch_metrics(**self.criterion.forward_epoch_metrics())
-        if hasattr(self, 'ema_criterion'):
+        if self.ema_criterion is not None:
             mlogger.add_epoch_metrics(**self.ema_criterion.forward_epoch_metrics())
         self.last_val_metrics = mlogger.output_dict(sync=self.dist_eval, final_print=True)
         

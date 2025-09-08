@@ -759,7 +759,7 @@ class DistMisc:
                     self.work = dist.all_reduce(self.reduced, op=self.op, async_op=async_op)
             
         def wait_for_work(self):
-            if self.work is not None:
+            if hasattr(self.work, 'wait'):
                 self.work.wait()
             return self.reduced
 
@@ -792,7 +792,7 @@ class DistMisc:
                     self.work = dist.all_gather(self.gathered, self.tensor, async_op=async_op)
 
         def wait_for_work(self):
-            if self.work is not None:
+            if hasattr(self.work, 'wait'):
                 self.work.wait()
             if self.concat_dim is None:
                 return self.gathered
