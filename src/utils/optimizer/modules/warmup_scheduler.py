@@ -292,7 +292,7 @@ class WarmupCosineAnnealingMultiCycleLR(_CustomedStepLR):
         
         
 class BasicScheduler:
-    def __init__(self, T_max, current_index=-1):
+    def __init__(self, T_max=1, current_index=-1):
         self.T_max = T_max
         self.current_index = current_index
 
@@ -333,6 +333,11 @@ class BasicScheduler:
     
     def load_state_dict(self, state_dict):
         self.current_index = state_dict.get('current_index', -1)
+
+
+class DummyScheduler(BasicScheduler):
+    def __getitem__(self, index):
+        return 0.0
 
 
 class SimpleWarmupScheduler(BasicScheduler):
@@ -435,3 +440,4 @@ class SimpleWarmUpAnnealingScheduler(BasicScheduler):
             res[anneal_mask] = self.end_value + anneal_weight * (self.base_value - self.end_value)
 
         return res.tolist()
+    
