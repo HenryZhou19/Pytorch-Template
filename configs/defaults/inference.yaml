@@ -20,7 +20,7 @@ info:
   cli_log_freq: 1
   # global_tqdm: True  # NO NEED. only one epoch
   # torchinfo: True  # NO NEED. print model info to logs.log
-  # print_param_names: True  # NO NEED.
+  # print_param_groups: True  # NO NEED.
   print_module_states: False
 
 tester:

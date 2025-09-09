@@ -46,23 +46,20 @@ trainer:
     #   wd_head: 1.0e-4
     max_grad_norm: 1.0  # <= 0 means no gradient clipping
     freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
-    scheduler:
-      scheduler_choice: linear  # multistep, cosine, linear, cosine_restart
-      lr_milestones_epochs: null  # only for scheduler_choice == 'multistep' [50, 100]
-      lr_milestones_steps: null # only for scheduler_choice == 'multistep', if lr_milestones_steps is not None, override lr_milestones_epochs
-      lr_decay_gamma: 0.1  # only for scheduler_choice == 'multistep'
-      lr_first_cycle_epochs: null  # only for scheduler_choice == 'cosine_restart'
-      lr_first_cycle_steps: null  # only for scheduler_choice == 'cosine_restart'
-      lr_cycle_mult: 1.0  # only for scheduler_choice == 'cosine_restart'
-      lr_cycle_gamma: 1.0  # only for scheduler_choice == 'cosine_restart'
-      warmup_epochs: 10
-      warmup_steps: 50  # if warmup_steps >= 0, override warmup_epochs
-      # lr_min_factor: 0.0  # default
-      # warmup_type: linear  # default
-      wd_end_scale: 1.0  # use cosine scheduler for wd from wd_xxx to wd_xxx * wd_end_scale for all param_groups
+    lr_scheduler:
+      ### len(phase) == N, e.g. N=2: warmup, keep
+      lr_phase_epochs: [10]  # (N-1) the last phase goes to the end
+      lr_phase_steps: [50]  # (N-1) the last phase goes to the end; if phase_steps is not null, override phase_epochs
+      lr_phase_scales: [0.0, 1.0, 0.001]  # (N+1) start scale of each phase and the final scale of the end
+      lr_phase_types: [linear, cosine]  # (N)
+    wd_scheduler:
+      ### len(phase) == N, e.g. N=2: warmup, keep
+      wd_phase_epochs: []  # (N-1) the last phase goes to the end
+      wd_phase_steps: null  # (N-1) the last phase goes to the end; if phase_steps is not null, override phase_epochs
+      wd_phase_scales: [1.0, 1.0]  # (N+1) start scale of each phase and the final scale of the end
+      wd_phase_types: [keep_start]  # (N)
 
 sweep:
   sweep_enabled: False
   sweep_params:  # use '//' as the connector for sub-params
     trainer//optimizer//lr_default: [2.0e-4, 4.0e-4]
-    trainer//optimizer//scheduler//scheduler_choice: [linear, cosine]
