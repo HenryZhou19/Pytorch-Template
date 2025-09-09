@@ -33,14 +33,13 @@ trainer:
   epochs: 20
   real_epochs: null  # if not None, do early stopping based on real_epochs (scheduler is still based on epochs)
   optimizer_1:
-    identifier: convs
+    identifier: convs  # just the name for the module in the root_module
     optimizer_choice: adamw
     lr_default: 4.0e-4
     wd_default: 1.0e-2
-    max_grad_norm: 1.0  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
-    modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
-    freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
-    freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
+    max_grad_norm_name: [all]  # names for grad norm groups in loggers
+    max_grad_norm_value: [1.0]  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
+    max_grad_norm_modules: [['']]  # nested_list: exact module name for this optimizer's root module, '' means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
     lr_scheduler:
       ### len(phase) == N, e.g. N=2: warmup, keep
       lr_phase_epochs: [1]  # (N-1) the last phase goes to the end
@@ -55,14 +54,13 @@ trainer:
       wd_phase_types: [keep_start]  # (N)
     
   optimizer_2:
-    identifier: fcs
+    identifier: fcs  # just the name for the module in the root_module
     optimizer_choice: adamw
     lr_default: 1.0e-4
     wd_default: 1.0e-4
-    max_grad_norm: .inf  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
-    modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
-    freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
-    freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
+    max_grad_norm_name: [all]  # names for grad norm groups in loggers
+    max_grad_norm_value: [.inf]  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
+    max_grad_norm_modules: [['']]  # nested_list: exact module name for this optimizer's root module, '' means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
     lr_scheduler:
       ### len(phase) == N, e.g. N=2: warmup, keep
       lr_phase_epochs: [1]  # (N-1) the last phase goes to the end

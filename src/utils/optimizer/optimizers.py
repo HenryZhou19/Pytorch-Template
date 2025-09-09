@@ -2,15 +2,15 @@ from typing import List
 
 import torch
 
-from src.utils.misc import LoggerMisc
+from src.utils.misc import LoggerMisc, ModelMisc
 
 from .modules.arbitrary_scheduler import BasicScheduler
 from .schedulers import SchedulerUtils
 
 
 class IntegratedOptimizer:
-    def __init__(self, identifier, optimizer, lr_scale_scheduler, wd_scale_scheduler, scaler, root_module, max_grad_norm, modules_for_grad_norm, freeze_modules, freeze_params):
-        self.identifier: str = identifier
+    def __init__(self, root_module_name, optimizer, lr_scale_scheduler, wd_scale_scheduler, scaler, root_module, max_grad_norm_dict, freeze_modules, freeze_params):
+        self.root_module_name: str = root_module_name
         
         self.optimizer: torch.optim.Optimizer = optimizer
         self.scaler: torch.amp.GradScaler = scaler
@@ -18,10 +18,12 @@ class IntegratedOptimizer:
         self.wd_scale_scheduler: BasicScheduler = wd_scale_scheduler
         
         self.root_module: torch.nn.Module = root_module
-        self.max_grad_norm: float = max_grad_norm
-        self.modules_for_grad_norm: torch.nn.Module = modules_for_grad_norm
         self.freeze_modules: list = freeze_modules
         self.freeze_params: list = freeze_params
+        
+        self.max_grad_norm_name_list = list(max_grad_norm_dict.keys())
+        self.max_grad_norm_params_list = [list(v['params']) for v in max_grad_norm_dict.values()]
+        self.max_grad_norm_value_list = [v['value'] for v in max_grad_norm_dict.values()]
         
         self._init_schedulers()
         
@@ -45,23 +47,32 @@ class IntegratedOptimizer:
             self.wd_scale_scheduler.load_state_dict(state_dict['wd_scale_scheduler'])
         
     def optimize(self, fn_before_step=None):
-        grad_norm = None
+        grad_norm_value_list, grad_norm_name_list = [], []
         if self.scaler is not None:
-            if self.max_grad_norm > 0:
-                self.scaler.unscale_(self.optimizer)
-                grad_norm = torch.nn.utils.clip_grad_norm_(parameters=self.modules_for_grad_norm.parameters(), max_norm=self.max_grad_norm)
+            already_unscaled_optimizer = False
+            for name, params, value in zip(self.max_grad_norm_name_list, self.max_grad_norm_params_list, self.max_grad_norm_value_list):
+                if value > 0:  # only clip when max_grad_norm > 0, otherwise skip; max_grad_norm = .inf can be used to disable clipping while logging the grad norm
+                    if not already_unscaled_optimizer:
+                        already_unscaled_optimizer = True
+                        self.scaler.unscale_(self.optimizer)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(parameters=params, max_norm=value)
+                    grad_norm_name_list.append(name)
+                    grad_norm_value_list.append(grad_norm)
             if fn_before_step is not None:
                 fn_before_step()
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
-            if self.max_grad_norm > 0:
-                grad_norm = torch.nn.utils.clip_grad_norm_(parameters=self.modules_for_grad_norm.parameters(), max_norm=self.max_grad_norm)
+            for name, params, value in zip(self.max_grad_norm_name_list, self.max_grad_norm_params_list, self.max_grad_norm_value_list):
+                if value > 0:  # only clip when max_grad_norm > 0, otherwise skip; max_grad_norm = .inf can be used to disable clipping while logging the grad norm
+                    grad_norm = torch.nn.utils.clip_grad_norm_(parameters=params, max_norm=value)
+                    grad_norm_name_list.append(name)
+                    grad_norm_value_list.append(grad_norm)
             if fn_before_step is not None:
                 fn_before_step()
             self.step()
         self.zero_grad()
-        return grad_norm
+        return grad_norm_value_list, grad_norm_name_list
     
     ## the following methods are inherited from the inner Optimizer
     @property
@@ -163,22 +174,26 @@ class OptimizerUtils:
         
         return param_dicts_with_lr_wd
     
-    
     @staticmethod
-    def _get_modules_for_grad_norm(optimizer_name, root_module, modules_for_grad_norm=None):
-        if modules_for_grad_norm is not None:
-            print(LoggerMisc.block_wrapper(f'Optimizer {optimizer_name} --- grad norm modules: {modules_for_grad_norm}'))
-            modules_for_grad_norm = torch.nn.ModuleList(
-                [getattr(root_module, module_name) for module_name in modules_for_grad_norm]
-                )
+    def _get_max_grad_norm_params_with_value(max_grad_norm_modules, max_grad_norm_value, root_module, root_module_name, optimizer_name):
+        assert len(max_grad_norm_modules) > 0, f'max_grad_norm_modules should be a non-empty list (can be [\'\'] for the whole model).'
+        if max_grad_norm_modules == ['']:
+            print(LoggerMisc.block_wrapper(f'{optimizer_name} for {root_module_name} --- grad norm modules: ALL, with value: {max_grad_norm_value}'))
+            max_grad_norm_params = root_module.parameters()
         else:
-            print(LoggerMisc.block_wrapper(f'Optimizer {optimizer_name} --- grad norm modules: ALL'))
-            modules_for_grad_norm = root_module
-        return modules_for_grad_norm
+            found_modules = ModelMisc.get_specific_submodules_with_full_names(root_module, max_grad_norm_modules)
+            print(LoggerMisc.block_wrapper(f'{optimizer_name} for {root_module_name} --- grad norm modules: {max_grad_norm_modules}, with value: {max_grad_norm_value}'))
+            max_grad_norm_params = torch.nn.ModuleList(
+                [module for module in found_modules.values()]
+                ).parameters()
+        return {
+            'params': max_grad_norm_params,
+            'value': max_grad_norm_value,
+            }
     
     @staticmethod
-    def _print_param_groups(param_dicts_with_lr_wd, root_module, name_optimizer, loggers):
-        print(f'\n\nOptimizer [{name_optimizer}] parameter groups:', file=loggers.log_file)
+    def _print_param_groups(param_dicts_with_lr_wd, root_module, optimizer_name, loggers):
+        print(f'\n\nOptimizer [{optimizer_name}] parameter groups:', file=loggers.log_file)
         param_to_name = {id(p): n for n, p in root_module.named_parameters()}
         for i, group in enumerate(param_dicts_with_lr_wd):
             print(f'\tParam group {i}: (weight_decay={group.get("weight_decay", "N/A")}, lr={group.get("lr", "N/A")})', file=loggers.log_file)
@@ -189,11 +204,11 @@ class OptimizerUtils:
         loggers.log_file.flush()
     
     @staticmethod
-    def _get_integrated_optimizer(cfg, optimizer_cfg, optimizer_identifier, root_module, train_loader, name_optimizer, loggers) -> IntegratedOptimizer:
+    def _get_integrated_optimizer(cfg, optimizer_cfg, train_loader, root_module, root_module_name, optimizer_name, loggers) -> IntegratedOptimizer:
         param_dicts_with_lr_wd = OptimizerUtils._get_param_dicts_with_specific_lr_wd(optimizer_cfg, root_module)
         
         if cfg.info.print_param_groups:
-            OptimizerUtils._print_param_groups(param_dicts_with_lr_wd, root_module, name_optimizer, loggers)
+            OptimizerUtils._print_param_groups(param_dicts_with_lr_wd, root_module, optimizer_name, loggers)
         
         if optimizer_cfg.optimizer_choice == 'adamw':
             optimizer = torch.optim.AdamW(param_dicts_with_lr_wd, eps=getattr(optimizer_cfg, 'adamw_eps', 1.0e-8))
@@ -203,15 +218,20 @@ class OptimizerUtils:
             raise ValueError(f'Unknown optimizer choice: {optimizer_cfg.optimizer_choice}')
         
         ## the following attributes are use in the trainer
-        # max_grad_norm
-        max_grad_norm = optimizer_cfg.max_grad_norm
-        
-        # modules_for_grad_norm
-        modules_for_grad_norm = OptimizerUtils._get_modules_for_grad_norm(
-            optimizer_identifier,
-            root_module,
-            getattr(optimizer_cfg, 'modules_for_grad_norm', None)
-            )
+        max_grad_norm_name_list: List[str] = optimizer_cfg.max_grad_norm_name
+        max_grad_norm_value_list: List[float] = optimizer_cfg.max_grad_norm_value
+        max_grad_norm_modules_list: List[List[str]] = optimizer_cfg.max_grad_norm_modules
+        max_grad_norm_dict = {}
+        for max_grad_norm_name, max_grad_norm_value, max_grad_norm_modules in zip(max_grad_norm_name_list, max_grad_norm_value_list, max_grad_norm_modules_list):
+            assert max_grad_norm_name not in max_grad_norm_dict, f'Duplicate max_grad_norm_name: {max_grad_norm_name}'
+            assert max_grad_norm_value >= 0, f'max_grad_norm_value must be non-negative, got {max_grad_norm_value}'
+            max_grad_norm_dict[max_grad_norm_name] = OptimizerUtils._get_max_grad_norm_params_with_value(
+                max_grad_norm_modules=max_grad_norm_modules,
+                max_grad_norm_value=max_grad_norm_value,
+                root_module=root_module,
+                root_module_name=root_module_name,
+                optimizer_name=optimizer_name,
+                )
         
         # freeze_modules
         freeze_modules = getattr(optimizer_cfg, 'freeze_modules', [])
@@ -233,14 +253,13 @@ class OptimizerUtils:
             )
         
         integrated_optimizer = IntegratedOptimizer(
-            identifier=optimizer_identifier,
+            root_module_name=root_module_name,
             optimizer=optimizer,
             lr_scale_scheduler=lr_scale_scheduler,
             wd_scale_scheduler=wd_scale_scheduler,
             scaler=scaler,
             root_module=root_module,
-            max_grad_norm=max_grad_norm,
-            modules_for_grad_norm=modules_for_grad_norm,
+            max_grad_norm_dict=max_grad_norm_dict,
             freeze_modules=freeze_modules,
             freeze_params=freeze_params,
             )
@@ -252,25 +271,25 @@ class OptimizerUtils:
     def get_integrated_optimizers(cfg, model_without_ddp, train_loader, loggers) -> List[IntegratedOptimizer]:
         integrated_optimizers = []
         
-        for name_optimizer in cfg.trainer.name_optimizers:
-            optimizer_cfg = getattr(cfg.trainer, name_optimizer)
+        for optimizer_name in cfg.trainer.all_optimizer_names:
+            optimizer_cfg = getattr(cfg.trainer, optimizer_name)
             
-            if name_optimizer != 'optimizer':
-                assert hasattr(optimizer_cfg, 'identifier'), f'Non-main optimizer config `{name_optimizer}` must have an identifier.'
-                optimizer_identifier = optimizer_cfg.identifier
-                root_module = getattr(model_without_ddp, optimizer_cfg.identifier)
+            if optimizer_name != 'optimizer':
+                assert hasattr(optimizer_cfg, 'identifier'), f'Non-main optimizer config `{optimizer_name}` must have an identifier.'
+                root_module_name = optimizer_cfg.identifier
+                root_module = getattr(model_without_ddp, root_module_name)
             else:
-                assert len(cfg.trainer.name_optimizers) == 1, 'Main optimizer config must be the only one.'
-                optimizer_identifier = 'main'
+                assert len(cfg.trainer.all_optimizer_names) == 1, 'Main optimizer config must be the only one.'
+                root_module_name = 'main'
                 root_module = model_without_ddp
             
             integrated_optimizer = OptimizerUtils._get_integrated_optimizer(
                 cfg=cfg,
                 optimizer_cfg=optimizer_cfg,
-                optimizer_identifier=optimizer_identifier,
-                root_module=root_module,
                 train_loader=train_loader,
-                name_optimizer=name_optimizer,
+                root_module=root_module,
+                root_module_name=root_module_name,
+                optimizer_name=optimizer_name,
                 loggers=loggers,
                 )
             integrated_optimizers.append(integrated_optimizer)

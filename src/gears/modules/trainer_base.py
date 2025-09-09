@@ -150,7 +150,7 @@ class TrainerBase:
         ## _no_wd ones are paired with normal ones, so no need to collect them here
         return_dict = {}
         for integrated_optimizer in self.integrated_optimizers:
-            return_dict.update({f'lr_{integrated_optimizer.identifier}_' + param_group['group_name']: param_group['lr']
+            return_dict.update({f'lr_{integrated_optimizer.root_module_name}_' + param_group['group_name']: param_group['lr']
                 for param_group in integrated_optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')})
         return return_dict
     
@@ -159,7 +159,7 @@ class TrainerBase:
         ## _no_wd ones are paired with normal ones, so no need to collect them here
         return_dict = {}
         for integrated_optimizer in self.integrated_optimizers:
-            return_dict.update({f'wd_{integrated_optimizer.identifier}_' + param_group['group_name']: param_group['weight_decay']
+            return_dict.update({f'wd_{integrated_optimizer.root_module_name}_' + param_group['group_name']: param_group['weight_decay']
                 for param_group in integrated_optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')})
         return return_dict
                 
@@ -237,7 +237,7 @@ class TrainerBase:
                 assert checkpoint['ema_criterion'] is not None, '"ema_criterion" in checkpoint is None, which means the checkpoint is not trained with ema.'
                 self.ema_criterion.load_state_dict(checkpoint['ema_criterion'])
             for integrated_optimizer in self.integrated_optimizers:
-                integrated_optimizer.load_state_dict(checkpoint[f'integrated_optimizer_{integrated_optimizer.identifier}'])
+                integrated_optimizer.load_state_dict(checkpoint[f'integrated_optimizer_{integrated_optimizer.root_module_name}'])
             self.start_epoch = checkpoint['epoch'] + 1
             if DistMisc.is_main_process():
                 self.best_val_metrics = checkpoint.get('best_val_metrics', {})
@@ -362,7 +362,7 @@ class TrainerBase:
                     'ema_container': self.ema_container.state_dict() if self.ema_container is not None else None,
                     'criterion': self.criterion.state_dict(),
                     'ema_criterion': self.ema_criterion.state_dict() if self.ema_container is not None else None,
-                    **{f'integrated_optimizer_{integrated_optimizer.identifier}': integrated_optimizer.state_dict() for integrated_optimizer in self.integrated_optimizers},
+                    **{f'integrated_optimizer_{integrated_optimizer.root_module_name}': integrated_optimizer.state_dict() for integrated_optimizer in self.integrated_optimizers},
                     'last_val_metrics': self.last_val_metrics,
                     'epoch': self.finished_train_epochs,
                 }
@@ -535,7 +535,7 @@ class TrainerBase:
         grad_norm_dict = {}
         def _backward():
             for integrated_optimizer in self.integrated_optimizers:
-                loss = loss_dict[f'loss_{integrated_optimizer.identifier}']  # make sure loss_dict has the keys as "loss_`integrated_optimizers.identifier`"
+                loss = loss_dict[f'loss_{integrated_optimizer.root_module_name}']  # make sure loss_dict has the keys as "loss_`integrated_optimizers.root_module_name`"
                 if loss is not None:
                     if integrated_optimizer.scaler is not None:
                         integrated_optimizer.scaler.scale(loss).backward()
@@ -545,8 +545,9 @@ class TrainerBase:
         def _optimize():
             grad_norm_dict = {}
             for integrated_optimizer in self.integrated_optimizers:
-                grad_norm = integrated_optimizer.optimize()
-                grad_norm_dict[f'grad_norm_{integrated_optimizer.identifier}'] = grad_norm
+                grad_norm_value_list, grad_norm_name_list = integrated_optimizer.optimize()
+                for grad_norm_value, grad_norm_name in zip(grad_norm_value_list, grad_norm_name_list):
+                    grad_norm_dict[f'grad_norm_{integrated_optimizer.root_module_name}_{grad_norm_name}'] = grad_norm_value
             if self.ema_container is not None:
                 self.ema_container.update()
             return grad_norm_dict
@@ -591,8 +592,8 @@ class TrainerBase:
             epoch_str=f'epoch: [{self.finished_train_epochs + 1}/{self.total_epochs}]',
             )
         mlogger.add_metrics([{
-            **{f'loss_{integrated_optimizer.identifier}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers},
-            **{f'grad_norm_{integrated_optimizer.identifier}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers},
+            **{f'loss_{integrated_optimizer.root_module_name}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers},
+            **{f'grad_norm_{integrated_optimizer.root_module_name}_{grad_norm_name}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers for grad_norm_name in integrated_optimizer.max_grad_norm_name_list},
             **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for lr_group in self.lr_groups.keys()},
             **{wd_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for wd_group in self.wd_groups.keys()},
             'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True),
@@ -616,8 +617,7 @@ class TrainerBase:
                 epoch=self.finished_backward_iters / self.trainloader_len,
             )
             for key, grad_norm in grad_norm_dict.items():
-                if grad_norm is not None:
-                    mlogger.update_metrics(**{key: grad_norm})
+                mlogger.update_metrics(**{key: grad_norm})
             
             if cfg.info.iter_log_freq > 0:
                 if self.finished_backward_iters % (cfg.info.iter_log_freq * cfg.trainer.grad_accumulation) == 0:
@@ -640,7 +640,7 @@ class TrainerBase:
             header='Eval ',
             epoch_str=f'epoch: [{self.finished_train_epochs}/{self.total_epochs}]',
             )
-        mlogger.add_metrics([{f'loss_{integrated_optimizer.identifier}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers}])
+        mlogger.add_metrics([{f'loss_{integrated_optimizer.root_module_name}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers}])
         first_iter = True
         for batch in mlogger.log_every(self.val_loader):
             
