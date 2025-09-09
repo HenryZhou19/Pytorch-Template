@@ -455,12 +455,12 @@ class PortalMisc:
                 ConfigMisc.auto_track_setattr(cfg, ['info', 'batch_info'],
                                               f'{cfg.trainer.trainer_batch_size_total}={cfg.trainer.trainer_batch_size_per_rank}x{cfg.env.world_size}x{cfg.trainer.grad_accumulation}')
                 
-                ConfigMisc.auto_track_setattr(cfg, ['trainer', 'name_optimizers'],
+                ConfigMisc.auto_track_setattr(cfg, ['trainer', 'all_optimizer_names'],
                                               [attr for attr in dir(cfg.trainer) if attr.startswith('optimizer')])
                 if cfg.trainer.sync_lr_with_batch_size > 0:
-                    for name_optimizer in cfg.trainer.name_optimizers:
-                        optimizer_cfg = getattr(cfg.trainer, name_optimizer)
-                        ConfigMisc.auto_track_setattr(cfg, ['trainer', name_optimizer, 'lr_default'],
+                    for optimizer_name in cfg.trainer.all_optimizer_names:
+                        optimizer_cfg = getattr(cfg.trainer, optimizer_name)
+                        ConfigMisc.auto_track_setattr(cfg, ['trainer', optimizer_name, 'lr_default'],
                                                       _sync_lr(optimizer_cfg.lr_default, cfg.trainer.trainer_batch_size_total, cfg.trainer.sync_lr_with_batch_size, mode=getattr(cfg.trainer, 'sync_lr_mode', 'linear')))
                         if hasattr(optimizer_cfg, 'param_groups'):
                             lr_mark = 'lr_'
@@ -1039,6 +1039,38 @@ class ModelMisc:
                 ModelMisc.convert_batchnorm_to_instancenorm(child)
     
     @staticmethod
+    def get_specific_submodules_with_full_names(module, submodule_name_list, strict=False):
+        named_modules = dict(module.named_modules())
+        found_submodules = {}
+        for submodule_name in submodule_name_list:
+            submodule: torch.nn.Module = named_modules.get(submodule_name, None)
+            if submodule is None:
+                error_message = f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.'
+                if strict:
+                    raise ValueError(error_message)
+                else:
+                    warnings.warn(error_message)
+            else:
+                found_submodules[submodule_name] = submodule
+        return found_submodules
+    
+    @staticmethod
+    def get_specific_params_with_full_names(module, params_name_list, strict=False):
+        params_dict = dict(module.named_parameters())
+        found_params = {}
+        for param_name in params_name_list:
+            param: torch.nn.Parameter = params_dict.get(param_name, None)
+            if param is None:
+                error_message = f'Cannot find parameter "{param_name}" in {module.__class__.__name__}.'
+                if strict:
+                    raise ValueError(error_message)
+                else:
+                    warnings.warn(error_message)
+            else:
+                found_params[param_name] = param
+        return found_params
+    
+    @staticmethod
     def unfreeze_or_freeze_submodules(module, submodule_name_list, is_trainable: bool, strict=False, verbose=True):  # whether to update the parameters of the submodules
         """
         Just change the trainable property of submodules' parameters.
@@ -1048,23 +1080,15 @@ class ModelMisc:
         
         verbose: (default True) as this function is usually called only once --- before all epochs
         """
-        module: nn.Module
-        named_modules = dict(module.named_modules())
-        verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} parameters of the following submodules:'
-        for submodule_name in submodule_name_list:
-            submodule: torch.nn.Module = named_modules.get(submodule_name, None)
-            if submodule is None:
-                error_message = f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__} when {"unfreezing" if is_trainable else "freezing"} parameters.'
-                if strict:
-                    raise ValueError(error_message)
-                else:
-                    warnings.warn(error_message)
-            else:
-                verbose_string += f'\n    {submodule_name}'
+        if len(submodule_name_list) > 0:
+            verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} parameters of the following submodules:'
+            found_submodules = ModelMisc.get_specific_submodules_with_full_names(module, submodule_name_list, strict=strict)  # check first
+            for name, submodule in found_submodules.items():
+                verbose_string += f'\n    {name}'
                 for param in submodule.parameters():
                     param.requires_grad = is_trainable
-        if verbose and len(submodule_name_list) > 0:
-            print(LoggerMisc.block_wrapper(verbose_string, '='))
+            if verbose:
+                print(LoggerMisc.block_wrapper(verbose_string, '='))
     
     @staticmethod
     def unfreeze_or_freeze_params(module, params_name_list, is_trainable: bool, strict=False, verbose=True):  # whether to update the parameters of the submodules
@@ -1073,24 +1097,14 @@ class ModelMisc:
         
         verbose: (default True) as this function is usually called only once --- before all epochs
         """
-        module: nn.Module
-        verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} the following specific parameters:'
         if len(params_name_list) > 0:
-            params_dict = dict(module.named_parameters())
-            for param_name in params_name_list:
-                param = params_dict.get(param_name, None)
-                if param is None:
-                    error_message = f'Cannot find parameter "{param_name}" in {module.__class__.__name__} when {"unfreezing" if is_trainable else "freezing"} parameters.'
-                    if strict:
-                        raise ValueError(error_message)
-                    else:
-                        warnings.warn(error_message)
-                else:
-                    verbose_string += f'\n    {param_name}'
-                    param.requires_grad = is_trainable
-
-        if verbose and len(params_name_list) > 0:
-            print(LoggerMisc.block_wrapper(verbose_string, '='))        
+            verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} the following specific parameters:'
+            found_params = ModelMisc.get_specific_params_with_full_names(module, params_name_list, strict=strict)  # check first
+            for name, param in found_params.items():
+                verbose_string += f'\n    {name}'
+                param.requires_grad = is_trainable
+            if verbose:
+                print(LoggerMisc.block_wrapper(verbose_string, '='))        
     
     @staticmethod
     def train_or_eval_submodules(module, submodule_name_list, is_train: bool, strict=False, verbose=False):
@@ -1102,22 +1116,14 @@ class ModelMisc:
         
         verbose: (default False) as this function is usually called multiple times --- before one (each) epoch
         """
-        module: nn.Module
-        named_modules = dict(module.named_modules())
-        verbose_string = f'Set nn.Module mode of the following submodules to {"train" if is_train else "eval"}:'
-        for submodule_name in submodule_name_list:
-            submodule: torch.nn.Module = named_modules.get(submodule_name, None)
-            if submodule is None:
-                error_message = f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__} when setting nn.Module mode to {"train" if is_train else "eval"}'
-                if strict:
-                    raise ValueError(error_message)
-                else:
-                    warnings.warn(error_message)
-            else:
-                verbose_string += f'\n    {submodule_name}'
+        if len(submodule_name_list) > 0:
+            verbose_string = f'Set nn.Module mode of the following submodules to {"train" if is_train else "eval"}:'
+            found_submodules = ModelMisc.get_specific_submodules_with_full_names(module, submodule_name_list, strict=strict)  # check first
+            for name, submodule in found_submodules.items():
+                verbose_string += f'\n    {name}'
                 submodule.train() if is_train else submodule.eval()
-        if verbose and len(submodule_name_list) > 0:
-            print(LoggerMisc.block_wrapper(verbose_string, '='))
+            if verbose:
+                print(LoggerMisc.block_wrapper(verbose_string, '='))
     
     @staticmethod
     def _re_init_check(module, param_name):

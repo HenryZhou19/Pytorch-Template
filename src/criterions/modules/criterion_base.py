@@ -18,7 +18,7 @@ class CriterionBase(nn.Module):
         self.loss_config = cfg.criterion.loss
         self.primary_criterion = cfg.criterion.primary_criterion
         if self.primary_criterion is None:
-            assert len(self.cfg.trainer.name_optimizers) == 1, 'Main optimizer config must be the only one if primary_criterion is not specified.'
+            assert len(self.cfg.trainer.all_optimizer_names) == 1, 'Main optimizer config must be the only one if primary_criterion is not specified.'
             self.primary_criterion = 'loss_main'
         print(LoggerMisc.block_wrapper(f'primary_criterion: {self.primary_criterion}'))
         
