@@ -52,8 +52,8 @@ class TrainerBase:
         # model wrapper
         model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
         
-        # prepare for optimizers, le_schedulers, and scalers (cuda auto mixed precision(amp)) if needed, all in the integrated_optimizers
-        integrated_optimizers = OptimizerUtils.get_integrated_optimizers(cfg, model_without_ddp, train_loader)
+        # prepare for optimizers, schedulers, and scalers (cuda auto mixed precision(amp)) if needed, all in the integrated_optimizers
+        integrated_optimizers = OptimizerUtils.get_integrated_optimizers(cfg, model_without_ddp, train_loader, loggers)
         
         # prepare for EMA (must be called after the ddp_wrapper to avoid potential problems)
         ema_container = self.model_manager.build_ema(model_without_ddp)
@@ -574,7 +574,7 @@ class TrainerBase:
             grad_norm_dict = _optimize()
         
         for integrated_optimizer in self.integrated_optimizers:
-            integrated_optimizer.schedulers_step()  # update all lr_schedulers and wd_scale_schedulers after each iter
+            integrated_optimizer.schedulers_step()  # update all lr_scale_schedulers and wd_scale_schedulers after each iter
         
         self.finished_backward_iters += 1
         return grad_norm_dict

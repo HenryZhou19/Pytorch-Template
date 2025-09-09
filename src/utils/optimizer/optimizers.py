@@ -4,17 +4,17 @@ import torch
 
 from src.utils.misc import LoggerMisc
 
-from .modules.warmup_scheduler import BasicScheduler
+from .modules.arbitrary_scheduler import BasicScheduler
 from .schedulers import SchedulerUtils
 
 
 class IntegratedOptimizer:
-    def __init__(self, identifier, optimizer, lr_scheduler, wd_scale_scheduler, scaler, root_module, max_grad_norm, modules_for_grad_norm, freeze_modules, freeze_params):
+    def __init__(self, identifier, optimizer, lr_scale_scheduler, wd_scale_scheduler, scaler, root_module, max_grad_norm, modules_for_grad_norm, freeze_modules, freeze_params):
         self.identifier: str = identifier
         
         self.optimizer: torch.optim.Optimizer = optimizer
         self.scaler: torch.amp.GradScaler = scaler
-        self.lr_scheduler: torch.optim.lr_scheduler._LRScheduler = lr_scheduler
+        self.lr_scale_scheduler: BasicScheduler = lr_scale_scheduler
         self.wd_scale_scheduler: BasicScheduler = wd_scale_scheduler
         
         self.root_module: torch.nn.Module = root_module
@@ -23,13 +23,13 @@ class IntegratedOptimizer:
         self.freeze_modules: list = freeze_modules
         self.freeze_params: list = freeze_params
         
-        self._special_init()
+        self._init_schedulers()
         
     def state_dict(self):
         state_dict = {
             'optimizer': self.optimizer.state_dict(),
             'scaler': self.scaler.state_dict() if self.scaler is not None else None,
-            'lr_scheduler': self.lr_scheduler.state_dict(),
+            'lr_scale_scheduler': self.lr_scale_scheduler.state_dict(),
             'wd_scale_scheduler': self.wd_scale_scheduler.state_dict(),
             }
         return state_dict
@@ -41,7 +41,7 @@ class IntegratedOptimizer:
             assert 'scaler' in state_dict, 'the checkpoint does not contain "scaler".'
             self.scaler.load_state_dict(state_dict['scaler'])
         if not skip_scheduler:
-            self.lr_scheduler.load_state_dict(state_dict['lr_scheduler'])
+            self.lr_scale_scheduler.load_state_dict(state_dict['lr_scale_scheduler'])
             self.wd_scale_scheduler.load_state_dict(state_dict['wd_scale_scheduler'])
         
     def optimize(self, fn_before_step=None):
@@ -74,18 +74,23 @@ class IntegratedOptimizer:
     def step(self, closure=None):
         self.optimizer.step(closure)
         
-    def _special_init(self):
+    def _init_schedulers(self):
+        self.lr_scale_scheduler.reset_index()
         self.wd_scale_scheduler.reset_index()
         wd_scale = self.wd_scale_scheduler.step()
+        lr_scale = self.lr_scale_scheduler.step()
         for param_group in self.param_groups:
+            param_group['lr_base'] = param_group['lr']
+            param_group['lr'] = lr_scale * param_group['lr_base']
             param_group['weight_decay_base'] = param_group['weight_decay']
             param_group['weight_decay'] = wd_scale * param_group['weight_decay_base'] 
         
     def schedulers_step(self):
-        self.lr_scheduler.step()
-        wd_value = self.wd_scale_scheduler.step()
+        lr_scale = self.lr_scale_scheduler.step()
+        wd_scale = self.wd_scale_scheduler.step()
         for param_group in self.param_groups:
-            param_group['weight_decay'] = wd_value * param_group['weight_decay_base']
+            param_group['lr'] = lr_scale * param_group['lr_base']
+            param_group['weight_decay'] = wd_scale * param_group['weight_decay_base']
     
 
 class OptimizerUtils:
@@ -143,7 +148,7 @@ class OptimizerUtils:
         for param_name, param in root_module.named_parameters():
             if not param.requires_grad:
                 continue
-            if param.ndim <= 1 or param_name.endswith(".bias") or getattr(param, '_no_weight_decay', False):
+            if param.ndim <= 1 or param_name.endswith('.bias') or getattr(param, '_no_weight_decay', False) or 'norm' in param_name or 'gamma' in param_name or 'beta' in param_name:
                 param_groups[match_param_group(param_name, param_group_name_list) + '_no_wd']['params'].append(param)
             else:
                 param_groups[match_param_group(param_name, param_group_name_list)]['params'].append(param)
@@ -171,10 +176,25 @@ class OptimizerUtils:
             modules_for_grad_norm = root_module
         return modules_for_grad_norm
     
+    @staticmethod
+    def _print_param_groups(param_dicts_with_lr_wd, root_module, name_optimizer, loggers):
+        print(f'\n\nOptimizer [{name_optimizer}] parameter groups:', file=loggers.log_file)
+        param_to_name = {id(p): n for n, p in root_module.named_parameters()}
+        for i, group in enumerate(param_dicts_with_lr_wd):
+            print(f'\tParam group {i}: (weight_decay={group.get("weight_decay", "N/A")}, lr={group.get("lr", "N/A")})', file=loggers.log_file)
+            for p in group['params']:
+                n = param_to_name.get(id(p), '<NOT_FOUND>')
+                print(f'\t\t[{i}] {n:60s} | shape {list(p.shape)}', file=loggers.log_file)
+        print('\n\n', file=loggers.log_file)
+        loggers.log_file.flush()
     
     @staticmethod
-    def _get_integrated_optimizer(cfg, optimizer_cfg, optimizer_identifier, root_module, train_loader) -> IntegratedOptimizer:
+    def _get_integrated_optimizer(cfg, optimizer_cfg, optimizer_identifier, root_module, train_loader, name_optimizer, loggers) -> IntegratedOptimizer:
         param_dicts_with_lr_wd = OptimizerUtils._get_param_dicts_with_specific_lr_wd(optimizer_cfg, root_module)
+        
+        if cfg.info.print_param_groups:
+            OptimizerUtils._print_param_groups(param_dicts_with_lr_wd, root_module, name_optimizer, loggers)
+        
         if optimizer_cfg.optimizer_choice == 'adamw':
             optimizer = torch.optim.AdamW(param_dicts_with_lr_wd, eps=getattr(optimizer_cfg, 'adamw_eps', 1.0e-8))
         elif optimizer_cfg.optimizer_choice == 'sgd':
@@ -205,15 +225,17 @@ class OptimizerUtils:
         else:
             scaler = None
         
-        # prepare for lr_scheduler
-        lr_scheduler = SchedulerUtils.get_warmup_lr_scheduler(cfg, optimizer_cfg, optimizer, scaler, train_loader)
-        # prepare for wd_scheduler
-        wd_scale_scheduler = SchedulerUtils.get_warmup_wd_scale_scheduler(cfg, optimizer_cfg, train_loader)
+        # prepare for lr and wd scale schedulers
+        lr_scale_scheduler, wd_scale_scheduler = SchedulerUtils.get_lr_wd_scale_schedulers(
+            cfg=cfg,
+            cfg_for_optimizer=optimizer_cfg,
+            train_loader=train_loader,
+            )
         
         integrated_optimizer = IntegratedOptimizer(
             identifier=optimizer_identifier,
             optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
+            lr_scale_scheduler=lr_scale_scheduler,
             wd_scale_scheduler=wd_scale_scheduler,
             scaler=scaler,
             root_module=root_module,
@@ -227,7 +249,7 @@ class OptimizerUtils:
     
     
     @staticmethod
-    def get_integrated_optimizers(cfg, model_without_ddp, train_loader) -> List[IntegratedOptimizer]:
+    def get_integrated_optimizers(cfg, model_without_ddp, train_loader, loggers) -> List[IntegratedOptimizer]:
         integrated_optimizers = []
         
         for name_optimizer in cfg.trainer.name_optimizers:
@@ -248,8 +270,9 @@ class OptimizerUtils:
                 optimizer_identifier=optimizer_identifier,
                 root_module=root_module,
                 train_loader=train_loader,
+                name_optimizer=name_optimizer,
+                loggers=loggers,
                 )
             integrated_optimizers.append(integrated_optimizer)
-        
         
         return integrated_optimizers

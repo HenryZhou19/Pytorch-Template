@@ -101,7 +101,7 @@
 #### ① These files and folders may not require any changes in most cases:
 * **scripts/\***
 * **train.py**; **inference.py**
-* **src/utils/\*** (except for **src/utils/optimizer/\***, if you need some special optimizers and lr_schedulers)
+* **src/utils/\*** (except for **src/utils/optimizer/\***, if you need some special optimizers and schedulers)
 * **src/datasets/modules/\*** (you may add some new files); **src/datasets/\_\_init\_\_.py**
 * **src/models/modules/\*** (you may add some new files); **src/models/\_\_init\_\_.py**
 * **src/criterions/modules/\*** (you may add some new files); **src/criterions/\_\_init\_\_.py**
@@ -302,16 +302,16 @@
         sweep_enabled: True
         sweep_params:  # use '//' as the connector for sub-params 
             trainer//optimizer//lr_default: [2.0e-4, 4.0e-4]
-            trainer//optimizer//scheduler//scheduler_choice: [linear, cosine]
+            trainer//optimizer//lr_scheduler//lr_phase_types: [[linear], [cosine]]
     ```
     * so if you run one task using this 'yaml' file, there will be four experiments in total:
-        1. trainer.optimizer.scheduler.scheduler_choice=linear  
+        1. trainer.optimizer.lr_scheduler.lr_phase_types=[linear]
            trainer.optimizer.lr_default=2.0e-4
-        2. trainer.optimizer.scheduler.scheduler_choice=cosine  
+        2. trainer.optimizer.lr_scheduler.lr_phase_types=[cosine]
            trainer.optimizer.lr_default=2.0e-4
-        3. trainer.optimizer.scheduler.scheduler_choice=linear  
+        3. trainer.optimizer.lr_scheduler.lr_phase_types=[linear]
            trainer.optimizer.lr_default=4.0e-4
-        4. trainer.optimizer.scheduler.scheduler_choice=cosine  
+        4. trainer.optimizer.lr_scheduler.lr_phase_types=[cosine]
            trainer.optimizer.lr_default=4.0e-4
 
 5. You may explore the usage of other configs by reading the comments in 'configs/defaults/\*.yaml' and 'configs/templates/\*.yaml' files.

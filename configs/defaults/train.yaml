@@ -28,7 +28,7 @@ info: # info & wandb
   cli_log_freq: 1
   global_tqdm: True
   torchinfo: True  # print model info to logs.log
-  print_param_names: True
+  print_param_groups: True
   print_module_states: False
 
 model:
@@ -66,6 +66,3 @@ trainer:
     modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
     freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
     freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
-    scheduler:
-      lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
-      warmup_type: linear  # no_warmup, constant, linear, exponential, cosine

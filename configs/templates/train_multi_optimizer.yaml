@@ -41,14 +41,19 @@ trainer:
     modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
     freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
     freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
-    scheduler:
-      scheduler_choice: linear  # multistep, cosine, linear, cosine_restart
-      warmup_epochs: 1
-      warmup_steps: -1  # if warmup_steps >= 0, override warmup_epochs
-      # lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
-      # warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
-      wd_end_scale: 1.0  # use cosine scheduler for wd from wd_xxx to wd_xxx * wd_end_scale for all param_groups
-
+    lr_scheduler:
+      ### len(phase) == N, e.g. N=2: warmup, keep
+      lr_phase_epochs: [1]  # (N-1) the last phase goes to the end
+      lr_phase_steps: null  # (N-1) the last phase goes to the end; if phase_steps is not null, override phase_epochs
+      lr_phase_scales: [0.0, 1.0, 1.0]  # (N+1) start scale of each phase and the final scale of the end
+      lr_phase_types: [linear, keep_start]  # (N)
+    wd_scheduler:
+      ### len(phase) == N, e.g. N=2: warmup, keep
+      wd_phase_epochs: []  # (N-1) the last phase goes to the end
+      wd_phase_steps: null  # (N-1) the last phase goes to the end; if phase_steps is not null, override phase_epochs
+      wd_phase_scales: [1.0, 1.0]  # (N+1) start scale of each phase and the final scale of the end
+      wd_phase_types: [keep_start]  # (N)
+    
   optimizer_2:
     identifier: fcs
     optimizer_choice: adamw
@@ -58,16 +63,20 @@ trainer:
     modules_for_grad_norm: null  # null(None) means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
     freeze_modules: []  # [submodule_name1, submodule_name2, ...], '.' can be used to point to a subsubmodule
     freeze_params: []  # [param_name1, param_name2, ...], '.' can be used to point to a subsubmodule
-    scheduler:
-      scheduler_choice: linear  # multistep, cosine, linear, cosine_restart
-      warmup_epochs: 1
-      warmup_steps: -1  # if warmup_steps >= 0, override warmup_epochs
-      # lr_min_factor: 0.0  # [0., 1.] start warmup from: lr_min_factor * lr, and anneal to lr_min_factor * lr. will be changed in cycle scheduler
-      # warmup_type: linear  # no_warmup, constant, linear, exponential, cosine
-      wd_end_scale: 1.0  # use cosine scheduler for wd from wd_xxx to wd_xxx * wd_end_scale for all param_groups
+    lr_scheduler:
+      ### len(phase) == N, e.g. N=2: warmup, keep
+      lr_phase_epochs: [1]  # (N-1) the last phase goes to the end
+      lr_phase_steps: null  # (N-1) the last phase goes to the end; if phase_steps is not null, override phase_epochs
+      lr_phase_scales: [0.0, 1.0, 1.0]  # (N+1) start scale of each phase and the final scale of the end
+      lr_phase_types: [cosine, keep_start]  # (N)
+    wd_scheduler:
+      ### len(phase) == N, e.g. N=2: warmup, keep
+      wd_phase_epochs: []  # (N-1) the last phase goes to the end
+      wd_phase_steps: null  # (N-1) the last phase goes to the end; if phase_steps is not null, override phase_epochs
+      wd_phase_scales: [1.0, 1.0]  # (N+1) start scale of each phase and the final scale of the end
+      wd_phase_types: [keep_start]  # (N)
 
 sweep:
   sweep_enabled: False
   sweep_params:  # use '//' as the connector for sub-params
     trainer//optimizer_1//lr_default: [2.0e-4, 4.0e-4]
-    trainer//optimizer_1//scheduler//scheduler_choice: [linear, cosine]

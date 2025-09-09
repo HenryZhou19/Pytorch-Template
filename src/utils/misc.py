@@ -448,7 +448,7 @@ class PortalMisc:
         def _set_real_batch_size_and_lr(cfg):
             if not ConfigMisc.is_inference(cfg):  # for train and val
                 if cfg.trainer.grad_accumulation > 1:
-                    warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, lr_scheduler).')
+                    warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, schedulers).')
 
                 ConfigMisc.auto_track_setattr(cfg, ['trainer', 'trainer_batch_size_total'],
                                               cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation)
@@ -985,12 +985,6 @@ class ModelMisc:
                 # Check model info in OUTPUT_PATH/logs.log
                 print(print_str, file=trainer.loggers.log_file)    
                 print(LoggerMisc.block_wrapper(f'torchinfo: Model structure and summary have been saved.'))
-            
-            if cfg.info.print_param_names:
-                print('\nAll Params:', file=trainer.loggers.log_file)
-                for k, _ in temp_model.named_parameters():
-                    print(f'\t{k}', file=trainer.loggers.log_file)
-                print('\n', file=trainer.loggers.log_file)
                 
             trainer.loggers.log_file.flush()
             del temp_model, one_sample, one_sample_batch_input, whole_batch_input
