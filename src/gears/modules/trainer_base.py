@@ -150,8 +150,9 @@ class TrainerBase:
         ## _no_wd ones are paired with normal ones, so no need to collect them here
         return_dict = {}
         for integrated_optimizer in self.integrated_optimizers:
-            return_dict.update({f'lr_{integrated_optimizer.root_module_name}_' + param_group['group_name']: param_group['lr']
-                for param_group in integrated_optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')})
+            return_dict[f'lr_{integrated_optimizer.root_module_name}_' + 'default'] = integrated_optimizer.lr_default
+            return_dict.update({f'lr_{integrated_optimizer.root_module_name}_' + param_group['name']: param_group['lr']
+                for param_group in integrated_optimizer.param_groups if param_group['logging']})
         return return_dict
     
     @property
@@ -159,8 +160,9 @@ class TrainerBase:
         ## _no_wd ones are paired with normal ones, so no need to collect them here
         return_dict = {}
         for integrated_optimizer in self.integrated_optimizers:
-            return_dict.update({f'wd_{integrated_optimizer.root_module_name}_' + param_group['group_name']: param_group['weight_decay']
-                for param_group in integrated_optimizer.param_groups if not param_group['group_name'].endswith('_no_wd')})
+            return_dict[f'wd_{integrated_optimizer.root_module_name}_' + 'default'] = integrated_optimizer.wd_default
+            return_dict.update({f'wd_{integrated_optimizer.root_module_name}_' + param_group['name']: param_group['weight_decay']
+                for param_group in integrated_optimizer.param_groups if param_group['logging']})
         return return_dict
                 
     @property
@@ -573,7 +575,7 @@ class TrainerBase:
             )
         mlogger.add_metrics([{
             **{f'loss_{integrated_optimizer.root_module_name}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers},
-            **{f'grad_norm_{integrated_optimizer.root_module_name}_{max_grad_norm_group["group_name"]}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers for max_grad_norm_group in integrated_optimizer.max_grad_norm_group_list},
+            **{f'grad_norm_{integrated_optimizer.root_module_name}_{max_grad_norm_group["name"]}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers for max_grad_norm_group in integrated_optimizer.max_grad_norm_group_list},
             **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for lr_group in self.lr_groups.keys()},
             **{wd_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for wd_group in self.wd_groups.keys()},
             'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True),

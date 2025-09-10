@@ -143,29 +143,38 @@ class ModelBase(nn.Module):
             verbose=True,
             )
     
+    def check_special_param_group_rules(self, default_param_dict, param_group_rules_cfg):
+        '''
+        default_param_dict: {
+            'name': name,
+            'params': [param],
+            'lr_base': lr_default,
+            'wd_base': wd_default,
+            'logging': False,
+            MAYBE OTHER CUSTOMIZED OPTIONS
+            }
+        '''
+        return default_param_dict
+    
     def configure_optimizer_param_groups(self, lr_default, wd_default, param_group_rules_cfg):
         '''
         called in the initialization of the trainer (when creating optimizers)
             configure param groups after doing freezing and before creating optimizers
         return: optimizer_param_group_list for the corresponding optimizer
         '''
-        default_param_groups = {
-            'default': {
-                'params': [],
-                'lr_base': lr_default,
-                'wd_base': wd_default,
-            },
-            'default_no_wd': {
-                'params': [],
-                'lr_base': lr_default,
-                'wd_base': 0.,
-            }
-        }
+        optimizer_param_group_list = []
         no_wd_names = param_group_rules_cfg.no_wd_names
         no_wd_max_ndim = param_group_rules_cfg.no_wd_max_ndim
         for name, param in self.named_parameters():
             if not param.requires_grad:
                 continue
+            default_param_dict = {
+                'name': name,
+                'params': [param],
+                'lr_base': lr_default,
+                'wd_base': wd_default,
+                'logging': False,
+                }
             no_decay = False
             if param.ndim <= no_wd_max_ndim:
                 no_decay = True
@@ -174,17 +183,11 @@ class ModelBase(nn.Module):
             if getattr(param, '_no_weight_decay', False):
                 no_decay = True
             if no_decay:
-                default_param_groups['default_no_wd']['params'].append(param)
-            else:
-                default_param_groups['default']['params'].append(param)
+                default_param_dict['wd_base'] = 0.
+                
+            default_param_dict = self.check_special_param_group_rules(default_param_dict, param_group_rules_cfg)
         
-        optimizer_param_group_list = []
-        for k, v in default_param_groups.items():
-            optimizer_param_group_list.append({
-                'group_name': k,
-                **v,
-                })  
-        optimizer_param_group_list = [g for g in optimizer_param_group_list if len(g['params']) > 0]
+            optimizer_param_group_list.append(default_param_dict)
         
         return optimizer_param_group_list
     
@@ -213,7 +216,7 @@ class ModelBase(nn.Module):
         max_grad_norm_group_list = []
         for k, v in max_grad_norm_group_dict.items():
             max_grad_norm_group_list.append({
-                'group_name': k,
+                'name': k,
                 **v,
                 })  
         max_grad_norm_group_list = [g for g in max_grad_norm_group_list if len(g['params']) > 0]

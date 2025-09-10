@@ -10,15 +10,31 @@ from .schedulers import SchedulerUtils
 
 
 class IntegratedOptimizer:
-    def __init__(self, root_module_name, root_module, optimizer, max_grad_norm_group_list, lr_scale_scheduler, wd_scale_scheduler, scaler):
-        self.root_module_name: str = root_module_name
-        self.root_module: ModelBase = root_module
+    def __init__(
+        self,
+        root_module_name: str,
+        root_module: ModelBase,
+        optimizer: torch.optim.Optimizer,
+        max_grad_norm_group_list: list,
+        lr_scale_scheduler: BasicScheduler,
+        wd_scale_scheduler: BasicScheduler,
+        scaler: torch.amp.GradScaler,
+        lr_default: float,
+        wd_default: float,
+        ):
+        self.root_module_name = root_module_name
+        self.root_module= root_module
         
-        self.optimizer: torch.optim.Optimizer = optimizer
-        self.max_grad_norm_group_list: list = max_grad_norm_group_list
-        self.scaler: torch.amp.GradScaler = scaler
-        self.lr_scale_scheduler: BasicScheduler = lr_scale_scheduler
-        self.wd_scale_scheduler: BasicScheduler = wd_scale_scheduler
+        self.optimizer = optimizer
+        self.max_grad_norm_group_list = max_grad_norm_group_list
+        self.scaler = scaler
+        self.lr_scale_scheduler = lr_scale_scheduler
+        self.wd_scale_scheduler = wd_scale_scheduler
+        
+        self.lr_default_base = lr_default
+        self.wd_default_base = wd_default
+        self.lr_default = None
+        self.wd_default = None
         
         self._init_schedulers()
         
@@ -46,7 +62,7 @@ class IntegratedOptimizer:
         need_unscaled_optimizer = self.scaler is not None
         
         for max_grad_norm_group in self.max_grad_norm_group_list:
-            name, params, value = max_grad_norm_group['group_name'], max_grad_norm_group['params'], max_grad_norm_group['value']
+            name, params, value = max_grad_norm_group['name'], max_grad_norm_group['params'], max_grad_norm_group['value']
             if value > 0:  # only clip when max_grad_norm > 0, otherwise skip; max_grad_norm = .inf can be used to disable clipping while logging the grad norm
                 if need_unscaled_optimizer:
                     self.scaler.unscale_(self.optimizer)
@@ -89,30 +105,39 @@ class IntegratedOptimizer:
         for param_group in self.param_groups:
             param_group['lr'] = lr_scale * param_group['lr_base']
             param_group['weight_decay'] = wd_scale * param_group['wd_base']
+        self.lr_default = lr_scale * self.lr_default_base
+        self.wd_default = wd_scale * self.wd_default_base
     
 
 class OptimizerUtils: 
     @staticmethod
-    def _print_optimizer_param_groups(optimizer_param_group_list, param_to_name, optimizer_name, loggers):
-        print(f'\nOptimizer [{optimizer_name}] parameter groups:', file=loggers.log_file)
+    def _print_optimizer_param_groups(optimizer_param_group_list, param_to_name, optimizer_name, loggers, name_total_width=60):
+        print(f'\n[{optimizer_name}] parameter groups:', file=loggers.log_file)
         n_groups = len(optimizer_param_group_list)
         for i, group in enumerate(optimizer_param_group_list, start=1):
-            print(f'\tParam group [{i}/{n_groups}]: "{group.get("group_name", "N/A")}" (lr_base={group.get("lr_base", "N/A")}, wd_base={group.get("wd_base", "N/A")})', file=loggers.log_file)
-            for p in group['params']:
-                n = param_to_name.get(id(p), '<NOT_FOUND>')
-                print(f'\t\t{n:50s} | shape {list(p.shape)}', file=loggers.log_file)
+            assert len(group['params']) == 1, 'Each param group should contain exactly one parameter tensor in this design.'
+            count_str = f'[{i}/{n_groups}]'
+            n_str = f'\t{count_str:9s}: {group.get("name", "N/A")}'
+            dash_count = max(name_total_width - len(n_str), 3)
+            dash_str = '-' * dash_count
+            lr = f'lr_base={group.get("lr_base", "N/A")}'
+            wd = f'wd_base={group.get("wd_base", "N/A")}'
+            print(f'{n_str} {dash_str} {lr:20s} {wd:20s}', file=loggers.log_file)
         print('\n', file=loggers.log_file)
         loggers.log_file.flush()
         
     @staticmethod
-    def _print_max_grad_norm_groups(max_grad_norm_group_list, param_to_name, optimizer_name, loggers):
-        print(f'\nOptimizer [{optimizer_name}] max grad norm groups:', file=loggers.log_file)
+    def _print_max_grad_norm_groups(max_grad_norm_group_list, param_to_name, optimizer_name, loggers, name_total_width=57):
+        print(f'\n[{optimizer_name}] max grad norm groups:', file=loggers.log_file)
         n_groups = len(max_grad_norm_group_list)
         for i, group in enumerate(max_grad_norm_group_list, start=1):
-            print(f'\tMax grad norm group [{i}/{n_groups}]: "{group.get("group_name", "N/A")}" (max_grad_norm={group.get("value", "N/A")})', file=loggers.log_file)
+            print(f'\tMax grad norm group [{i}/{n_groups}]: "{group.get("name", "N/A")}" (max_grad_norm={group.get("value", "N/A")})', file=loggers.log_file)
             for p in group['params']:
-                n = param_to_name.get(id(p), '<NOT_FOUND>')
-                print(f'\t\t{n:50s} | shape {list(p.shape)}', file=loggers.log_file)
+                n_str = f'\t\t{param_to_name.get(id(p), "<NOT_FOUND>")}'
+                dash_count = max(name_total_width - len(n_str), 3)
+                dash_str = '-' * dash_count
+                shape_str = f'shape {list(p.shape)}'
+                print(f'{n_str} {dash_str} {shape_str}', file=loggers.log_file)
         print('\n', file=loggers.log_file)
         loggers.log_file.flush()
     
@@ -168,6 +193,8 @@ class OptimizerUtils:
             lr_scale_scheduler=lr_scale_scheduler,
             wd_scale_scheduler=wd_scale_scheduler,
             scaler=scaler,
+            lr_default=optimizer_cfg.lr_default,
+            wd_default=optimizer_cfg.wd_default,
             )
         
         return integrated_optimizer
