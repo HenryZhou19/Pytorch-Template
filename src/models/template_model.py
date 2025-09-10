@@ -85,48 +85,22 @@ class LeNet(ModelBase):
         self.fc1 = nn.Linear(16 * 4 * 4, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
-        
-    def configure_optimizer_param_groups(self, lr_default, wd_default, param_group_rules_cfg):
-        optimizer_param_group_list = super().configure_optimizer_param_groups(lr_default, wd_default, param_group_rules_cfg)
+    
+    def check_special_param_group_rules(self, default_param_dict, param_group_rules_cfg):
         
         conv_lr_scale = param_group_rules_cfg.conv_lr_scale
         conv_wd_scale = param_group_rules_cfg.conv_wd_scale
-        conv_param_groups = {
-            'conv': {
-                'params': [],
-                'lr_base': lr_default * conv_lr_scale,
-                'wd_base': wd_default * conv_wd_scale,
-            },
-            'conv_no_wd': {
-                'params': [],
-                'lr_base': lr_default * conv_lr_scale,
-                'wd_base': 0.,
-            }
-        }
         
-        param_to_name = {id(p): n for n, p in self.named_parameters()}
-        for i, group in enumerate(optimizer_param_group_list):
-            p_list, name_list = [], []
-            for p in group['params']:
-                p_list.append(p)
-                name_list.append(param_to_name[id(p)])
-            for p, name in zip(p_list, name_list):
-                if 'conv' in name:
-                    # remove from original group
-                    group['params'].remove(p)
-                    # add to conv group
-                    if group['wd_base'] == 0.:
-                        conv_param_groups['conv_no_wd']['params'].append(p)
-                    else:
-                        conv_param_groups['conv']['params'].append(p)
-        
-        for k, v in conv_param_groups.items():
-            optimizer_param_group_list.append({
-                'group_name': k,
-                **v,
-                })  
-        optimizer_param_group_list = [g for g in optimizer_param_group_list if len(g['params']) > 0]
-        return optimizer_param_group_list
+        if 'conv' in default_param_dict['name']:
+            default_param_dict['lr_base'] = default_param_dict['lr_base'] * conv_lr_scale
+            default_param_dict['wd_base'] = default_param_dict['wd_base'] * conv_wd_scale
+            
+        if 'conv1.weight' in default_param_dict['name']:
+            default_param_dict['logging'] = True
+        if 'fc1.weight' in default_param_dict['name']:
+            default_param_dict['logging'] = True
+            
+        return default_param_dict
 
     def forward(self, inputs: dict) -> dict:
         x = inputs['x']
