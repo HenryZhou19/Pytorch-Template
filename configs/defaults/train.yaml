@@ -62,6 +62,10 @@ trainer:
   checkpoint_keep_interval: 0  # if > 0, save the checkpoint every {checkpoint_keep_interval} epochs (keep all)
   all_optimizer_names: TBD
   optimizer:  # unique optimizer for all modules, the `root_module` is the whole model_without_ddp
+    param_group_rules:
+      no_wd_names: [bias, norm, alpha, beta, gamma]  # names for no weight decay groups in loggers
+      no_wd_max_ndim: 1  # if param.ndim <= no_wd_max_ndim, then no weight decay
+      ## other rules for param groups can be added in ModelBase.configure_param_groups()
     max_grad_norm_name: [all]  # names for grad norm groups in loggers
     max_grad_norm_value: [.inf]  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
     max_grad_norm_modules: [['']]  # nested_list: exact module name for this optimizer's root module, '' means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]

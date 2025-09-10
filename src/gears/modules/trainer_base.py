@@ -194,7 +194,7 @@ class TrainerBase:
         return val_epochs
     
     def _get_pbar(self):
-        # called in "before_all_epochs"
+        # called in the end of "before_all_epochs"
         if DistMisc.is_main_process():
             epoch_finished = self.start_epoch - 1
             train_pbar = LoggerMisc.MultiTQDM(
@@ -351,7 +351,7 @@ class TrainerBase:
             os.rename(old_path, new_path)
     
     def _save_checkpoint(self):
-        # called in "after_one_epoch"
+        # called in the end of "after_one_epoch"
         if DistMisc.is_main_process():
             save_last = self.finished_train_epochs % self.checkpoint_last_interval == 0
             save_keep = self.finished_train_epochs % self.checkpoint_keep_interval == 0 if self.checkpoint_keep_interval > 0 else False
@@ -373,7 +373,7 @@ class TrainerBase:
                 torch.save(save_dict, keep_path)
     
     def _save_checkpoint_only_best_model(self):
-        # called in "after_validation"
+        # called in the end of "after_validation"
         if DistMisc.is_main_process():
             self.best_val_metrics, last_is_best = self.criterion.choose_best(
                 self.last_val_metrics, self.best_val_metrics
@@ -391,38 +391,18 @@ class TrainerBase:
                 self._save_or_update_checkpoint(save_dict, self.cfg.info.work_dir, self.finished_train_epochs, 'best')
     
     def _train_mode(self):
-        # called in "before_one_epoch"
+        # called in the end of "before_one_epoch"
         for nn_module in self.nn_module_list:
             nn_module.train()
-        
-        for integrated_optimizer in self.integrated_optimizers:
-            ModelMisc.train_or_eval_submodules(
-                integrated_optimizer.root_module,
-                integrated_optimizer.freeze_modules,
-                False,
-            )
         self.training = True
     
     def _eval_mode(self):
-        # called in "before_validation"
+        # called in the end of "before_validation"
         for nn_module in self.nn_module_list:
             nn_module.eval()
         self.training = False
     
     def _before_all_epochs(self, *args, **kwargs):
-        for integrated_optimizer in self.integrated_optimizers:
-            ModelMisc.unfreeze_or_freeze_submodules(
-                integrated_optimizer.root_module,
-                integrated_optimizer.freeze_modules,
-                False,
-                )
-            
-            ModelMisc.unfreeze_or_freeze_params(
-                integrated_optimizer.root_module,
-                integrated_optimizer.freeze_params,
-                False,
-                )
-        
         # try to call the "before_all_epochs" function of all root modules
         for nn_module in self.all_module_list:
             if hasattr(nn_module, 'before_all_epochs'):
@@ -440,6 +420,14 @@ class TrainerBase:
         self._get_pbar()
     
     def _before_one_epoch(self, *args, **kwargs):
+        # try to call the "before_one_epoch" function of all root modules
+        for nn_module in self.all_module_list:
+            if hasattr(nn_module, 'before_one_epoch'):
+                nn_module.before_one_epoch(self.train_progress_dict)
+            if hasattr(nn_module, 'module'):  # for DDP-wrapped modules
+                if hasattr(nn_module.module, 'before_one_epoch'):
+                    nn_module.module.before_one_epoch(self.train_progress_dict)
+        
         # shuffle data for each epoch (here needs epoch start from 0)
         # specially called for DistributedSampler
         self.train_loader.sampler_set_epoch(self.finished_train_epochs)  
@@ -457,14 +445,6 @@ class TrainerBase:
         for integrated_optimizer in self.integrated_optimizers:
             integrated_optimizer.zero_grad()
         self._train_mode()
-        
-        # try to call the "before_one_epoch" function of all root modules
-        for nn_module in self.all_module_list:
-            if hasattr(nn_module, 'before_one_epoch'):
-                nn_module.before_one_epoch(self.train_progress_dict)
-            if hasattr(nn_module, 'module'):  # for DDP-wrapped modules
-                if hasattr(nn_module.module, 'before_one_epoch'):
-                    nn_module.module.before_one_epoch(self.train_progress_dict)
     
     def _after_first_train_iter(self, *args, **kwargs):
         pass
@@ -593,7 +573,7 @@ class TrainerBase:
             )
         mlogger.add_metrics([{
             **{f'loss_{integrated_optimizer.root_module_name}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers},
-            **{f'grad_norm_{integrated_optimizer.root_module_name}_{grad_norm_name}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers for grad_norm_name in integrated_optimizer.max_grad_norm_name_list},
+            **{f'grad_norm_{integrated_optimizer.root_module_name}_{max_grad_norm_group["group_name"]}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers for max_grad_norm_group in integrated_optimizer.max_grad_norm_group_list},
             **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for lr_group in self.lr_groups.keys()},
             **{wd_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for wd_group in self.wd_groups.keys()},
             'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True),

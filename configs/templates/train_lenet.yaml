@@ -35,13 +35,11 @@ trainer:
   optimizer:
     optimizer_choice: sgd  # adamw, sgd
     sgd_momentum: 0.9
-    lr_default: 1.0e-2
-    wd_default: 1.0e-2
-    param_groups:
-      lr_backbone: 4.0e-4
-      wd_backbone: 1.0e-2
-      lr_head: 1.0e-4
-      wd_head: 1.0e-4
+    lr_default: 5.0e-3
+    wd_default: 1.0e-4
+    param_group_rules:
+      conv_lr_scale: 2.0
+      conv_wd_scale: 100.0
     max_grad_norm_name: [all]  # names for grad norm groups in loggers
     max_grad_norm_value: [1.0]  # .inf means no gradient clipping (setting to 0.0 is the same, but grad_norm will not be logged)
     max_grad_norm_modules: [['']]  # nested_list: exact module name for this optimizer's root module, '' means the whole model, or a list of submodule names [submodule_name1, submodule_name2, ...]
