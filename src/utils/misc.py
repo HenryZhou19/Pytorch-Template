@@ -462,12 +462,6 @@ class PortalMisc:
                         optimizer_cfg = getattr(cfg.trainer, optimizer_name)
                         ConfigMisc.auto_track_setattr(cfg, ['trainer', optimizer_name, 'lr_default'],
                                                       _sync_lr(optimizer_cfg.lr_default, cfg.trainer.trainer_batch_size_total, cfg.trainer.sync_lr_with_batch_size, mode=getattr(cfg.trainer, 'sync_lr_mode', 'linear')))
-                        if hasattr(optimizer_cfg, 'param_groups'):
-                            lr_mark = 'lr_'
-                            for k, v in vars(optimizer_cfg.param_groups).items():
-                                if k.startswith(lr_mark):
-                                    ConfigMisc.auto_track_setattr(cfg, ['trainer', 'optimizer', 'param_groups', k],
-                                                                    _sync_lr(v, cfg.trainer.trainer_batch_size_total, cfg.trainer.sync_lr_with_batch_size, mode=getattr(cfg.trainer, 'sync_lr_mode', 'linear')))
             else: # for inference
                 ConfigMisc.auto_track_setattr(cfg, ['tester', 'tester_batch_size_total'],
                                               cfg.tester.tester_batch_size_per_rank * cfg.env.world_size)
@@ -1071,19 +1065,18 @@ class ModelMisc:
         return found_params
     
     @staticmethod
-    def unfreeze_or_freeze_submodules(module, submodule_name_list, is_trainable: bool, strict=False, verbose=True):  # whether to update the parameters of the submodules
+    def unfreeze_or_freeze_modules(modules_dict, is_trainable: bool, verbose=True):  # whether to update the parameters of the modules
         """
-        Just change the trainable property of submodules' parameters.
+        Just change the trainable property of modules' parameters.
         
         Some special statistics(e.g. BatchNorm's running mean and variance) are still updated and Dropouts are still working 
-        unless the submodules are set to eval mode by calling ModelMisc.train_or_eval_submodules().
+        unless the modules are set to eval mode by calling ModelMisc.train_or_eval_modules().
         
         verbose: (default True) as this function is usually called only once --- before all epochs
         """
-        if len(submodule_name_list) > 0:
+        if len(modules_dict) > 0:
             verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} parameters of the following submodules:'
-            found_submodules = ModelMisc.get_specific_submodules_with_full_names(module, submodule_name_list, strict=strict)  # check first
-            for name, submodule in found_submodules.items():
+            for name, submodule in modules_dict.items():
                 verbose_string += f'\n    {name}'
                 for param in submodule.parameters():
                     param.requires_grad = is_trainable
@@ -1091,35 +1084,33 @@ class ModelMisc:
                 print(LoggerMisc.block_wrapper(verbose_string, '='))
     
     @staticmethod
-    def unfreeze_or_freeze_params(module, params_name_list, is_trainable: bool, strict=False, verbose=True):  # whether to update the parameters of the submodules
+    def unfreeze_or_freeze_params(params_dict, is_trainable: bool, verbose=True):  # whether to update these parameters 
         """
         Just change the trainable property of specific parameters.
         
         verbose: (default True) as this function is usually called only once --- before all epochs
         """
-        if len(params_name_list) > 0:
+        if len(params_dict) > 0:
             verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} the following specific parameters:'
-            found_params = ModelMisc.get_specific_params_with_full_names(module, params_name_list, strict=strict)  # check first
-            for name, param in found_params.items():
+            for name, param in params_dict.items():
                 verbose_string += f'\n    {name}'
                 param.requires_grad = is_trainable
             if verbose:
                 print(LoggerMisc.block_wrapper(verbose_string, '='))        
     
     @staticmethod
-    def train_or_eval_submodules(module, submodule_name_list, is_train: bool, strict=False, verbose=False):
+    def train_or_eval_modules(modules_dict, is_train: bool, verbose=False):
         """
-        Just change the behavior of some specific submodules (e.g. BatchNorm, Dropout).
+        Just change the behavior of some specific modules (e.g. BatchNorm, Dropout).
         
-        Gradients of the submodules are still computed (and updated if trainable)
-        unless the submodules are set to untrainable mode by calling ModelMisc.unfreeze_or_freeze_submodules().
+        Gradients of the modules are still computed (and updated if trainable)
+        unless the modules are set to untrainable mode by calling ModelMisc.unfreeze_or_freeze_modules().
         
         verbose: (default False) as this function is usually called multiple times --- before one (each) epoch
         """
-        if len(submodule_name_list) > 0:
+        if len(modules_dict) > 0:
             verbose_string = f'Set nn.Module mode of the following submodules to {"train" if is_train else "eval"}:'
-            found_submodules = ModelMisc.get_specific_submodules_with_full_names(module, submodule_name_list, strict=strict)  # check first
-            for name, submodule in found_submodules.items():
+            for name, submodule in modules_dict.items():
                 verbose_string += f'\n    {name}'
                 submodule.train() if is_train else submodule.eval()
             if verbose:
@@ -1227,6 +1218,8 @@ class LoggerMisc:
                 for k, v in output_dict.items():
                     if k == 'epoch':
                         loggers.wandb_run.log({k: v}, step=step)  # log epoch without group
+                    elif k.startswith('lr_') or k.startswith('wd_') or 'schedule' in k:
+                        loggers.wandb_run.log({f'{group}_schedule/{k}': v}, step=step)
                     else:
                         loggers.wandb_run.log({f'{group}/{k}': v}, step=step)
                     # loggers.wandb_run.log({'output_image': [wandb.Image(output_dict['output_image'])]}, step=step)
@@ -1235,6 +1228,8 @@ class LoggerMisc:
                 for k, v in output_dict.items():
                     if k == 'epoch':
                         loggers.tensorboard_run.add_scalar(k, v, global_step=step)  # log epoch without group
+                    elif k.startswith('lr_') or k.startswith('wd_') or 'schedule' in k:
+                        loggers.tensorboard_run.add_scalar(f'{group}_schedule/{k}', v, global_step=step)
                     else:
                         loggers.tensorboard_run.add_scalar(f'{group}/{k}', v, global_step=step)
                     # loggers.tensorboard_run.add_image('output_image', output_dict['output_image'], global_step=step)

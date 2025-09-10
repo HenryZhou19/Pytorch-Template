@@ -148,7 +148,7 @@ class TesterBase:
                     self.loggers.wandb_run.tags = self.loggers.wandb_run.tags + (f'Epoch: {checkpoint["epoch"]}',)
     
     def _eval_mode(self):
-        # called in "before_inference"
+        # called in the end of "before_inference"
         for nn_module in self.nn_module_list:
             nn_module.eval()
         # self.training = False

@@ -20,7 +20,7 @@ class CriterionBase(nn.Module):
         if self.primary_criterion is None:
             assert len(self.cfg.trainer.all_optimizer_names) == 1, 'Main optimizer config must be the only one if primary_criterion is not specified.'
             self.primary_criterion = 'loss_main'
-        print(LoggerMisc.block_wrapper(f'primary_criterion: {self.primary_criterion}'))
+        print(LoggerMisc.block_wrapper(f'{self.__class__.__name__}\'s primary_criterion: {self.primary_criterion}'))
         
         if cfg.model.ema.ema_enabled and cfg.model.ema.ema_primary_criterion:
             self.primary_criterion = 'ema_' + self.primary_criterion  # use 'ema_xxx' as primary criterion
@@ -32,12 +32,18 @@ class CriterionBase(nn.Module):
             
     def set_ema_mode(self, ema_mode):
         self.ema_mode = ema_mode
+        for module in self.children():
+            if hasattr(module, 'set_ema_mode'):
+                module.set_ema_mode(ema_mode)
     
     def set_infer_mode(self, infer_mode):
         self.infer_mode = infer_mode
+        for module in self.children():
+            if hasattr(module, 'set_infer_mode'):
+                module.set_infer_mode(infer_mode)
         
     def print_states(self, prefix='', force=True):
-        print(f'{prefix}Criterion --- training mode: {self.training}, infer_mode: {self.infer_mode}, ema_mode: {self.ema_mode}', force=force)
+        print(f'{prefix}{self.__class__.__name__} --- training mode: {self.training}, infer_mode: {self.infer_mode}, ema_mode: {self.ema_mode}', force=force)
             
     def untrainable_check(self):
         trainable_params = [p for p in self.parameters() if p.requires_grad]
@@ -111,7 +117,25 @@ class CriterionBase(nn.Module):
         return DistMisc.is_dist_avail_and_initialized() and if_real_dist
     
     def before_one_epoch(self, *args, **kwargs):
+        '''
+        this will be called in the trainer right before calling self.train()
+        '''
         pass
     
     def before_all_epochs(self, *args, **kwargs):
+        '''
+        this will be called in the trainer before resume training or loading pretrained weights
+        '''
         pass
+    
+    def train(self, mode = True):
+        '''
+        this will be called in the trainer right after self.before_one_epoch()
+        '''
+        super().train(mode)
+        
+    def eval(self):
+        '''
+        this will be called in the trainer or tester before validation or testing
+        '''
+        super().eval()
