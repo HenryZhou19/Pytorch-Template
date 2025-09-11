@@ -105,7 +105,7 @@ class ConfigMisc:
     
     @staticmethod
     def _parse_yaml_files(config_file_paths):
-        """Load and merge multiple YAML files."""
+        '''Load and merge multiple YAML files.'''
         cfg = SimpleNamespace()
         for path in config_file_paths:
             cfg_new = ConfigMisc.read_from_yaml(path)
@@ -116,12 +116,12 @@ class ConfigMisc:
     def _update_config_with_cli_args(cfg):
         args = sys.argv
         for arg in args:
-            if "=" not in arg:
-                continue  # Skip arguments without "key=value" format
-            key_path, value = arg.split("=", 1)
+            if '=' not in arg:
+                continue  # Skip arguments without 'key=value' format
+            key_path, value = arg.split('=', 1)
             value = yaml.safe_load(value)  # Convert strings like 'true', '1' properly
             
-            keys = key_path.split(".")
+            keys = key_path.split('.')
             ConfigMisc.setattr_for_nested_namespace(cfg, keys, value, track_modifications=True, mod_dict_key_prefix='cli')
         return cfg
     
@@ -289,7 +289,7 @@ class PortalMisc:
             dist.broadcast(buffer, src=0)
             dist.barrier()
         time_string = buffer.cpu().numpy().tobytes().decode('utf-8')
-        # print(f"Rank {DistMisc.get_rank()} has time string: {time_string}", force=True)
+        # print(f'Rank {DistMisc.get_rank()} has time string: {time_string}', force=True)
         ConfigMisc.auto_track_setattr(cfg, ['info', config_name], time_string)
     
     @staticmethod
@@ -343,7 +343,7 @@ class PortalMisc:
         if use_train_seed:
             ConfigMisc.auto_track_setattr(cfg, ['seed_base'], train_seed_base)
         
-        ## 2. confirm the train_work_dir for the "checkpoint_path" and the "(inference_)work_dir"
+        ## 2. confirm the train_work_dir for the 'checkpoint_path' and the '(inference_)work_dir'
         ## Note: get it from the train_cfg_path, not in the config itself, as the train_work_dir might have been moved or renamed.
         # ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], cfg.info.work_dir)
         ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1]))
@@ -535,12 +535,12 @@ class PortalMisc:
                 modified = ADDED
                 str_post = f'{get_value_prefix(dict_key_prefix)}{COLORS[ADDED]}{value}{COLORS[UNCHANGED]}'  # green
             elif key in modified_cfg_dict[f'{dict_key_prefix}_modified']:
-                old_value = modified_cfg_dict[f"{dict_key_prefix}_modified"][key]["old_value"]
+                old_value = modified_cfg_dict[f'{dict_key_prefix}_modified'][key]['old_value']
                 new_value = modified_cfg_dict[f'{dict_key_prefix}_modified'][key]['new_value']
                 if key in modified_cfg_dict[f'{dict_key_prefix}_typechanged']:
                     modified = TYPECHANGED
-                    old_type = modified_cfg_dict[f"{dict_key_prefix}_typechanged"][key]["old_type"]
-                    new_type = modified_cfg_dict[f"{dict_key_prefix}_typechanged"][key]["new_type"]
+                    old_type = modified_cfg_dict[f'{dict_key_prefix}_typechanged'][key]['old_type']
+                    new_type = modified_cfg_dict[f'{dict_key_prefix}_typechanged'][key]['new_type']
                     str_pre = f'{FADED_COLOR}{old_value} ({old_type})'
                     str_post = f'{FADED_COLOR} -> {get_value_prefix(dict_key_prefix)}{COLORS[TYPECHANGED]}{new_value} ({new_type}){COLORS[UNCHANGED]}'  # red
                 else:
@@ -683,7 +683,7 @@ class PortalMisc:
     
     @staticmethod 
     def interrupt_handler(cfg):
-        """Handles SIGINT signal (Ctrl+C) by exiting the program gracefully."""
+        '''Handles SIGINT signal (Ctrl+C) by exiting the program gracefully.'''
         def signal_handler(sig, frame):
             if DistMisc.is_main_process():
                 print('Caught SIGINT signal, exiting gracefully...')
@@ -832,7 +832,7 @@ class DistMisc:
     @staticmethod
     def init_distributed_mode(cfg):
         if cfg.env.device == 'cuda':
-            if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:  # 
+            if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ and int(os.environ['WORLD_SIZE']) > 1:
                 ConfigMisc.auto_track_setattr(cfg, ['env', 'world_size'], int(os.environ['WORLD_SIZE']))
                 ConfigMisc.auto_track_setattr(cfg, ['env', 'rank'], int(os.environ['RANK']))
                 if os.environ.get('LOCAL_RANK', None) is None:
@@ -1066,14 +1066,14 @@ class ModelMisc:
     
     @staticmethod
     def unfreeze_or_freeze_modules(modules_dict, is_trainable: bool, verbose=True):  # whether to update the parameters of the modules
-        """
+        '''
         Just change the trainable property of modules' parameters.
         
         Some special statistics(e.g. BatchNorm's running mean and variance) are still updated and Dropouts are still working 
         unless the modules are set to eval mode by calling ModelMisc.train_or_eval_modules().
         
         verbose: (default True) as this function is usually called only once --- before all epochs
-        """
+        '''
         if len(modules_dict) > 0:
             verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} parameters of the following submodules:'
             for name, submodule in modules_dict.items():
@@ -1085,11 +1085,11 @@ class ModelMisc:
     
     @staticmethod
     def unfreeze_or_freeze_params(params_dict, is_trainable: bool, verbose=True):  # whether to update these parameters 
-        """
+        '''
         Just change the trainable property of specific parameters.
         
         verbose: (default True) as this function is usually called only once --- before all epochs
-        """
+        '''
         if len(params_dict) > 0:
             verbose_string = f'{"Unfreeze" if is_trainable else "Freeze"} the following specific parameters:'
             for name, param in params_dict.items():
@@ -1100,14 +1100,14 @@ class ModelMisc:
     
     @staticmethod
     def train_or_eval_modules(modules_dict, is_train: bool, verbose=False):
-        """
+        '''
         Just change the behavior of some specific modules (e.g. BatchNorm, Dropout).
         
         Gradients of the modules are still computed (and updated if trainable)
         unless the modules are set to untrainable mode by calling ModelMisc.unfreeze_or_freeze_modules().
         
         verbose: (default False) as this function is usually called multiple times --- before one (each) epoch
-        """
+        '''
         if len(modules_dict) > 0:
             verbose_string = f'Set nn.Module mode of the following submodules to {"train" if is_train else "eval"}:'
             for name, submodule in modules_dict.items():

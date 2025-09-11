@@ -92,7 +92,7 @@ class ModelBase(nn.Module):
     
     def set_no_weight_decay_by_param_names(self, param_names_list):
         '''
-        all param.ndim <= 1 or name.endswith('.bias') are not decayed by default
+        all param.ndim <= 1 or any substring match in (bias, norm, alpha, beta, gamma) are not decayed by default
         the list of params' names that are not decayed can be customized by overriding this property
         
         the name here must match the name in model_without_ddp.named_parameters()
