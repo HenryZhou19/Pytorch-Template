@@ -95,10 +95,14 @@ class LeNet(ModelBase):
             default_param_dict['lr_base'] = default_param_dict['lr_base'] * conv_lr_scale
             default_param_dict['wd_base'] = default_param_dict['wd_base'] * conv_wd_scale
             
-        if 'conv1.weight' in default_param_dict['name']:
-            default_param_dict['logging'] = True
-        if 'fc1.weight' in default_param_dict['name']:
-            default_param_dict['logging'] = True
+        if 'conv' in default_param_dict['name']:
+            if default_param_dict['wd_base'] != 0:  # only log groups with weight decay
+                default_param_dict['logging'] = True
+                default_param_dict['logging_name'] = 'conv'
+        if 'fc' in default_param_dict['name']:
+            if default_param_dict['wd_base'] != 0:  # only log groups with weight decay
+                default_param_dict['logging'] = True
+                default_param_dict['logging_name'] = 'fc'
             
         return default_param_dict
 

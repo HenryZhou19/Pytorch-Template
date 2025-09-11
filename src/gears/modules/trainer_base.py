@@ -52,11 +52,11 @@ class TrainerBase:
         # model wrapper
         model = ModelMisc.ddp_wrapper(cfg, model_without_ddp)
         
-        # prepare for optimizers, schedulers, and scalers (cuda auto mixed precision(amp)) if needed, all in the integrated_optimizers
-        integrated_optimizers = OptimizerUtils.get_integrated_optimizers(cfg, model_without_ddp, train_loader, loggers)
-        
         # prepare for EMA (must be called after the ddp_wrapper to avoid potential problems)
         ema_container = self.model_manager.build_ema(model_without_ddp)
+        
+        # prepare for optimizers, schedulers, and scalers (cuda auto mixed precision(amp)) if needed, all in the integrated_optimizers
+        integrated_optimizers = OptimizerUtils.get_integrated_optimizers(cfg, model_without_ddp, train_loader, loggers)
         
         self._prepare_for_training(
             model=model,
@@ -151,7 +151,7 @@ class TrainerBase:
         return_dict = {}
         for integrated_optimizer in self.integrated_optimizers:
             return_dict[f'lr_{integrated_optimizer.root_module_name}_' + 'default'] = integrated_optimizer.lr_default
-            return_dict.update({f'lr_{integrated_optimizer.root_module_name}_' + param_group['name']: param_group['lr']
+            return_dict.update({f'lr_{integrated_optimizer.root_module_name}_' + param_group['logging_name']: param_group['lr']
                 for param_group in integrated_optimizer.param_groups if param_group['logging']})
         return return_dict
     
@@ -161,7 +161,7 @@ class TrainerBase:
         return_dict = {}
         for integrated_optimizer in self.integrated_optimizers:
             return_dict[f'wd_{integrated_optimizer.root_module_name}_' + 'default'] = integrated_optimizer.wd_default
-            return_dict.update({f'wd_{integrated_optimizer.root_module_name}_' + param_group['name']: param_group['weight_decay']
+            return_dict.update({f'wd_{integrated_optimizer.root_module_name}_' + param_group['logging_name']: param_group['weight_decay']
                 for param_group in integrated_optimizer.param_groups if param_group['logging']})
         return return_dict
                 
