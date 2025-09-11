@@ -1,7 +1,8 @@
+import warnings
+from collections import defaultdict
 from functools import partial
 from typing import List
 
-import torch.utils.checkpoint as checkpoint
 from torch import nn
 
 from src.utils.misc import LoggerMisc, ModelMisc
@@ -91,7 +92,7 @@ class ModelBase(nn.Module):
     
     def set_no_weight_decay_by_param_names(self, param_names_list):
         '''
-        all param.ndim <= 1 or name.endswith(".bias") are not decayed by default
+        all param.ndim <= 1 or name.endswith('.bias') are not decayed by default
         the list of params' names that are not decayed can be customized by overriding this property
         
         the name here must match the name in model_without_ddp.named_parameters()
@@ -151,10 +152,53 @@ class ModelBase(nn.Module):
             'lr_base': lr_default,
             'wd_base': wd_default,
             'logging': False,
+            'logging_name': None,
             MAYBE OTHER CUSTOMIZED OPTIONS
             }
         '''
         return default_param_dict
+    
+    def fuse_params_groups(verbose_param_group_list, fusing_keys):
+        '''
+        fuse param groups with the same values for all fusing_keys
+        example: fusing_keys = ('lr_base', 'wd_base')
+        
+        if you want to log group-wise lr & wd to tensorboard or other loggers,
+            you can add `'logging': True` to one of the input verbose_param_groups,
+            and better give a logging_name `'logging_name': str` as a shorter and more understandable one.
+        Note: if multiple params in the same fused group have logging=True, only the first one's logging_name will be used.
+        '''
+        fused_param_group_dict = defaultdict(lambda: {'name': None, 'params': [], 'logging': False, 'logging_name': None})
+        for param_group in verbose_param_group_list:
+            identifier = '|'.join([f'{k}:{param_group[k]}' for k in fusing_keys])
+            if fused_param_group_dict[identifier]['name'] is None:
+                fused_param_group_dict[identifier]['name'] = param_group['name'] + ',etc.'
+                for k in fusing_keys:
+                    assert k in param_group, f'Key {k} not found in param group {param_group}'
+                    fused_param_group_dict[identifier][k] = param_group[k]
+            assert len(param_group['params']) == 1, f'Each param group in verbose_param_group_list should only contain one param, but got {len(param_group["params"])} in {param_group}'
+            fused_param_group_dict[identifier]['params'].append(param_group['params'][0])
+            
+            # configure logging
+            if param_group['logging'] and not fused_param_group_dict[identifier]['logging']:
+                fused_param_group_dict[identifier]['logging'] = True
+                if param_group['logging_name'] is not None:
+                    fused_param_group_dict[identifier]['logging_name'] = param_group['logging_name']
+                else:
+                    fused_param_group_dict[identifier]['logging_name'] = param_group['name']
+            elif param_group['logging'] and fused_param_group_dict[identifier]['logging']:
+                if param_group['logging_name'] != fused_param_group_dict[identifier]['logging_name']:
+                    warnings.warn(f'Warning: Multiple params in the same fused group have logging=True, but different logging_name: {fused_param_group_dict[identifier]["logging_name"]} and {param_group["logging_name"]}. Only the first one will be used.')
+
+        # check all fused groups with logging=True have distinct logging_name
+        logging_name_set = set()
+        for param_group in fused_param_group_dict.values():
+            if param_group['logging']:
+                if param_group['logging_name'] in logging_name_set:
+                    raise ValueError(f'Duplicate logging_name {param_group["logging_name"]} found in fused param groups. Please make sure all fused groups with logging=True have distinct logging_name.')
+                logging_name_set.add(param_group['logging_name'])
+
+        return list(fused_param_group_dict.values())
     
     def configure_optimizer_param_groups(self, lr_default, wd_default, param_group_rules_cfg):
         '''
@@ -162,7 +206,7 @@ class ModelBase(nn.Module):
             configure param groups after doing freezing and before creating optimizers
         return: optimizer_param_group_list for the corresponding optimizer
         '''
-        optimizer_param_group_list = []
+        verbose_param_group_list = []
         no_wd_names = param_group_rules_cfg.no_wd_names
         no_wd_max_ndim = param_group_rules_cfg.no_wd_max_ndim
         for name, param in self.named_parameters():
@@ -174,6 +218,7 @@ class ModelBase(nn.Module):
                 'lr_base': lr_default,
                 'wd_base': wd_default,
                 'logging': False,
+                'logging_name': None,
                 }
             no_decay = False
             if param.ndim <= no_wd_max_ndim:
@@ -187,9 +232,9 @@ class ModelBase(nn.Module):
                 
             default_param_dict = self.check_special_param_group_rules(default_param_dict, param_group_rules_cfg)
         
-            optimizer_param_group_list.append(default_param_dict)
-        
-        return optimizer_param_group_list
+            verbose_param_group_list.append(default_param_dict)
+            
+        return ModelBase.fuse_params_groups(verbose_param_group_list, fusing_keys=('lr_base', 'wd_base'))
     
     def configure_max_grad_norm_groups(self, max_grad_norm_name_list: List[str], max_grad_norm_value_list: List[float], max_grad_norm_modules_list: List[List[str]]):
         max_grad_norm_group_dict = {}

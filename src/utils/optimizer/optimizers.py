@@ -115,23 +115,24 @@ class OptimizerUtils:
         print(f'\n[{optimizer_name}] parameter groups:', file=loggers.log_file)
         n_groups = len(optimizer_param_group_list)
         for i, group in enumerate(optimizer_param_group_list, start=1):
-            assert len(group['params']) == 1, 'Each param group should contain exactly one parameter tensor in this design.'
-            count_str = f'[{i}/{n_groups}]'
-            n_str = f'\t{count_str:9s}: {group.get("name", "N/A")}'
-            dash_count = max(name_total_width - len(n_str), 3)
-            dash_str = '-' * dash_count
-            lr = f'lr_base={group.get("lr_base", "N/A")}'
-            wd = f'wd_base={group.get("wd_base", "N/A")}'
-            print(f'{n_str} {dash_str} {lr:20s} {wd:20s}', file=loggers.log_file)
+            other_keys_str = ', '.join([f'{k}={v}' for k, v in group.items() if k not in ['name', 'params']])
+            print(f'\tParameter group [{i}/{n_groups}]: "{group.get("name", "N/A")}" ({other_keys_str})', file=loggers.log_file)
+            for p in group['params']:
+                n_str = f'\t\t{param_to_name.get(id(p), "<NOT_FOUND>")}'
+                dash_count = max(name_total_width - len(n_str), 3)
+                dash_str = '-' * dash_count
+                shape_str = f'shape {list(p.shape)}'
+                print(f'{n_str} {dash_str} {shape_str}', file=loggers.log_file)
         print('\n', file=loggers.log_file)
         loggers.log_file.flush()
         
     @staticmethod
-    def _print_max_grad_norm_groups(max_grad_norm_group_list, param_to_name, optimizer_name, loggers, name_total_width=57):
+    def _print_max_grad_norm_groups(max_grad_norm_group_list, param_to_name, optimizer_name, loggers, name_total_width=60):
         print(f'\n[{optimizer_name}] max grad norm groups:', file=loggers.log_file)
         n_groups = len(max_grad_norm_group_list)
         for i, group in enumerate(max_grad_norm_group_list, start=1):
-            print(f'\tMax grad norm group [{i}/{n_groups}]: "{group.get("name", "N/A")}" (max_grad_norm={group.get("value", "N/A")})', file=loggers.log_file)
+            other_keys_str = ', '.join([f'{k}={v}' for k, v in group.items() if k not in ['name', 'params']])
+            print(f'\tMax grad norm group [{i}/{n_groups}]: "{group.get("name", "N/A")}" ({other_keys_str})', file=loggers.log_file)
             for p in group['params']:
                 n_str = f'\t\t{param_to_name.get(id(p), "<NOT_FOUND>")}'
                 dash_count = max(name_total_width - len(n_str), 3)
