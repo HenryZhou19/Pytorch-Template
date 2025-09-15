@@ -1,7 +1,7 @@
 import datetime
-import statistics
-from collections import defaultdict, deque
+from collections import defaultdict
 from math import nan
+from typing import List
 
 import numpy as np
 import torch
@@ -10,18 +10,18 @@ import torch.distributed as dist
 from .misc import ConfigMisc, DistMisc, LoggerMisc, TimeMisc
 
 __all__ = [
-    'MetricLogger',
     'ValueMetric',
+    'MetricLogger',
+    'LossGuard',
     ]
 
 class ValueMetric(object):
-    def __init__(self, window_size=None, format=None, final_format=None, high_prior=False, low_prior=False, no_print=False, no_sync=False):
+    def __init__(self, format=None, final_format=None, high_prior=False, low_prior=False, no_print=False, no_sync=False):
         if format is None:  # show current value and average when running
             format = '{value:.4f} ({avg:.4f})'
-        if final_format is None:  # show average, min, max, std when one epoch finished
-            final_format = '({avg:.4f} ± {std:.4f}) [{min:.4f}, {max:.4f}]'
+        if final_format is None:  # only show average when one epoch finished (synced if needed)
+            final_format = '({avg:.4f})'
         self.value_now = 0.0
-        self.deque = deque(maxlen=window_size)
         self.sample_count = 0
         self.total = 0.0
         self.format = format
@@ -35,43 +35,23 @@ class ValueMetric(object):
 
     def append_one_value(self, value, sample_count=1):
         # maybe the mean of one batch, so sample_count can be larger than 1
-        self.deque.append(value)
         self.value_now = value
         self.sample_count += sample_count
         self.total += value * sample_count
         
     def prepare_sync_metrics(self):
         assert not self.synced, 'metrics have been synced.'
-        queue = torch.as_tensor(list(self.deque), dtype=torch.float64, device='cpu')
         summary = torch.as_tensor([self.sample_count, self.total], dtype=torch.float64, device='cuda')
-        return queue, summary
+        return summary
     
-    def write_synced_metrics(self, queue, summary):
-        queue = queue.tolist()
+    def write_synced_metrics(self, summary):
         summary = summary.tolist()
-        self.deque.clear()
-        self.deque += list(queue)
         self.sample_count = int(summary[0])
         self.total = summary[1]
     
     @property
-    def std(self):
-        try:
-            return statistics.stdev(self.deque) if len(self.deque) > 1 else nan
-        except:
-            return nan
-    
-    @property
     def avg(self):
         return self.total / self.sample_count if self.sample_count > 0 else nan
-    
-    @property
-    def min(self):
-        return min(self.deque) if len(self.deque) > 0 else nan
-    
-    @property
-    def max(self):
-        return max(self.deque) if len(self.deque) > 0 else nan
 
     @property
     def value(self):
@@ -85,9 +65,6 @@ class ValueMetric(object):
         return f.format(
             value=self.value if 'value' in f else None,
             avg=self.avg if 'avg' in f else None,
-            min=self.min if 'min' in f else None,
-            max=self.max if 'max' in f else None,
-            std=self.std if 'std' in f else None,
         )
 
 
@@ -128,7 +105,6 @@ class MetricLogger(object):
                 v = v.item()
             assert isinstance(v, (float, int)), f'{v} is {type(v)}, not float or int.'
             self.metrics[k] = ValueMetric(
-                window_size=1,
                 format='({value:.4f})',
                 final_format='({value:.4f})',
                 no_sync=True,
@@ -162,31 +138,25 @@ class MetricLogger(object):
         if not DistMisc.is_dist_avail_and_initialized():
             return
         assert not self.synced, 'metrics have been synced.'
-        queue_list = []
         summary_list = []
         try:
             for metric in self.metrics.values():
                 if metric.require_sync:
-                    queue, summary = metric.prepare_sync_metrics()
-                    queue_list.append(queue)
+                    summary = metric.prepare_sync_metrics()
                     summary_list.append(summary)
-            queue_stack = torch.stack(queue_list, dim=0)
             summary_stack = torch.stack(summary_list, dim=0)
             dist.barrier()
             dist.all_reduce(summary_stack)
-            gathered_queue_stack = [None for _ in range(DistMisc.get_world_size())]
-            dist.all_gather_object(gathered_queue_stack, queue_stack)
-            queue_stack = torch.cat(gathered_queue_stack, dim=1)
             require_sync_metric_idx = 0
             for metric in self.metrics.values():
                 if metric.require_sync:
-                    metric.write_synced_metrics(queue_stack[require_sync_metric_idx], summary_stack[require_sync_metric_idx])
+                    metric.write_synced_metrics(summary_stack[require_sync_metric_idx])
                     require_sync_metric_idx += 1
         except Exception as e:
             rank = DistMisc.get_rank()
             print(f'Rank: {rank}, error in MetricLogger._synchronize_all_processes():', force=True)
             for name, metric in self.metrics.items():
-                print(f'\tRank: {rank}, metric name: {name}\n\t\ttype: {type(metric.value)}, sample_count: {metric.sample_count}, total: {metric.total}\n\t\tlength of deque: {len(metric.deque) if hasattr(metric, "deque") else "N/A"}, require_sync: {metric.require_sync}, synced: {metric.synced}', force=True)
+                print(f'\tRank: {rank}, metric name: {name}\n\t\ttype: {type(metric.value)}, sample_count: {metric.sample_count}, total: {metric.total}\n\t\trequire_sync: {metric.require_sync}, synced: {metric.synced}', force=True)
             raise e
         self.synced = True
 
@@ -286,3 +256,75 @@ class MetricLogger(object):
             print(
                 '\n' * (self.pbar.postlines + 1) + '\033[34m' + final_msg, '\033[0m\n'
             )
+
+
+class LossGuard:
+    def __init__(self, scalers: List[torch.cuda.amp.GradScaler] | List[None], tolerance: int = 5):
+        '''
+        Args:
+            mlogger: MetricLogger, to show all metrics when nan/inf detected.
+            tolerance: (int) Number of consecutive nan/inf before aborting.
+            scalers: List[torch.cuda.amp.GradScaler] | None
+        '''
+        self.tolerance = tolerance
+        self.valid_scalers = [scaler for scaler in scalers if scaler is not None]
+        
+        self.nan_inf_count = 0
+        self.prev_scales = [None] * len(self.valid_scalers)
+
+    def reset(self):
+        self.nan_inf_count = 0
+        self.prev_scales = [None] * len(self.valid_scalers)
+        
+    def _check_one_value_safe(self, loss):
+        if torch.isnan(loss).any() or torch.isinf(loss).any():
+            return False
+        return True
+
+    def check(self, loss_dict: dict, mlogger: MetricLogger, model: torch.nn.Module | None = None):
+        '''
+        loss_dict: dict of losses to be checked
+        model: torch.nn.Module | None, to check model parameters and gradients
+        '''
+        safe_to_backward = True
+        
+        for k, loss in loss_dict.items():
+            if not self._check_one_value_safe(loss):
+                safe_to_backward = False
+                print(LoggerMisc.block_wrapper(f'Rank {DistMisc.get_rank()}: [LossGuard] `{k}` has nan/inf: {loss}, already counts: {self.nan_inf_count}/{self.tolerance}', '#'), force=True)
+
+        if not safe_to_backward:
+            # check amp scale and set safe_to_backward to True if scale is reduced
+            if len(self.valid_scalers) > 0:
+                all_scalers_safe = True
+                for idx, scaler in enumerate(self.valid_scalers):
+                    prev_scale = self.prev_scales[idx]
+                    curr_scale = scaler.get_scale()
+                    if prev_scale is not None:
+                        if curr_scale < prev_scale:
+                            print(f'Rank {DistMisc.get_rank()}: [LossGuard] AMP scale in scaler No.{idx + 1} reduced from {prev_scale} to {curr_scale}, safe to backward.', force=True)
+                        else:
+                            print(f'Rank {DistMisc.get_rank()}: [LossGuard] AMP scale in scaler No.{idx + 1} not reduced: {prev_scale} -> {curr_scale}.', force=True)
+                            all_scalers_safe = False
+                    self.prev_scales[idx] = curr_scale
+                if all_scalers_safe:
+                    safe_to_backward = True
+        
+        if not safe_to_backward:
+            self.nan_inf_count += 1
+            print(f'Rank {DistMisc.get_rank()}: [LossGuard] All metrics:', force=True)
+            print('\t' + mlogger.metrics_str(synced=False).replace(mlogger.delimiter, '\n\t'), force=True)
+            if model is not None:
+                for n, p in model.named_parameters():
+                    if torch.isnan(p.data).any() or torch.isinf(p.data).any():
+                        print(f'[LossGuard] Parameter `{n}` has nan/inf!', force=True)
+                    if p.grad is not None and (torch.isnan(p.grad).any() or torch.isinf(p.grad).any()):
+                        print(f'[LossGuard] Grad `{n}` has nan/inf!', force=True)
+                        
+            if self.nan_inf_count > self.tolerance:
+                LoggerMisc.get_wandb_pid(kill_all=True)
+                raise RuntimeError(f'[LossGuard] NAN/INF detected {self.nan_inf_count} consecutive steps — aborting.')
+        else:
+            self.nan_inf_count = 0
+        
+        return safe_to_backward

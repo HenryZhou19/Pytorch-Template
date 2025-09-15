@@ -97,6 +97,11 @@ class TrainerBase:
         self.best_val_metrics = {}
         self.train_pbar = None
         self.val_pbar = None
+        self.nan_inf_tolerance = self.cfg.trainer.nan_inf_tolerance
+        self.loss_guard = LossGuard(
+            scalers=[integrated_optimizer.scaler for integrated_optimizer in self.integrated_optimizers if integrated_optimizer.scaler is not None],
+            tolerance=self.nan_inf_tolerance,
+            )
         self.dist_eval = self.cfg.trainer.dist_eval
         
         assert self.cfg.trainer.grad_accumulation > 0 and isinstance(self.cfg.trainer.grad_accumulation, int), 'grad_accumulation should be a positive integer.'
@@ -513,7 +518,7 @@ class TrainerBase:
             
         return outputs, loss_dict, metrics_dict
     
-    def _backward_and_step(self, loss_dict: Dict[str, torch.Tensor]):
+    def _backward_and_step(self, loss_dict: Dict[str, torch.Tensor], safe_to_backward: bool):
         grad_norm_dict = {}
         def _backward():
             for integrated_optimizer in self.integrated_optimizers:
@@ -534,20 +539,15 @@ class TrainerBase:
                 self.ema_container.update()
             return grad_norm_dict
         
-        for loss in loss_dict.values():
-            if loss is not None:
-                if not math.isfinite(loss) and self.integrated_optimizers[0].scaler is None:
-                    LoggerMisc.get_wandb_pid(kill_all=True)
-                    raise ValueError(f'Rank {DistMisc.get_rank()}: Loss is {loss}, stopping training.')
-        
-                if self.do_gradient_accumulation:
-                    loss /= self.gradient_accumulation_steps  # Assume that all losses are mean-reduction. (Otherwise meaningless)
-                    
+        if safe_to_backward:
+            for k, loss in loss_dict.items():
+                if loss is not None and self.do_gradient_accumulation:
+                    loss_dict[k] = loss / self.gradient_accumulation_steps  # Assume that all losses are mean-reduction. (Otherwise meaningless)
+            _backward()
+            
         if self.do_gradient_accumulation:
             self.gradient_accumulation_count += 1
-        
-        _backward()
-        
+            
         # if self.do_gradient_accumulation and (self.finish_backward_iters % self.trainloader_len != 0):  # not the last iter of the epoch
         if self.do_gradient_accumulation:  # just drop the last few steps if not divisible
             if self.gradient_accumulation_count % self.gradient_accumulation_steps == 0:
@@ -576,9 +576,9 @@ class TrainerBase:
         mlogger.add_metrics([{
             **{f'loss_{integrated_optimizer.root_module_name}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers},
             **{f'grad_norm_{integrated_optimizer.root_module_name}_{max_grad_norm_group["name"]}': ValueMetric(high_prior=True, no_sync=True) for integrated_optimizer in self.integrated_optimizers for max_grad_norm_group in integrated_optimizer.max_grad_norm_group_list},
-            **{lr_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for lr_group in self.lr_groups.keys()},
-            **{wd_group: ValueMetric(format='{value:.2e}', final_format='[{min:.2e}, {max:.2e}]', low_prior=True, no_sync=True) for wd_group in self.wd_groups.keys()},
-            'epoch': ValueMetric(window_size=1, no_print=True, no_sync=True),
+            **{lr_group: ValueMetric(format='{value:.2e} ({avg:.2e})', final_format='({avg:.2e})', low_prior=True, no_sync=True) for lr_group in self.lr_groups.keys()},
+            **{wd_group: ValueMetric(format='{value:.2e} ({avg:.2e})', final_format='({avg:.2e})', low_prior=True, no_sync=True) for wd_group in self.wd_groups.keys()},
+            'epoch': ValueMetric(no_print=True, no_sync=True),
             }])
         first_iter = True
         for batch in mlogger.log_every(self.train_loader):
@@ -593,7 +593,8 @@ class TrainerBase:
                 **metrics_dict,
             )
             
-            grad_norm_dict = self._backward_and_step(loss_dict)
+            safe_to_backward = self.loss_guard.check(loss_dict=loss_dict, mlogger=mlogger, model=self.model)
+            grad_norm_dict = self._backward_and_step(loss_dict=loss_dict, safe_to_backward=safe_to_backward)
             
             mlogger.update_metrics(
                 epoch=self.finished_backward_iters / self.trainloader_len,
