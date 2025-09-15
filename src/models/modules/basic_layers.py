@@ -3,6 +3,8 @@ import math
 import torch
 from torch import nn
 
+from src.utils.misc import LoggerMisc
+
 from .basic_functions import (adapt_conv_2d_load_from_state_dict,
                               adapt_conv_3d_load_from_state_dict,
                               adapt_L_C_parameter_load_from_state_dict,
@@ -172,7 +174,7 @@ class PositionalEncoding(nn.Module):
         else:
             return self.pe
     
-    def expand_pe(self, xx: torch.Tensor, seq_dim):
+    def expand_pe(self, xx: torch.Tensor, seq_dim: int):
         seq_length = xx.shape[seq_dim]        
         assert seq_length <= self.max_seq_length, f'x.shape[{seq_dim}]={xx.shape[seq_dim]} > max_seq_length={self.max_seq_length}'
         
@@ -182,7 +184,7 @@ class PositionalEncoding(nn.Module):
         shape[-1] = self.d_pos
         return pe.reshape(shape).to(xx.dtype)
         
-    def forward(self, x: torch.Tensor, seq_dim):  #  x: [..., L, ..., d_model]
+    def forward(self, x: torch.Tensor, seq_dim: int):  #  x: [..., L, ..., d_model]
         assert self.d_end_idx <= x.shape[-1], f'd_end_idx={self.d_end_idx} should be <= x.shape[-1]={x.shape[-1]}'
         xx = x[..., self.d_start_idx:self.d_end_idx]  # [..., L, ..., d_pos]
         x[..., self.d_start_idx:self.d_end_idx] = xx + self.dropout(self.expand_pe(xx, seq_dim))
@@ -198,6 +200,62 @@ class PositionalEncoding(nn.Module):
             state_dict, prefix, local_metadata, strict,
             missing_keys, unexpected_keys, error_msgs,
         )
+
+
+class PositionalEncoding2D(nn.Module):
+    def __init__(self, pos_embed_mode, grid_size, embed_dim):
+        super().__init__()
+        HH, WW = tuple(grid_size)
+        if 'sinusoidal' in pos_embed_mode:
+            assert embed_dim % 2 == 0, 'embed_dim should be even if using sinusoidal positional encoding'
+            pos_embed_dim = embed_dim // 2
+            h_pos_enc = PositionalEncoding(d_pos=pos_embed_dim, max_seq_length=HH, type=pos_embed_mode, init_magnitute=0.02, d_start_idx=0)
+            w_pos_enc = PositionalEncoding(d_pos=pos_embed_dim, max_seq_length=WW, type=pos_embed_mode, init_magnitute=0.02, d_start_idx=pos_embed_dim)
+        else:  # learnable or none
+            h_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=HH, type=pos_embed_mode, init_magnitute=0.02)
+            w_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=WW, type=pos_embed_mode, init_magnitute=0.02)
+        print(LoggerMisc.block_wrapper(f'{self.__class__.__name__} using pos_embed mode: {pos_embed_mode}!', s='#'))
+        self.h_pos_enc = h_pos_enc
+        self.w_pos_enc = w_pos_enc
+        self.pos_embed_mode = pos_embed_mode
+        self.embed_dim = embed_dim
+        self.grid_size = grid_size
+        
+    def forward(self, x: torch.Tensor):
+        # [N, HH, WW, C]
+        x = self.h_pos_enc(x, seq_dim=1)
+        x = self.w_pos_enc(x, seq_dim=2)
+        return x
+
+
+class PositionalEncoding3D(nn.Module):
+    def __init__(self, pos_embed_mode, grid_size, embed_dim):
+        super().__init__()
+        DD, HH, WW = tuple(grid_size)
+        if 'sinusoidal' in pos_embed_mode:
+            assert embed_dim % 3 == 0, 'embed_dim should be even if using sinusoidal positional encoding'
+            pos_embed_dim = embed_dim // 3
+            d_pos_enc = PositionalEncoding(d_pos=pos_embed_dim, max_seq_length=DD, type=pos_embed_mode, init_magnitute=0.02, d_start_idx=0)
+            h_pos_enc = PositionalEncoding(d_pos=pos_embed_dim, max_seq_length=HH, type=pos_embed_mode, init_magnitute=0.02, d_start_idx=pos_embed_dim)
+            w_pos_enc = PositionalEncoding(d_pos=pos_embed_dim, max_seq_length=WW, type=pos_embed_mode, init_magnitute=0.02, d_start_idx=pos_embed_dim * 2)
+        else:  # learnable or none
+            d_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=DD, type=pos_embed_mode, init_magnitute=0.02)
+            h_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=HH, type=pos_embed_mode, init_magnitute=0.02)
+            w_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=WW, type=pos_embed_mode, init_magnitute=0.02)
+        print(LoggerMisc.block_wrapper(f'{self.__class__.__name__} using pos_embed mode: {pos_embed_mode}!', s='#'))
+        self.d_pos_enc = d_pos_enc
+        self.h_pos_enc = h_pos_enc
+        self.w_pos_enc = w_pos_enc
+        self.pos_embed_mode = pos_embed_mode
+        self.embed_dim = embed_dim
+        self.grid_size = grid_size
+        
+    def forward(self, x: torch.Tensor):
+        # [N, DD, HH, WW, C]
+        x = self.d_pos_enc(x, seq_dim=1)
+        x = self.h_pos_enc(x, seq_dim=2)
+        x = self.w_pos_enc(x, seq_dim=3)
+        return x
 
 
 class PatchEmbedding2D(nn.Module):

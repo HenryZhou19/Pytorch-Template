@@ -161,28 +161,34 @@ class MetricLogger(object):
     def _synchronize_all_processes(self):
         if not DistMisc.is_dist_avail_and_initialized():
             return
-        
         assert not self.synced, 'metrics have been synced.'
-        self.synced = True
         queue_list = []
         summary_list = []
-        for metric in self.metrics.values():
-            if metric.require_sync:
-                queue, summary = metric.prepare_sync_metrics()
-                queue_list.append(queue)
-                summary_list.append(summary)
-        queue_stack = torch.stack(queue_list, dim=0)
-        summary_stack = torch.stack(summary_list, dim=0)
-        dist.barrier()
-        dist.all_reduce(summary_stack)
-        gathered_queue_stack = [None for _ in range(DistMisc.get_world_size())]
-        dist.all_gather_object(gathered_queue_stack, queue_stack)
-        queue_stack = torch.cat(gathered_queue_stack, dim=1)
-        require_sync_metric_idx = 0
-        for metric in self.metrics.values():
-            if metric.require_sync:
-                metric.write_synced_metrics(queue_stack[require_sync_metric_idx], summary_stack[require_sync_metric_idx])
-                require_sync_metric_idx += 1
+        try:
+            for metric in self.metrics.values():
+                if metric.require_sync:
+                    queue, summary = metric.prepare_sync_metrics()
+                    queue_list.append(queue)
+                    summary_list.append(summary)
+            queue_stack = torch.stack(queue_list, dim=0)
+            summary_stack = torch.stack(summary_list, dim=0)
+            dist.barrier()
+            dist.all_reduce(summary_stack)
+            gathered_queue_stack = [None for _ in range(DistMisc.get_world_size())]
+            dist.all_gather_object(gathered_queue_stack, queue_stack)
+            queue_stack = torch.cat(gathered_queue_stack, dim=1)
+            require_sync_metric_idx = 0
+            for metric in self.metrics.values():
+                if metric.require_sync:
+                    metric.write_synced_metrics(queue_stack[require_sync_metric_idx], summary_stack[require_sync_metric_idx])
+                    require_sync_metric_idx += 1
+        except Exception as e:
+            rank = DistMisc.get_rank()
+            print(f'Rank: {rank}, error in MetricLogger._synchronize_all_processes():', force=True)
+            for name, metric in self.metrics.items():
+                print(f'\tRank: {rank}, metric name: {name}\n\t\ttype: {type(metric.value)}, sample_count: {metric.sample_count}, total: {metric.total}\n\t\tlength of deque: {len(metric.deque) if hasattr(metric, "deque") else "N/A"}, require_sync: {metric.require_sync}, synced: {metric.synced}', force=True)
+            raise e
+        self.synced = True
 
     def log_every(self, iterable):
         self.iter_len = len(iterable)
