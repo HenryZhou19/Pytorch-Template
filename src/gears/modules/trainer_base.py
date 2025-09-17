@@ -313,7 +313,7 @@ class TrainerBase:
                     del fake_ema_container
             else:  # use state_dict[model] to load
                 model_key, criterion_key = 'model', 'criterion'
-                print(f'\nLoading {pretrain_model_name} (key="model") from {model_path}')
+                print(f'\nLoading {pretrain_model_name} (key="[{model_key}, {criterion_key}]") from {model_path}')
                 ModelMisc.load_state_dict_with_more_info(
                     self.model_without_ddp,
                     checkpoint[model_key],

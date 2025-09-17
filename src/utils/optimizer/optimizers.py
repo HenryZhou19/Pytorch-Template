@@ -178,7 +178,7 @@ class OptimizerUtils:
             print('\nUsing torch.amp.GradScaler for automatic mixed precision (AMP) training with fp16.\n')
             scaler = torch.amp.GradScaler(device='cuda', enabled=True)
         else:
-            print(f'\nNot using automatic mixed precision (AMP) training as amp_enabled is set to {cfg.amp.amp_enabled} (maybe caused by CPU training) and amp_mode is set to "{cfg.amp.amp_mode}".\n')
+            print(f'\nNot using GradScaler as amp_enabled is set to {cfg.amp.amp_enabled} (maybe caused by CPU training) and amp_mode is set to "{cfg.amp.amp_mode}".\n')
             scaler = None
         
         # prepare for lr and wd scale schedulers
