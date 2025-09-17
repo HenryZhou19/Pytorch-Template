@@ -1220,6 +1220,8 @@ class LoggerMisc:
                         loggers.wandb_run.log({k: v}, step=step)  # log epoch without group
                     elif k.startswith('lr_') or k.startswith('wd_') or 'schedule' in k:
                         loggers.wandb_run.log({f'{group}_schedule/{k}': v}, step=step)
+                    elif k.startswith('grad_norm_'):
+                        loggers.wandb_run.log({f'{group}_grad_norm/{k}': v}, step=step)
                     else:
                         loggers.wandb_run.log({f'{group}/{k}': v}, step=step)
                     # loggers.wandb_run.log({'output_image': [wandb.Image(output_dict['output_image'])]}, step=step)
@@ -1230,6 +1232,8 @@ class LoggerMisc:
                         loggers.tensorboard_run.add_scalar(k, v, global_step=step)  # log epoch without group
                     elif k.startswith('lr_') or k.startswith('wd_') or 'schedule' in k:
                         loggers.tensorboard_run.add_scalar(f'{group}_schedule/{k}', v, global_step=step)
+                    elif k.startswith('grad_norm_'):
+                        loggers.tensorboard_run.add_scalar(f'{group}_grad_norm/{k}', v, global_step=step)
                     else:
                         loggers.tensorboard_run.add_scalar(f'{group}/{k}', v, global_step=step)
                     # loggers.tensorboard_run.add_image('output_image', output_dict['output_image'], global_step=step)
