@@ -11,6 +11,26 @@ from .basic_functions import (adapt_conv_2d_load_from_state_dict,
                               trunc_normal_init_linear_weights)
 
 
+class DropPath(nn.Module):
+    def __init__(self, drop_prob: float = 0., scale_by_keep: bool = True):
+        super().__init__()
+        self.drop_prob = drop_prob
+        self.scale_by_keep = scale_by_keep
+        
+    def forward(self, x: torch.Tensor):
+        if self.drop_prob == 0. or not self.training:
+            return x
+        keep_prob = 1 - self.drop_prob
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
+        random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
+        if keep_prob > 0.0 and self.scale_by_keep:
+            random_tensor.div_(keep_prob)
+        return x * random_tensor
+    
+    def extra_repr(self):
+        return f'drop_prob={round(self.drop_prob,3):0.3f}'
+
+
 class MLP(nn.Module):
     def __init__(self, in_channel: int, out_channels: list, activation_layer: nn.Module=nn.SiLU, norm_layer=nn.Identity, dropout=0.0, final_activation=False, trunc_normal_init=False) -> None:
         super().__init__()

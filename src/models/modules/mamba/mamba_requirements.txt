@@ -1,3 +1,0 @@
-## make sure the actually used CUDA >= 11.6
-causal-conv1d
-mamba-ssm  # ==2.1.0 or ==2.2.2 will be ok

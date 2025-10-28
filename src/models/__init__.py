@@ -1,10 +1,9 @@
 from copy import deepcopy
 
-import ema_pytorch
 import torch
-from ema_pytorch import EMA
 
 from src.utils.misc import ImportMisc
+from src.utils.optimizer import EMAContainer
 
 from .modules.model_base import ModelBase, model_register
 
@@ -29,9 +28,7 @@ class ModelManager(object):
         return model
     
     def build_ema(self, model_without_ddp, verbose=True) -> ModelBase:
-        if self.cfg.model.ema.ema_enabled:
-            assert self.cfg.model.ema.ema_type == 'EMA', 'only support vanilla EMA for now.'
-            
+        if self.cfg.model.ema.ema_enabled:            
             ema_init_kwargs = {
                 'model': model_without_ddp,
                 'beta': self.cfg.model.ema.ema_beta,
@@ -48,7 +45,7 @@ class ModelManager(object):
                 ema_model.load_state_dict(model_without_ddp.state_dict())
                 
             ema_init_kwargs['ema_model'] = ema_model
-            ema_container: EMA = ema_pytorch.__dict__.get(self.cfg.model.ema.ema_type)(**ema_init_kwargs).to(self.device)
+            ema_container = EMAContainer(**ema_init_kwargs).to(self.device)
             
             assert hasattr(ema_container.ema_model, 'ema_mode'), 'ema_container.ema_model doesn\'t have ema_mode attribute, which means the model is not a ModelBase instance.'
             ema_container.ema_model.set_ema_mode(True)

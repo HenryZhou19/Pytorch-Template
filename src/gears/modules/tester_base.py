@@ -5,13 +5,13 @@ from functools import partial
 from types import SimpleNamespace
 
 import torch
-from ema_pytorch import EMA
 
 from src.criterions import CriterionBase, CriterionManager
 from src.datasets import DataManager
 from src.datasets.modules.data_module_base import DataLoaderX
 from src.models import ModelBase, ModelManager
 from src.utils.misc import *
+from src.utils.optimizer import EMAContainer
 from src.utils.progress_logger import *
 from src.utils.register import Register
 
@@ -61,7 +61,7 @@ class TesterBase:
     def _prepare_for_testing(
         self,
         model_without_ddp: ModelBase,
-        ema_container: EMA,
+        ema_container: EMAContainer,
         postprocessor: None,
         criterion: CriterionBase,
         test_loader: DataLoaderX,

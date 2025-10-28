@@ -9,14 +9,14 @@ from types import SimpleNamespace
 from typing import Dict, List, Union
 
 import torch
-from ema_pytorch import EMA
 
 from src.criterions import CriterionBase, CriterionManager
 from src.datasets import DataManager
 from src.datasets.modules.data_module_base import DataLoaderX
 from src.models import ModelBase, ModelManager
 from src.utils.misc import *
-from src.utils.optimizer import IntegratedOptimizer, OptimizerUtils
+from src.utils.optimizer import (EMAContainer, IntegratedOptimizer,
+                                 OptimizerUtils)
 from src.utils.progress_logger import *
 from src.utils.register import Register
 
@@ -72,7 +72,7 @@ class TrainerBase:
     def _prepare_for_training(
         self,
         model: Union[ModelBase, torch.nn.parallel.DistributedDataParallel],
-        ema_container: EMA,
+        ema_container: EMAContainer,
         postprocessor: None,
         criterion: CriterionBase,
         train_loader: DataLoaderX,
