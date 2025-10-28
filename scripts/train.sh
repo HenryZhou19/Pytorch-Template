@@ -183,7 +183,7 @@ else
     master_port=$start_port
     
     while [ $master_port -le $end_port ]; do
-      if netstat -tuln | grep -q ":$master_port "; then
+      if ss -tuln | grep -q ":$master_port "; then
         # echo "Port: $master_port is occupied."
         ((master_port++))
       else

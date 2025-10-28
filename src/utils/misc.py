@@ -818,7 +818,7 @@ class DistMisc:
         return int(os.environ['LOCAL_RANK']) == 0
     
     @staticmethod
-    def setup_for_distributed(is_master):
+    def setup_for_distributed_print(is_master):
         # This function disables printing when not in master process
         import builtins as __builtin__
         builtin_print = __builtin__.print
@@ -854,7 +854,11 @@ class DistMisc:
                 # dist.distributed_c10d.logger.setLevel(logging.WARNING)  # this line may cause the multi-machine ddp to hang
                 
                 dist.init_process_group(
-                    backend=cfg.env.dist_backend, init_method=cfg.env.dist_url, world_size=cfg.env.world_size, rank=cfg.env.rank
+                    backend=cfg.env.dist_backend,
+                    init_method=cfg.env.dist_url,
+                    world_size=cfg.env.world_size,
+                    rank=cfg.env.rank,
+                    device_id=torch.device(f'cuda:{cfg.env.local_rank}'),
                 )
                 # DistMisc.avoid_print_mess()
                 # print(f'INFO - distributed init (Rank {cfg.env.rank}): {cfg.env.dist_url}')
@@ -867,7 +871,7 @@ class DistMisc:
                 ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_backend'], 'None')
                 ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_url'], 'None')
 
-            DistMisc.setup_for_distributed(cfg.env.rank == 0)
+            DistMisc.setup_for_distributed_print(cfg.env.rank == 0)
             
             if cfg.env.rank != cfg.env.local_rank:
                 if DistMisc.is_node_first_rank():
@@ -880,7 +884,7 @@ class DistMisc:
             ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_backend'], 'None')
             ConfigMisc.auto_track_setattr(cfg, ['env', 'dist_url'], 'None')
             
-            DistMisc.setup_for_distributed(True)
+            DistMisc.setup_for_distributed_print(True)
             
             if getattr(cfg.amp, 'amp_enabled', False):  # in train mode, check AMP
                 print(LoggerMisc.block_wrapper('AMP is not supported on CPU currently. Automatically turning off AMP by setting "cfg.amp.amp_enabled = False".', '#'))
