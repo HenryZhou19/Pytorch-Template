@@ -6,7 +6,7 @@ from .modules.criterion_base import CriterionBase, criterion_register
 
 ImportMisc.import_current_dir_all(__file__, __name__)
 
-class CriterionManager(object):
+class CriterionManager:
     def __init__(self, cfg, loggers) -> None:
         self.cfg = cfg
         self.loggers = loggers

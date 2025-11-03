@@ -5,7 +5,7 @@ from .modules.data_module_base import (DataLoaderX, DataModuleBase,
 
 ImportMisc.import_current_dir_all(__file__, __name__)
 
-class DataManager(object):
+class DataManager:
     def __init__(self, cfg, loggers) -> None:
         self.loggers = loggers
         self.cfg = cfg

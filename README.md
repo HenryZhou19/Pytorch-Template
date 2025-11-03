@@ -13,11 +13,14 @@
 
 ## 🚀 Easy Start
 ### Create a new Python environment and install the requirements
- ```
- # use conda as an example
- conda create -n NEW_ENV_NAME python=3.9
- pip install -r requirements.txt
- ```
+For this version, `Python 3.12` and `Pytorch 2.7.1` with `CUDA 11.8` (included in the requirements.txt file) are recommended.  
+`CUDA 11.8` is the minimum requirement for supporting this project to use a `non-outdated Pytorch` version.  
+Higher versions of CUDA and Pytorch may also work well.
+```
+# use conda as an example
+conda create -n NEW_ENV_NAME python=3.12
+pip install -r requirements.txt
+```
 ### Run the LeNet model to check if this template works well on your device
 * Important notices: 
     * Main entry points are the shell scripts in the 'scripts' folder.  
@@ -64,10 +67,10 @@
     # i.e. 4+2 GPUs
 
     # node 0 (master)
-    bash scripts/multi_machine_train.sh -d 0,1,2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 0 -c configs/templates/train_lenet.yaml
+    bash scripts/multi_machine_static_rdzv_train.sh -d 0,1,2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 0 -c configs/templates/train_lenet.yaml
 
     # node 1 (slave_1)
-    bash scripts/multi_machine_train.sh -d 2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 1 -c configs/templates/train_lenet.yaml
+    bash scripts/multi_machine_static_rdzv_train.sh -d 2,3 -a MASTER_ADDR -p MASTER_PORT -nn 2 -n 1 -c configs/templates/train_lenet.yaml
 
     # '-a' means '--master_addr' in torchrun.
     # '-p' means '--master_port' in torchrun.

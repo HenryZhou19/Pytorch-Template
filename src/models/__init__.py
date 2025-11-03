@@ -9,7 +9,7 @@ from .modules.model_base import ModelBase, model_register
 
 ImportMisc.import_current_dir_all(__file__, __name__)
 
-class ModelManager(object):
+class ModelManager:
     def __init__(self, cfg, loggers) -> None:
         self.cfg = cfg
         self.loggers = loggers

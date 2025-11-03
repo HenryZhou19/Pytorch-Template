@@ -15,7 +15,8 @@ __all__ = [
     'LossGuard',
     ]
 
-class ValueMetric(object):
+
+class ValueMetric:
     def __init__(self, format=None, final_format=None, high_prior=False, low_prior=False, no_print=False, no_sync=False):
         if format is None:  # show current value and average when running
             format = '{value:.4f} ({avg:.4f})'
@@ -68,7 +69,7 @@ class ValueMetric(object):
         )
 
 
-class MetricLogger(object):
+class MetricLogger:
     def __init__(self, cfg, loggers, pbar=None, delimiter='  ', header='', epoch_str=''):
         self.print_freq=cfg.info.cli_log_freq
         self.debug=cfg.special.debug
