@@ -797,7 +797,7 @@ class DistMisc:
         def __call__(self) -> List[torch.Tensor] | torch.Tensor:
             return self.wait_for_work()
     
-    @ staticmethod
+    @staticmethod
     def is_dist_avail_and_initialized():
         return dist.is_available() and dist.is_initialized()
     
