@@ -179,9 +179,9 @@ class OptimizerUtils:
             scaler = torch.amp.GradScaler(device='cuda', enabled=True)
         else:
             if not cfg.amp.amp_enabled:
-                print(f'\nNot using GradScaler as amp_enabled is set to False (maybe caused by CPU training).\n')
+                print(f'\nNot using GradScaler as `amp.amp_enabled` is set to False (maybe caused by CPU training).\n')
             else:
-                print(f'\nNot using GradScaler as amp_enabled is set to True and amp_mode is set to "{cfg.amp.amp_mode}" (not "fp16").\n')
+                print(f'\nNot using GradScaler as `amp.amp_enabled` is set to True and `amp.amp_mode` is set to "{cfg.amp.amp_mode}" (not "fp16").\n')
             scaler = None
         
         # prepare for lr and wd scale schedulers
