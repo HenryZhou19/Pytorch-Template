@@ -402,7 +402,7 @@ class PortalMisc:
                     print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\nConfigs are different. Please check and modify the new config.\n If you are sure to resume with these differences, set "trainer.force_resume" to True.', '#'), force=True)
                     exit(1)
                 else:
-                    print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\n\033[33mWarning: Ignoring the mismatch of critical params and continuing to resume as "trainer.force_resume" is set to True.\033[0m', '#'), force=True)
+                    print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\n\033[33mWarning: Ignoring the mismatch of critical params and continuing to resume as `trainer.force_resume` is set to True.\033[0m', '#'), force=True)
             work_dir = cfg_old.info.work_dir
             ConfigMisc.auto_track_setattr(cfg, ['info', 'resume_start_time'], cfg.info.start_time)
             ConfigMisc.auto_track_setattr(cfg, ['info', 'start_time'], cfg_old.info.start_time)
@@ -448,7 +448,7 @@ class PortalMisc:
         def _set_real_batch_size_and_lr(cfg):
             if not ConfigMisc.is_inference(cfg):  # for train and val
                 if cfg.trainer.grad_accumulation > 1:
-                    warnings.warn('Gradient accumulation is set to N > 1. This may affect the function of some modules(e.g. batchnorm, schedulers).')
+                    warnings.warn('`trainer.grad_accumulation` is set to N > 1. This may affect the function of some modules(e.g. batchnorm, schedulers).')
 
                 ConfigMisc.auto_track_setattr(cfg, ['trainer', 'trainer_batch_size_total'],
                                               cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation)
@@ -1001,7 +1001,7 @@ class ModelMisc:
             return model_without_ddp
     
     @staticmethod
-    def load_state_dict_with_more_info(module, state_dict, strict=False, print_keys_level=1):
+    def load_state_dict_with_more_info(module, state_dict, strict=False, print_keys_level=1, module_name='Module'):
         missing_keys, unexpected_keys = module.load_state_dict(state_dict, strict=strict)
         if print_keys_level > 0:
             matched_keys = list(set(state_dict.keys()) - set(missing_keys) - set(unexpected_keys))
@@ -1009,7 +1009,7 @@ class ModelMisc:
             matched_keys = list(set(['.'.join(matched_key.split('.')[:print_keys_level]) for matched_key in matched_keys]))
             missing_keys = list(set(['.'.join(missing_keys.split('.')[:print_keys_level]) for missing_keys in missing_keys]))
             unexpected_keys = list(set(['.'.join(unexpected_key.split('.')[:print_keys_level]) for unexpected_key in unexpected_keys]))
-            print_info = f'state_dict loaded not strictly.' \
+            print_info = f'{module_name}\'s state_dict loaded not strictly.' \
                 + '\n\033[32m\nMATCHED KEYS:\n\033[0m    ' + '\n    '.join(matched_keys) \
                 + '\n\033[33m\nMISSING KEYS (only in model):\n\033[0m    ' + '\n    '.join(missing_keys) \
                 + '\n\033[34m\nUNEXPECTED KEYS (only in pth):\n\033[0m    ' + '\n    '.join(unexpected_keys)

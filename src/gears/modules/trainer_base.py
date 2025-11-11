@@ -276,66 +276,75 @@ class TrainerBase:
                 model_state_dict.pop('initted', None)
                 model_state_dict.pop('step', None)
                 if self.ema_container is not None:
+                    print('EMA container exists for this run.\n')
+                    print('Steps of model param & buffer copying:\n\tstate_dict[EMA_container] -> ema_container -> online_model')
                     ModelMisc.load_state_dict_with_more_info(
                         self.ema_container,
                         model_state_dict,
                         strict=False,
                         print_keys_level=2,
+                        module_name='ema_container',
                         )
+                    print('Steps of criterion buffer copying:\n\tstate_dict[EMA_criterion] -> ema_criterion -> online_criterion')
                     ModelMisc.load_state_dict_with_more_info(
                         self.ema_criterion,
                         checkpoint[criterion_key],
                         strict=False,
                         print_keys_level=1,
+                        module_name='ema_criterion',
                         )
                     self.ema_container.copy_params_from_ema_to_model()
                     self.criterion.load_state_dict(self.ema_criterion.state_dict())
-                    print(f'EMA container exists for this run.'
-                          '\nSteps of model param & buffer copying:\n\tstate_dict[EMA_container] -> ema_container -> online_model\n'
-                          'Steps of criterion buffer copying:\n\tstate_dict[EMA_criterion] -> ema_criterion -> online_criterion')
                 else:
                     fake_ema_container = FakeEMA(self.model_without_ddp)
+                    print(f'No EMA for this run.\n')
+                    print('Steps of model param & buffer copying:\n\tstate_dict[EMA_container] -> fake_ema_container -> online_model')
                     ModelMisc.load_state_dict_with_more_info(
                         fake_ema_container,
                         model_state_dict,
                         strict=False,
-                        print_keys_level=1,
+                        print_keys_level=2,
+                        module_name='fake_ema_container',
                         )
+                    print('Steps of criterion buffer copying:\n\tstate_dict[EMA_criterion] -> online_criterion')
                     ModelMisc.load_state_dict_with_more_info(
                         self.criterion,
                         checkpoint[criterion_key],
                         strict=False,
                         print_keys_level=1,
+                        module_name='online_criterion',
                         )
-                    print(f'No EMA for this run.\n'
-                          'Steps of model param & buffer copying:\n\tstate_dict[EMA_container] -> fake_ema_container -> online_model\n'
-                          'Steps of criterion buffer copying:\n\tstate_dict[EMA_criterion] -> online_criterion')
                     del fake_ema_container
             else:  # use state_dict[model] to load
                 model_key, criterion_key = 'model', 'criterion'
                 print(f'\nLoading {pretrain_model_name} (key="[{model_key}, {criterion_key}]") from {model_path}')
+                if self.ema_container is not None:
+                    print('EMA container exists for this run.\n')
+                    print('Steps of model param & buffer copying:\n\tstate_dict[ONLINE_model] -> online_model -> ema_container')
+                else:
+                    print(f'No EMA for this run.\n')
+                    print('Steps of model param & buffer copying:\n\tstate_dict[ONLINE_model] -> online_model')
                 ModelMisc.load_state_dict_with_more_info(
                     self.model_without_ddp,
                     checkpoint[model_key],
                     strict=False,
                     print_keys_level=1,
+                    module_name='online_model',
                     )
+                if self.ema_container is not None:
+                    print('Steps of criterion buffer copying:\n\tstate_dict[ONLINE_criterion] -> online_criterion -> ema_criterion')
+                else:
+                    print('Steps of criterion buffer copying:\n\tstate_dict[ONLINE_criterion] -> online_criterion')
                 ModelMisc.load_state_dict_with_more_info(
                     self.criterion,
                     checkpoint[criterion_key],
                     strict=False,
                     print_keys_level=1,
+                    module_name='online_criterion',
                     )
                 if self.ema_container is not None:
                     self.ema_container.copy_params_from_model_to_ema()
                     self.ema_criterion.load_state_dict(self.criterion.state_dict())
-                    print(f'EMA container exists for this run.\n'
-                          'Steps of model param & buffer copying:\n\tstate_dict[ONLINE_model] -> online_model -> ema_container\n'
-                          'Steps of criterion buffer copying:\n\tstate_dict[ONLINE_criterion] -> online_criterion -> ema_criterion')
-                else:
-                    print(f'No EMA for this run.\n'
-                          'Steps of model param & buffer copying:\n\tstate_dict[ONLINE_model] -> online_model\n'
-                          'Steps of criterion buffer copying:\n\tstate_dict[ONLINE_criterion] -> online_criterion')
         
         if getattr(self.cfg.trainer, 'pretrained_models', None) is not None:
             for pretrain_model_name, pretrained_model_path in ConfigMisc.nested_namespace_to_nested_dict(self.cfg.trainer.pretrained_models).items():
