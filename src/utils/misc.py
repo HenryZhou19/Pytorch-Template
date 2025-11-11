@@ -738,7 +738,7 @@ class DistMisc:
         return reduced_dict
     
     class AsyncOrGradReduce:
-        def __init__(self, tensor: torch.Tensor, op='avg', async_op=False, auto_grad=False):
+        def __init__(self, tensor: torch.Tensor, op='sum', async_op=False, auto_grad=False):
             self.world_size = DistMisc.get_world_size()
             self.reduced = tensor.clone()
             self.op = DistMisc.ReduceOp[op.upper()]
@@ -751,7 +751,7 @@ class DistMisc:
                 if self.auto_grad:
                     self.reduced = dist_F.all_reduce(self.reduced, op=self.op)
                 else:
-                    self.work = dist.all_reduce(self.reduced, op=self.op, async_op=async_op)
+                    self.work = dist.all_reduce(self.reduced, op=self.op, async_op=self.async_op)
             
         def wait_for_work(self):
             if hasattr(self.work, 'wait'):
@@ -784,7 +784,7 @@ class DistMisc:
                     N_list = [torch.zeros(1, dtype=torch.int, device=device) for _ in range(self.world_size)]
                     dist.all_gather(N_list, N)
                     self.gathered = [torch.empty(N.item(), *shape[1:], dtype=dtype, device=device) for N in N_list]
-                    self.work = dist.all_gather(self.gathered, self.tensor, async_op=async_op)
+                    self.work = dist.all_gather(self.gathered, self.tensor, async_op=self.async_op)
 
         def wait_for_work(self):
             if hasattr(self.work, 'wait'):
