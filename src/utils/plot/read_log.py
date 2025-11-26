@@ -9,7 +9,7 @@ def get_metrics_from_log(log_file_path: str):
 
     pattern_full = re.compile(r'(\w+): \(([\d.]+) ± ([\d.]+)\) \[([\d.]+), ([\d.]+)\]')  # 'name': (mean ± std) [min, max]
     pattern_minmax = re.compile(r'(\w+): \[([\d.]+), ([\d.]+)\]')  #  'name': [min, max]
-    pattern_single = re.compile(r'(\w+): \(([\d.]+)\)')  # 'name': value
+    pattern_single = re.compile(r'(\w+): \(([\d.]+)\)')  # 'name': (value)
 
     metric_list = {}
     for block in log_content.split('\n\n'):
