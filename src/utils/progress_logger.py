@@ -282,6 +282,7 @@ class LossGuard:
             return False
         return True
 
+    @torch.no_grad()
     def check(self, loss_dict: dict, mlogger: MetricLogger, model: torch.nn.Module | None = None):
         '''
         loss_dict: dict of losses to be checked
