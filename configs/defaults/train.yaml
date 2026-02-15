@@ -11,6 +11,7 @@ env:
 info: # info & wandb
   start_time : TBD
   work_dir: TBD
+  work_log_dir: null  # if None, same as work_dir; otherwise, the loggers will write logs to this directory instead of work_dir
   task_type: Train  # Pretrain, Train, Pretrain_Re, Train_Re, ...
   batch_info: TBD
   name_tags: [special.extra_name, model.model_choice, data.dataset, info.batch_info]

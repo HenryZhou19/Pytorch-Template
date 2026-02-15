@@ -4,6 +4,7 @@ import os
 import random
 import shutil
 import signal
+import subprocess
 import sys
 import time
 import warnings
@@ -404,15 +405,21 @@ class PortalMisc:
                 else:
                     print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\n\033[33mWarning: Ignoring the mismatch of critical params and continuing to resume as `trainer.force_resume` is set to True.\033[0m', '#'), force=True)
             work_dir = cfg_old.info.work_dir
+            work_log_dir = cfg_old.info.work_log_dir
             ConfigMisc.auto_track_setattr(cfg, ['info', 'resume_start_time'], cfg.info.start_time)
             ConfigMisc.auto_track_setattr(cfg, ['info', 'start_time'], cfg_old.info.start_time)
         else:
-            work_dir = os.path.join(cfg.info.output_dir, LoggerMisc.output_dir_time_and_extras(cfg))
+            dir_time_extras = LoggerMisc.output_dir_time_and_extras(cfg)
+            work_dir = os.path.join(cfg.info.output_dir, dir_time_extras)
+            if cfg.info.output_log_dir is None:
+                cfg.info.output_log_dir = cfg.info.output_dir
+            work_log_dir = os.path.join(cfg.info.output_log_dir, dir_time_extras)
             if DistMisc.is_main_process():
                 print(LoggerMisc.block_wrapper(f'New start at: {work_dir}', '>'))
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir)
         ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'], work_dir)
+        ConfigMisc.auto_track_setattr(cfg, ['info', 'work_log_dir'], work_log_dir)
     
     @staticmethod
     def seed_everything(cfg):
@@ -610,28 +617,28 @@ class PortalMisc:
                 if cfg.trainer.resume != None:
                     wandb_tags.append(f'Re: {cfg.info.resume_start_time}')
                     if cfg.info.wandb.wandb_resume_enabled:
-                        resumed_wandb_id = glob(cfg.info.work_dir + '/wandb/latest-run/*.wandb')[0].split('-')[-1].split('.')[0]
+                        resumed_wandb_id = glob(cfg.info.work_log_dir + '/wandb/latest-run/*.wandb')[0].split('-')[-1].split('.')[0]
                 loggers.wandb_run = wandb.init(
                     project=cfg.info.project_name,
                     name=wandb_name,
                     tags=wandb_tags,
-                    dir=cfg.info.work_dir,
+                    dir=cfg.info.work_log_dir,
                     config=cfg_plain,
                     resume='allow' if cfg.trainer.resume and cfg.info.wandb.wandb_resume_enabled else None,
                     id=resumed_wandb_id if cfg.trainer.resume and cfg.info.wandb.wandb_resume_enabled else None,
                     )
             if cfg.info.tensorboard.tensorboard_enabled:
                 from torch.utils.tensorboard import SummaryWriter
-                loggers.tensorboard_run = SummaryWriter(log_dir=os.path.join(cfg.info.work_dir, 'tensorboard'))
+                loggers.tensorboard_run = SummaryWriter(log_dir=os.path.join(cfg.info.work_log_dir, 'tensorboard'))
                 # loggers.tensorboard_run.add_hparams(
                 #     hparam_dict=ConfigMisc.nested_namespace_to_nested_dict(cfg_dict),
                 #     metric_dict={},
                 #     )  # tensorboard's hparams logging strategy is not very useful in this case.
             
             if cfg.trainer.resume is None:
-                log_file_path = os.path.join(cfg.info.work_dir, 'logs.log')
+                log_file_path = os.path.join(cfg.info.work_log_dir, 'logs.log')
             else:
-                log_file_path = os.path.join(cfg.info.work_dir, f'logs_resume_{cfg.info.resume_start_time}.log')       
+                log_file_path = os.path.join(cfg.info.work_log_dir, f'logs_resume_{cfg.info.resume_start_time}.log')       
             loggers.log_file = open(log_file_path, 'a')
             if cfg.env.distributed:
                 LoggerMisc.print_all_pid(file=loggers.log_file)
@@ -1264,7 +1271,7 @@ class LoggerMisc:
         print(LoggerMisc.block_wrapper(f'All sub-processes of {p.name()}:\n{all_processes}', s='#'), file=file)
     
     @staticmethod
-    def get_wandb_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread', 'pt_elastic', 'python'], kill_all=False, kill_wait_time=60):
+    def get_wandb_pid(get_parent=True, specific_parent=['torchrun', 'pt_main_thread', 'pt_elastic', 'python'], kill_all=False, kill_wait_time=300):
         p = psutil.Process()
         wandb_pid_list = []
         try:
@@ -1277,8 +1284,8 @@ class LoggerMisc:
                 if 'wandb' in p.name():
                     wandb_pid_list.append(p.pid)
                     if kill_all:
-                        os.kill(p.pid, signal.SIGTERM)
-                        print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running.', s='#'))
+                        subprocess.Popen(['nohup', 'sh', '-c', f"sleep {kill_wait_time}; kill -15 {p.pid}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=os.setpgrp)
+                        print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running after {kill_wait_time} second(s).', s='#'))
         except Exception as e:
             print(f'Error when getting wandb\'s pid:\n\t{e}')
                 
