@@ -681,6 +681,17 @@ class PortalMisc:
                                     time.sleep(1)
                         loggers.wandb_run.finish()
                         print('wandb closed.')
+                        
+                if cfg.info.copy_log_to_work_dir and os.path.abspath(cfg.info.work_log_dir) != os.path.abspath(cfg.info.work_dir):
+                    ### copy all files and subfolders in work_log_dir to work_dir, which is useful when work_log_dir is set to a shared directory and work_dir is local for each run.
+                    log_dir_files = glob(os.path.join(cfg.info.work_log_dir, '*'))
+                    for file in log_dir_files:
+                        if os.path.isdir(file):
+                            shutil.copytree(file, os.path.join(cfg.info.work_dir, os.path.basename(file)),
+                                            ignore=shutil.ignore_patterns('*.log', '*.wandb', 'tensorboard'))
+                        elif os.path.isfile(file):
+                            shutil.copy(file, cfg.info.work_dir)
+                    print(LoggerMisc.block_wrapper(f'All log files are copied from\n"{cfg.info.work_log_dir}"\nto\n"{cfg.info.work_dir}"', s='>'))
             finally:
                 pass
         else:
