@@ -139,6 +139,14 @@ class DataModuleBase:
             batch_size = self.cfg.tester.tester_batch_size_per_rank if is_test else self.cfg.trainer.trainer_batch_size_per_rank
             if split=='val' and self.cfg.special.single_eval:
                 batch_size = 1
+                
+            # check batch_size and dataset length
+            if is_train:  # drop_last for training dataloader, so dataset length should be >= batch_size
+                if len(dataset) < self.cfg.trainer.trainer_batch_size_total:
+                    raise ValueError(f'Dataset length for split {split} ({len(dataset)}) is smaller than the total batch size ({self.cfg.trainer.trainer_batch_size_total}), which may cause dataloader to have 0 batches. Please reduce the batch size or make sure the dataset has enough samples.')
+            else:  # not drop_last for val/test dataloader, so dataset length should be > 0
+                if len(dataset) == 0:
+                    raise ValueError(f'Dataset length for split {split} is 0, which may cause dataloader to have 0 batches. Please make sure the dataset has enough samples.')
             
             return DataloaderClass(
                 dataset=dataset,
@@ -238,6 +246,7 @@ class FixedLengthDataLoaderX(DataLoaderX):
     @property
     def _index_sampler(self):
         len_raw_index_sampler = len(self._raw_index_sampler)
+        assert len_raw_index_sampler > 0, f'raw_index_sampler has length 0 (which indicates a dataset smaller than the total batch size over all ranks), thus cannot build the FixedLengthSampler.'
         raw_index_list = list(self._raw_index_sampler)
         now_length = len_raw_index_sampler
         

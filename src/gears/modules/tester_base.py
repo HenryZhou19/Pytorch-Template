@@ -133,7 +133,7 @@ class TesterBase:
     
     def _load_model(self):
         # called in "before_inference"
-        checkpoint = torch.load(self.cfg.tester.checkpoint_path, map_location=self.device)
+        checkpoint = torch.load(self.cfg.tester.checkpoint_path, map_location=self.device, weights_only=self.model_only_mode)
         self.model.load_state_dict(checkpoint['model'])
         if self.ema_container is not None:
             assert 'ema_container' in checkpoint, 'checkpoint does not contain "ema_container".'

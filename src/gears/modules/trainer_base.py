@@ -233,7 +233,7 @@ class TrainerBase:
             checkpoint_path = glob(os.path.join(self.cfg.info.work_dir, 'checkpoint_last_epoch_*.pth'))
             print(LoggerMisc.block_wrapper(f'loading the checkpoint from {checkpoint_path}', '>'))
             assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
-            checkpoint = torch.load(checkpoint_path[0], map_location='cpu')
+            checkpoint = torch.load(checkpoint_path[0], map_location='cpu', weights_only=True)
             self.model_without_ddp.load_state_dict(checkpoint['model'])
             self.criterion.load_state_dict(checkpoint['criterion'])
             if self.ema_container is not None:
@@ -263,7 +263,7 @@ class TrainerBase:
                 self.ema_model = model
         
         def _load_pretrained_model(model_path, pretrain_model_name):
-            checkpoint = torch.load(model_path, map_location='cpu')
+            checkpoint = torch.load(model_path, map_location='cpu', weights_only=True)
             if self.cfg.trainer.load_from_ema:  # use state_dict[EMA] to load
                 model_key, criterion_key = 'ema_container', 'ema_criterion'
                 assert model_key in checkpoint, f'checkpoint does not contain "{model_key}", but "load_from_ema" is True.'
