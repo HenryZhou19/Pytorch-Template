@@ -348,6 +348,7 @@ class PortalMisc:
         ## Note: get it from the train_cfg_path, not in the config itself, as the train_work_dir might have been moved or renamed.
         # ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], cfg.info.work_dir)
         ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1]))
+        ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_log_dir'], cfg.info.work_log_dir)
         if os.path.abspath(cfg.info.train_work_dir) != os.path.abspath(cfg.info.work_dir):
             print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', '#'))
         
@@ -362,15 +363,27 @@ class PortalMisc:
             assert os.path.exists(cfg.tester.checkpoint_path), f'Checkpoint path "{cfg.tester.checkpoint_path}" not found.'
         
         ## 4. set work_dir for inference (default: train_work_dir/inference_results)
-        if cfg.tester.custom_infer_work_dir is not None:
+        dir_time_extras = LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True)
+        if cfg.info.custom_infer_work_dir is not None:
             ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'],
-                                          os.path.join(cfg.tester.custom_infer_work_dir, LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True)))
+                                          os.path.join(cfg.info.custom_infer_work_dir, dir_time_extras))
         else:
             ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'],
-                                          cfg.info.train_work_dir + '/inference_results/' + LoggerMisc.output_dir_time_and_extras(cfg, is_infer=True))
+                                          os.path.join(cfg.info.train_work_dir, 'inference_results', dir_time_extras))
+        if cfg.info.custom_infer_work_log_dir is not None:
+            ConfigMisc.auto_track_setattr(cfg, ['info', 'work_log_dir'],
+                                          os.path.join(cfg.info.custom_infer_work_log_dir, dir_time_extras))
+        else:
+            ConfigMisc.auto_track_setattr(cfg, ['info', 'work_log_dir'],
+                                          os.path.join(cfg.info.train_work_log_dir, 'inference_results', dir_time_extras))
         if DistMisc.is_main_process():
+            print(LoggerMisc.block_wrapper(f'Inference at: {cfg.info.work_dir}', '>'))
             if not os.path.exists(cfg.info.work_dir):
                 os.makedirs(cfg.info.work_dir)
+            if os.path.abspath(cfg.info.work_log_dir) != os.path.abspath(cfg.info.work_dir):
+                print(LoggerMisc.block_wrapper(f'Temporary log dir: {cfg.info.work_log_dir}', '>'))
+                if not os.path.exists(cfg.info.work_log_dir):
+                    os.makedirs(cfg.info.work_log_dir)
         
         return cfg
     
@@ -415,9 +428,13 @@ class PortalMisc:
                 cfg.info.output_log_dir = cfg.info.output_dir
             work_log_dir = os.path.join(cfg.info.output_log_dir, dir_time_extras)
             if DistMisc.is_main_process():
-                print(LoggerMisc.block_wrapper(f'New start at: {work_dir}', '>'))
+                print(LoggerMisc.block_wrapper(f'New training at: {work_dir}', '>'))
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir)
+                if os.path.abspath(work_log_dir) != os.path.abspath(work_dir):
+                    print(LoggerMisc.block_wrapper(f'Temporary log dir: {work_log_dir}', '>'))
+                    if not os.path.exists(work_log_dir):
+                        os.makedirs(work_log_dir)
         ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'], work_dir)
         ConfigMisc.auto_track_setattr(cfg, ['info', 'work_log_dir'], work_log_dir)
     
