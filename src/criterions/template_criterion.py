@@ -123,3 +123,15 @@ class MnistMultiOptimizerCriterion(MnistCriterion):
             }, {
             'ce_loss': ce_loss,
             }
+    
+
+@criterion_register('dummy_criterion')
+class DummyCriterion(CriterionBase):
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        
+    def _get_iter_loss_and_metrics(self, outputs, targets):
+        return {
+            'loss_main': torch.tensor(0.0, requires_grad=True)
+            }, {
+            }

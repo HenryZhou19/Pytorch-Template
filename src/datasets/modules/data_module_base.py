@@ -50,7 +50,7 @@ class DataModuleBase:
     @staticmethod
     def collate_fn(data, recursion=False):
         """
-        AcceptableType: dict，torch.Tensor, np.ndarray, int, float, bool, str, tuple, list
+        AcceptableType: dict, torch.Tensor, np.ndarray, int, float, bool, str, tuple, list
         `dict` Type will always be processed recursively.
         `torch.Tensor` and `np.ndarray` will be stacked as a batched ND-Tensor.
         `int`, `float`, `bool` will be stacked as a batched 1D-Tensor.
