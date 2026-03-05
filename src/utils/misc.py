@@ -2,6 +2,7 @@ import importlib
 # import logging
 import os
 import random
+import re
 import shutil
 import signal
 import subprocess
@@ -81,11 +82,14 @@ else:
 class ConfigMisc:
     @staticmethod
     def get_configs():
+        missing_vars_set = set()
         main_config_path = ConfigMisc._get_main_config_file_path()
         additional_config_paths = ConfigMisc._get_additional_config_file_paths(main_config_path)
-        cfg = ConfigMisc._parse_yaml_files(additional_config_paths + [main_config_path])
+        cfg = ConfigMisc._parse_yaml_files(additional_config_paths + [main_config_path], missing_vars_set)
         cfg.modified_cfg_dict = defaultdict(dict)
-        cfg = ConfigMisc._update_config_with_cli_args(cfg)
+        cfg = ConfigMisc._update_config_with_cli_args(cfg, missing_vars_set)
+        if missing_vars_set:
+            raise ValueError(f'Missing environment variables for config:\n\t{"\n\t".join(missing_vars_set)} \nPlease set them before running.')
         return cfg
     
     @staticmethod
@@ -105,26 +109,57 @@ class ConfigMisc:
         return additional_config_paths
     
     @staticmethod
-    def _parse_yaml_files(config_file_paths):
+    def _parse_yaml_files(config_file_paths, missing_vars_set: set):
         '''Load and merge multiple YAML files.'''
         cfg = SimpleNamespace()
         for path in config_file_paths:
-            cfg_new = ConfigMisc.read_from_yaml(path)
+            cfg_new = ConfigMisc.read_from_yaml(path, missing_vars_set)
             ConfigMisc.update_nested_namespace(cfg, cfg_new)
         return cfg
     
     @staticmethod
-    def _update_config_with_cli_args(cfg):
+    def _update_config_with_cli_args(cfg, missing_vars_set: set):
         args = sys.argv
         for arg in args:
             if '=' not in arg:
                 continue  # Skip arguments without 'key=value' format
             key_path, value = arg.split('=', 1)
-            value = yaml.safe_load(value)  # Convert strings like 'true', '1' properly
+            value = ConfigMisc._yaml_safe_load_with_env_vars(value, missing_vars_set)  # Convert strings like 'true', '1' properly
             
             keys = key_path.split('.')
             ConfigMisc.setattr_for_nested_namespace(cfg, keys, value, track_modifications=True, mod_dict_key_prefix='cli')
         return cfg
+    
+    @staticmethod
+    def _yaml_safe_load_with_env_vars(stream, missing_vars_set: set):
+        def envsubst(text):
+            pattern = re.compile(r'\$(\w+)|\${(\w+)}')
+            def replacer(m):
+                var = m.group(1) or m.group(2)
+                if var in os.environ:
+                    return os.environ[var]
+                else:
+                    if missing_vars_set is not None:
+                        missing_vars_set.add(var)
+                    return ''
+            result = pattern.sub(replacer, text)
+            return result
+        
+        def expand_env_vars(d: any):
+            if isinstance(d, dict):
+                return {k: expand_env_vars(v) for k, v in d.items()}
+            elif isinstance(d, list):
+                return [expand_env_vars(x) for x in d]
+            elif isinstance(d, tuple):
+                return tuple(expand_env_vars(x) for x in d)
+            elif isinstance(d, str):
+                return envsubst(d)
+            else:
+                return d
+        
+        res = yaml.safe_load(stream)
+        res = expand_env_vars(res)
+        return res
     
     @staticmethod 
     def nested_dict_to_nested_namespace(dictionary, ignore_key_list=[]):
@@ -246,9 +281,9 @@ class ConfigMisc:
         ConfigMisc.setattr_for_nested_namespace(cfg, name_list, value, track_modifications=True, mod_dict_key_prefix='auto')
     
     @staticmethod
-    def read_from_yaml(path):
+    def read_from_yaml(path, missing_vars_set: set=None):
         with open(path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f.read())
+            config = ConfigMisc._yaml_safe_load_with_env_vars(f.read(), missing_vars_set)
         return ConfigMisc.nested_dict_to_nested_namespace(config)
     
     @staticmethod
@@ -1312,7 +1347,7 @@ class LoggerMisc:
                 if 'wandb' in p.name():
                     wandb_pid_list.append(p.pid)
                     if kill_all:
-                        subprocess.Popen(['nohup', 'sh', '-c', f"sleep {kill_wait_time}; kill -15 {p.pid}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=os.setpgrp)
+                        subprocess.Popen(['nohup', 'sh', '-c', f'sleep {kill_wait_time}; kill -15 {p.pid}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=os.setpgrp)
                         print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running after {kill_wait_time} second(s).', s='#'))
         except Exception as e:
             print(f'Error when getting wandb\'s pid:\n\t{e}')
