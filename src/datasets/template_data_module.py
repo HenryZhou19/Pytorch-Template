@@ -128,4 +128,3 @@ class MnistDataModule(DataModuleBase):
     def build_test_dataset(self):
         print('Test dataset is just the same as val dataset!')
         return self.MINST(root='./data', train=False, transform=self.transform)
-
