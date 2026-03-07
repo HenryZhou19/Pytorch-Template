@@ -7,11 +7,12 @@ special:
   extra_name: template_lenet  # null for no extra name
 
 info:
-  output_dir: ./outputs/template/
+  output_dir: $GLOBAL_OUTPUT_PATH/template
   project_name: template
 
 data:
   dataset: mnist
+  data_root_dir: $GLOBAL_DATA_PATH/template
   split_rate: 0.8
 
 model:

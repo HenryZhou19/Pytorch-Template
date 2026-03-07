@@ -9,7 +9,7 @@ env:
   find_unused_parameters: True
 
 info: # info & wandb
-  output_dir: ./outputs  # must be specified in the main config, e.g. ./outputs/exp1/
+  output_dir: TBD  # must be specified in the main config, e.g. $GLOBAL_OUTPUT_PATH/exp1/
   output_log_dir: null  # if None, same as output_dir; otherwise, the loggers will write logs to this directory instead of output_dir
   start_time : TBD
   work_dir: TBD

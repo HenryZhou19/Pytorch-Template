@@ -7,7 +7,7 @@ special:
   extra_name: template_multi_optimizer  # null for no extra name
 
 info:
-  output_dir: ./outputs/template/
+  output_dir: $GLOBAL_OUTPUT_PATH/template
   project_name: template
 
 data:

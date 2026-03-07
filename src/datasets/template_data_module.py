@@ -118,13 +118,14 @@ class MnistDataModule(DataModuleBase):
 
         self.transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
         self.MINST = MNISTX
+        self.data_root_dir = self.cfg.data.data_root_dir
         
     def build_train_dataset(self):
-        return self.MINST(root='./data', train=True, transform=self.transform, download=True)
+        return self.MINST(root=self.data_root_dir, train=True, transform=self.transform, download=True)
         
     def build_val_dataset(self):
-        return self.MINST(root='./data', train=False, transform=self.transform)
+        return self.MINST(root=self.data_root_dir, train=False, transform=self.transform)
         
     def build_test_dataset(self):
         print('Test dataset is just the same as val dataset!')
-        return self.MINST(root='./data', train=False, transform=self.transform)
+        return self.MINST(root=self.data_root_dir, train=False, transform=self.transform)

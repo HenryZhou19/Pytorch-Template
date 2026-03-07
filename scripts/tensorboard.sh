@@ -2,7 +2,7 @@
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$script_dir/.."
 
-outputs_path="./outputs"
+outputs_path=$GLOBAL_OUTPUT_PATH
 BIND_ALL=false
 SPEC=false
 PATH_SPEC=""
@@ -21,7 +21,7 @@ options:
 
     [-p value], -outputs_path
         Set the path to the outputs folder. The tensorboard logs in the outputs folder and all its subfolders will be visualized.
-        Default: "./outputs"
+        Default: $GLOBAL_OUTPUT_PATH
 
     [-ba], --bind_all
         If set, bind all the tensorboard logs in the outputs folder and its subfolders.
