@@ -2,12 +2,19 @@ from copy import deepcopy
 
 import torch
 
-from src.utils.misc import ImportMisc
 from src.utils.optimizer import EMAContainer
+from src.utils.register import get_registered_class, scan_register_classes
 
-from .modules.model_base import ModelBase, model_register
+from .modules.model_base import ModelBase
 
-ImportMisc.import_current_dir_all(__file__, __name__)
+registered_models = scan_register_classes(py_dir=__path__[0], register_type='model_register')
+
+# from src.utils.misc import ImportMisc
+
+# from .modules.model_base import ModelBase, model_register
+
+# ImportMisc.import_current_dir_all(__file__, __name__)
+
 
 class ModelManager:
     def __init__(self, cfg, loggers) -> None:
@@ -16,7 +23,8 @@ class ModelManager:
         self.device = torch.device(cfg.env.device)
 
     def build_model(self, verbose=True) -> ModelBase: 
-        model: ModelBase = model_register.get(self.cfg.model.model_choice)(self.cfg).to(self.device)
+        # model: ModelBase = model_register.get(self.cfg.model.model_choice)(self.cfg).to(self.device)
+        model: ModelBase = get_registered_class(registered_models, self.cfg.model.model_choice, package='src.models')(self.cfg).to(self.device)
         
         if verbose:
             print('model built successfully.')
