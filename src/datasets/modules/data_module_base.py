@@ -2,6 +2,7 @@ import itertools
 import random
 import signal
 from functools import partial
+from types import NoneType
 
 import numpy as np
 import torch
@@ -91,7 +92,7 @@ class DataModuleBase:
             elif isinstance(v, (int, float, bool)):
                 # every d in data, get d[k]: `(int, float, bool)` to form a batched 1D-Tensor
                 batch[k] = torch.as_tensor(list(map(lambda d: d[k], data)))
-            elif isinstance(v, (str, TensorMisc.NotToCudaBatchList)):
+            elif isinstance(v, (NoneType, str, TensorMisc.NotToCudaBatchList)):
                 # every d in data, get d[k]: `(str, TensorMisc.NotToCudaBatchList)` to form a NotToCudaBatchList, which will not be on cuda later
                 batch[k] = TensorMisc.NotToCudaBatchList(map(lambda d: d[k], data))
             elif isinstance(v, list):
