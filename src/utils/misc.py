@@ -507,7 +507,16 @@ class PortalMisc:
         def _set_real_batch_size_and_lr(cfg):
             if not ConfigMisc.is_inference(cfg):  # for train and val
                 if cfg.trainer.grad_accumulation > 1:
-                    warnings.warn('`trainer.grad_accumulation` is set to N > 1. This may affect the function of some modules(e.g. batchnorm, schedulers).')
+                    warnings.warn('`trainer.grad_accumulation` is set to N > 1. This may affect the function of some modules(e.g. batchnorm, schedulers, fixed_length_[train/val]loader).')
+                    # sync fixed_length_[train/val]loader with grad_accumulation
+                    if cfg.trainer.fixed_length_trainloader > 0:
+                        warnings.warn('setting `trainer.fixed_length_trainloader` according to `trainer.grad_accumulation`. Please check if this is expected.')
+                        ConfigMisc.auto_track_setattr(cfg, ['trainer', 'fixed_length_trainloader'],
+                                                    (cfg.trainer.fixed_length_trainloader * cfg.trainer.grad_accumulation))
+                    elif cfg.trainer.fixed_length_valloader > 0:
+                        warnings.warn('setting `trainer.fixed_length_valloader` according to `trainer.grad_accumulation`. Please check if this is expected.')
+                        ConfigMisc.auto_track_setattr(cfg, ['trainer', 'fixed_length_valloader'],
+                                                    (cfg.trainer.fixed_length_valloader * cfg.trainer.grad_accumulation))
 
                 ConfigMisc.auto_track_setattr(cfg, ['trainer', 'trainer_batch_size_total'],
                                               cfg.trainer.trainer_batch_size_per_rank * cfg.env.world_size * cfg.trainer.grad_accumulation)
