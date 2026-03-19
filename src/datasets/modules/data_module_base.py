@@ -99,7 +99,7 @@ class DataModuleBase:
                 # every d in data, get d[k]: `list` to simply form a BatchList (to support `Tensor` or `ndarray` of different shapes)
                 batch[k] = TensorMisc.BatchList(map(lambda d: d[k], data))
             elif isinstance(v, tuple):
-                raise TypeError(f'Please use `list` instead of `tuple` in data as `pin_memory=True` will convert all tuples to lists')
+                raise TypeError(f'Please use `list` instead of `tuple` for `{k}: {v}` in data as `pin_memory=True` will convert all tuples to lists')
             else:
                 raise NotImplementedError(f'DataModuleBase.collate_fn not implemented for Type: {type(v)} of Element: {v} with Key: {k}')
         if not recursion:
