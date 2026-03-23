@@ -16,11 +16,11 @@ class SimpleCriterion(CriterionBase):
         gt_y = targets['gt_y']   
 
         # metrics (loss) used for backprop
-        if self.loss_config == 'mse':
+        if self.loss_choice == 'mse':
             mse_loss = self.mse_loss(pred_y, gt_y.reshape_as(pred_y))
             loss = 1 * mse_loss
         else:
-            raise NotImplementedError(f'loss "{self.loss_config}" has not been implemented yet.')
+            raise NotImplementedError(f'loss "{self.loss_choice}" has not been implemented yet.')
     
         # metrics not used for backprop
         pred_y = pred_y.detach()
@@ -64,11 +64,11 @@ class MnistCriterion(CriterionBase):
         gt_y = targets['gt_y']   
 
         # metrics (loss) used for backprop
-        if self.loss_config == 'ce':
+        if self.loss_choice == 'ce':
             ce_loss = self.ce_loss(pred_scores, gt_y)
             loss = 1 * ce_loss
         else:
-            raise NotImplementedError(f'loss "{self.loss_config}" has not been implemented yet.')
+            raise NotImplementedError(f'loss "{self.loss_choice}" has not been implemented yet.')
         
         
         _, predicted = torch.max(pred_scores.data, 1)
@@ -106,10 +106,10 @@ class MnistMultiOptimizerCriterion(MnistCriterion):
         gt_y = targets['gt_y']   
 
         # metrics (loss) used for backprop
-        if self.loss_config == 'ce':
+        if self.loss_choice == 'ce':
             ce_loss = self.ce_loss(pred_scores, gt_y)
         else:
-            raise NotImplementedError(f'loss "{self.loss_config}" has not been implemented yet.')
+            raise NotImplementedError(f'loss "{self.loss_choice}" has not been implemented yet.')
         
         convs_loss = -1.0 * torch.std(conv_out, dim=1).mean()
         
