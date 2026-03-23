@@ -15,7 +15,7 @@ class CriterionBase(nn.Module):
         self.ema_mode = False
         self.infer_mode = False
         self.cfg = cfg
-        self.loss_config = cfg.criterion.loss
+        self.loss_choice = cfg.criterion.loss_choice
         self.primary_criterion = cfg.criterion.primary_criterion
         if self.primary_criterion is None:
             assert len(self.cfg.trainer.all_optimizer_names) == 1, 'Main optimizer config must be the only one if primary_criterion is not specified.'
