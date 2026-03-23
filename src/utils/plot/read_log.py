@@ -14,8 +14,8 @@ def get_metrics_from_log(log_file_path: str):
     metric_list = {}
     for block in log_content.split('\n\n'):
         block = block.strip('\n')
-        if block.startswith('Train') or block.startswith('Eval'):
-            prefix = 'train_' if block.startswith('Train') else 'eval_'
+        if block.startswith('Train') or block.startswith('Val'):
+            prefix = 'train_' if block.startswith('Train') else 'val_'
             
             matches_full = pattern_full.findall(block)
             matches_minmax = pattern_minmax.findall(block)

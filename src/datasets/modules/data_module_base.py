@@ -126,7 +126,7 @@ class DataModuleBase:
             return EmptyDataLoader()
         else:
             dataset = self.get_dataset(split)
-            use_dist_sampler = True if split == 'train' else self.cfg.trainer.dist_eval
+            use_dist_sampler = True if split == 'train' else self.cfg.trainer.dist_val
             
             if fixed_length_loader > 0:
                 DataloaderClass = partial(
@@ -138,7 +138,7 @@ class DataModuleBase:
                 DataloaderClass = DataLoaderX
                 
             batch_size = self.cfg.tester.tester_batch_size_per_rank if is_test else self.cfg.trainer.trainer_batch_size_per_rank
-            if split=='val' and self.cfg.special.single_eval:
+            if split=='val' and self.cfg.trainer.single_val_per_rank:
                 batch_size = 1
                 
             # check batch_size and dataset length

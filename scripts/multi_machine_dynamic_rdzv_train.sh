@@ -11,7 +11,7 @@ seconds_to_wait=0
 show_help() {
 cat << EOF
 discription:
-    Run the training and evaluation process with the given config file and other options on multiple machines (dynamic rendezvous mode).
+    Run the training and validation process with the given config file and other options on multiple machines (dynamic rendezvous mode).
     Use 'train.py' as the entry.
 
 usage:

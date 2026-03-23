@@ -102,7 +102,7 @@ class TrainerBase:
             scalers=[integrated_optimizer.scaler for integrated_optimizer in self.integrated_optimizers if integrated_optimizer.scaler is not None],
             tolerance=self.nan_inf_tolerance,
             )
-        self.dist_eval = self.cfg.trainer.dist_eval
+        self.dist_val = self.cfg.trainer.dist_val
         
         assert self.cfg.trainer.grad_accumulation > 0 and isinstance(self.cfg.trainer.grad_accumulation, int), 'grad_accumulation should be a positive integer.'
         
@@ -192,10 +192,10 @@ class TrainerBase:
         self.val_autocast = partial(torch.amp.autocast, device_type='cuda', dtype=dtype, enabled=val_amp_enabled)
     
     def _get_val_epochs(self):
-        if self.cfg.trainer.eval_freq <= 0:
+        if self.cfg.trainer.val_freq <= 0:
             val_epochs = [self.total_epochs]
         else:
-            val_epochs = list(range(self.cfg.trainer.eval_freq, self.total_epochs + 1, self.cfg.trainer.eval_freq))
+            val_epochs = list(range(self.cfg.trainer.val_freq, self.total_epochs + 1, self.cfg.trainer.val_freq))
             if val_epochs[-1] != self.total_epochs:
                 val_epochs.append(self.total_epochs)
         return val_epochs
@@ -222,7 +222,7 @@ class TrainerBase:
                 maxinterval=math.inf,
                 initial=len([x for x in self.val_epoch_list if x <= epoch_finished]) * self.valloader_len,
             )
-            val_pbar.set_description_str('Eval ')
+            val_pbar.set_description_str('Val  ')
             print('')
             self.train_pbar = train_pbar
             self.val_pbar = val_pbar
@@ -512,7 +512,7 @@ class TrainerBase:
         else:
             with torch.no_grad():
                 with self.val_autocast():
-                    if not self.dist_eval and isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
+                    if not self.dist_val and isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
                         outputs = self.model.module(inputs)
                     else:
                         outputs = self.model(inputs)
@@ -622,14 +622,14 @@ class TrainerBase:
         mlogger.add_epoch_metrics(**self.criterion.forward_epoch_metrics())
         self.train_outputs = mlogger.output_dict(no_avg_list=[*self.lr_groups.keys(), *self.wd_groups.keys(), 'epoch'], sync=True, final_print=True)
     
-    def _evaluate(self):
+    def _validate(self):
         cfg = self.cfg
         
         mlogger = MetricLogger(
             cfg=cfg,
             loggers=self.loggers,
             pbar=self.val_pbar,  
-            header='Eval ',
+            header='Val  ',
             epoch_str=f'epoch: [{self.finished_train_epochs}/{self.total_epochs}]',
             )
         mlogger.add_metrics([{f'loss_{integrated_optimizer.root_module_name}': ValueMetric(high_prior=True) for integrated_optimizer in self.integrated_optimizers}])
@@ -651,7 +651,7 @@ class TrainerBase:
         mlogger.add_epoch_metrics(**self.criterion.forward_epoch_metrics())
         if self.ema_criterion is not None:
             mlogger.add_epoch_metrics(**self.ema_criterion.forward_epoch_metrics())
-        self.last_val_metrics = mlogger.output_dict(sync=self.dist_eval, final_print=True)
+        self.last_val_metrics = mlogger.output_dict(sync=self.dist_val, final_print=True)
         
     def _print_module_states(self, prefix, after_train_before_val=False):
         print(f'\n[{prefix}] epoch {self.finished_train_epochs if after_train_before_val else self.finished_train_epochs + 1} --- module states:', force=True)
@@ -683,10 +683,10 @@ class TrainerBase:
                 
                 self._before_validation()
                 
-                if self.dist_eval or DistMisc.is_main_process():
+                if self.dist_val or DistMisc.is_main_process():
                     if self.cfg.info.print_module_states:
-                        self._print_module_states('Eval', after_train_before_val=True)
-                    self._evaluate()
+                        self._print_module_states('Val', after_train_before_val=True)
+                    self._validate()
                     
                 self._after_validation()
                 

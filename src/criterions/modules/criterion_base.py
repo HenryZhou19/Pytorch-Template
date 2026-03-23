@@ -113,7 +113,7 @@ class CriterionBase(nn.Module):
         return {}
     
     def _if_gather_epoch_metrics(self):
-        if_real_dist = self.training or self.infer_mode or self.cfg.trainer.dist_eval
+        if_real_dist = self.training or self.infer_mode or self.cfg.trainer.dist_val
         return DistMisc.is_dist_avail_and_initialized() and if_real_dist
     
     def before_one_epoch(self, *args, **kwargs):

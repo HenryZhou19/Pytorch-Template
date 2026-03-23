@@ -11,7 +11,7 @@ seconds_to_wait=0
 show_help() {
 cat << EOF
 discription:
-    Run the training and evaluation process with the given config file and other options.
+    Run the training and validation process with the given config file and other options.
     Use 'train.py' as the entry.
 
 usage:
