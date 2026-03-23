@@ -530,6 +530,9 @@ class PortalMisc:
                         optimizer_cfg = getattr(cfg.trainer, optimizer_name)
                         ConfigMisc.auto_track_setattr(cfg, ['trainer', optimizer_name, 'lr_default'],
                                                       _sync_lr(optimizer_cfg.lr_default, cfg.trainer.trainer_batch_size_total, cfg.trainer.sync_lr_with_batch_size, mode=getattr(cfg.trainer, 'sync_lr_mode', 'linear')))
+                if cfg.trainer.single_val_per_rank:
+                    warnings.warn('`trainer.single_val_per_rank` is set to True. You may want to set `trainer.dist_val` to False and keep trainer.fixed_length_valloader=-1 as the default setting, thus to ensure that each sample in the validation set is evaluated once for an accurate dataset-level metric. Please check if this is expected.')
+                
             else: # for inference
                 ConfigMisc.auto_track_setattr(cfg, ['tester', 'tester_batch_size_total'],
                                               cfg.tester.tester_batch_size_per_rank * cfg.env.world_size)
@@ -544,9 +547,6 @@ class PortalMisc:
         if cfg.special.no_logger:
             ConfigMisc.auto_track_setattr(cfg, ['info', 'wandb', 'wandb_enabled'], False)
             ConfigMisc.auto_track_setattr(cfg, ['info', 'tensorboard', 'tensorboard_enabled'], False)
-            
-        if cfg.special.single_eval:
-            ConfigMisc.auto_track_setattr(cfg, ['trainer', 'dist_eval'], False)
     
     @staticmethod
     def save_configs(cfg):
