@@ -875,6 +875,48 @@ class DistMisc:
 
         def __call__(self) -> List[torch.Tensor] | torch.Tensor:
             return self.wait_for_work()
+        
+    class AsyncGatherStringList:
+        def __init__(self, strs, device, async_op=False, encoding='utf-8', separator='|@|'):
+            self.world_size = dist.get_world_size()
+            self.str_list = strs
+            self.async_op = async_op
+            self.encoding = encoding
+            self.work = None
+            self.gathered = None
+            
+            if self.world_size == 1:
+                self.gathered = self.str_list
+            else:
+                s_joined = separator.join(strs)
+                bytes_arr = torch.tensor(list(s_joined.encode(encoding)), dtype=torch.uint8, device=device)
+                N = torch.tensor([bytes_arr.shape[0]], dtype=torch.int32, device=bytes_arr.device)
+                N_list = [torch.zeros(1, dtype=torch.int32, device=bytes_arr.device) for _ in range(self.world_size)]
+                dist.all_gather(N_list, N)
+                len_list = [int(nn.item()) for nn in N_list]
+                maxlen = max(len_list)
+                padded = torch.zeros(maxlen, dtype=torch.uint8, device=bytes_arr.device)
+                padded[:N] = bytes_arr
+
+                self.gathered_tensor = [torch.zeros(maxlen, dtype=torch.uint8, device=bytes_arr.device) for _ in range(self.world_size)]
+                self.len_list = len_list
+                self.s_separator = separator
+
+                self.work = dist.all_gather(self.gathered_tensor, padded, async_op=self.async_op)
+
+        def __call__(self):
+            if self.gathered is not None:
+                return self.gathered
+            if hasattr(self.work, 'wait'):
+                self.work.wait()
+            all_strs = []
+            for t, n in zip(self.gathered_tensor, self.len_list):
+                b = t[:n].cpu().numpy().tobytes()
+                s = b.decode(self.encoding)
+                list_str = s.split(self.s_separator) if s else []
+                all_strs.extend(list_str)
+            self.gathered = all_strs
+            return self.gathered
     
     @staticmethod
     def is_dist_avail_and_initialized():
