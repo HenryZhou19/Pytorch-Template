@@ -384,7 +384,7 @@ class PortalMisc:
         # ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], cfg.info.work_dir)
         ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1]))
         ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_log_dir'], cfg.info.work_log_dir)
-        if os.path.abspath(cfg.info.train_work_dir) != os.path.abspath(cfg.info.work_dir):
+        if os.path.realpath(cfg.info.train_work_dir) != os.path.realpath(cfg.info.work_dir):
             print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', '#'))
         
         ## 3. confirm the checkpoint_path (last or best, or specified) for inference
@@ -415,7 +415,7 @@ class PortalMisc:
             print(LoggerMisc.block_wrapper(f'Inference at: {cfg.info.work_dir}', '>'))
             if not os.path.exists(cfg.info.work_dir):
                 os.makedirs(cfg.info.work_dir)
-            if os.path.abspath(cfg.info.work_log_dir) != os.path.abspath(cfg.info.work_dir):
+            if os.path.realpath(cfg.info.work_log_dir) != os.path.realpath(cfg.info.work_dir):
                 print(LoggerMisc.block_wrapper(f'Temporary log dir: {cfg.info.work_log_dir}', '>'))
                 if not os.path.exists(cfg.info.work_log_dir):
                     os.makedirs(cfg.info.work_log_dir)
@@ -466,7 +466,7 @@ class PortalMisc:
                 print(LoggerMisc.block_wrapper(f'New training at: {work_dir}', '>'))
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir)
-                if os.path.abspath(work_log_dir) != os.path.abspath(work_dir):
+                if os.path.realpath(work_log_dir) != os.path.realpath(work_dir):
                     print(LoggerMisc.block_wrapper(f'Temporary log dir: {work_log_dir}', '>'))
                     if not os.path.exists(work_log_dir):
                         os.makedirs(work_log_dir)
@@ -743,7 +743,7 @@ class PortalMisc:
                         loggers.wandb_run.finish()
                         print('wandb closed.')
                         
-                if cfg.info.copy_log_to_work_dir and os.path.abspath(cfg.info.work_log_dir) != os.path.abspath(cfg.info.work_dir):
+                if cfg.info.copy_log_to_work_dir and os.path.realpath(cfg.info.work_log_dir) != os.path.realpath(cfg.info.work_dir):
                     ### copy all files and subfolders in work_log_dir to work_dir, which is useful when work_log_dir is set to a shared directory and work_dir is local for each run.
                     log_dir_files = glob(os.path.join(cfg.info.work_log_dir, '*'))
                     for file in log_dir_files:
