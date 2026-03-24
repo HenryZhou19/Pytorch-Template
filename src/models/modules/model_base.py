@@ -132,7 +132,7 @@ class ModelBase(nn.Module):
             strict=False,
             )
         if len(self.freeze_modules) > 0 or len(self.freeze_params) > 0:
-            print(LoggerMisc.block_wrapper('Freezing modules before creating optimizers...\n\tThese params will not be added to any param groups.\n\tSo if you want to train them later, do not freeze them here.\n'), '>')
+            print(LoggerMisc.block_wrapper('Freezing modules before creating optimizers...\n\tThese params will not be added to any param groups.\n\tSo if you want to train them later, do not freeze them here.\n', '>'))
         ModelMisc.unfreeze_or_freeze_modules(
             modules_dict=self.freeze_modules,
             is_trainable=False,
