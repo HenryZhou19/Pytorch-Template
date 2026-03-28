@@ -21,11 +21,11 @@ class ConvBlock(nn.Module):
         self.conv_block = nn.Sequential(
             ConvXd(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False, padding_mode=padding_mode),
             NormXd(out_channels),
-            activation_layer(inplace=True),
+            activation_layer(),
             ConvXd(out_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False, padding_mode=padding_mode),
             NormXd(out_channels),
             )
-        self.conv_final_activation = activation_layer(inplace=True)
+        self.conv_final_activation = activation_layer()
         self.res_in_block = res_in_block
         if self.res_in_block:
             self.conv_res = nn.Sequential(
