@@ -7,10 +7,10 @@ class ResNetBasicBlock(nn.Module):
         super(ResNetBasicBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.ac1 = activation_layer(inplace=True)
+        self.ac1 = activation_layer()
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.ac2 = activation_layer(inplace=True)
+        self.ac2 = activation_layer()
 
     def forward(self, x):
         output = self.conv1(x)
@@ -25,14 +25,14 @@ class ResNetDownBlock(nn.Module):
         super(ResNetDownBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride[0], padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.ac1 = activation_layer(inplace=True)
+        self.ac1 = activation_layer()
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=stride[1], padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
         self.downsample = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride[0], padding=0, bias=False),
             nn.BatchNorm2d(out_channels, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
         )
-        self.ac2 = activation_layer(inplace=True)
+        self.ac2 = activation_layer()
 
     def forward(self, x):
         downsampled_x = self.downsample(x)
@@ -50,7 +50,7 @@ class ResNet18(nn.Module):
         
         self.conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         self.bn1 = nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.ac1 = activation_layer(inplace=True)
+        self.ac1 = activation_layer()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
 
         self.layer1 = nn.Sequential(
@@ -96,7 +96,7 @@ class ResNet18WithoutFC(nn.Module):
         
         self.conv1 = nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
         self.bn1 = nn.BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.ac1 = activation_layer(inplace=True)
+        self.ac1 = activation_layer()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
 
         self.layer1 = nn.Sequential(
