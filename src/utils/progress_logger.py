@@ -185,6 +185,7 @@ class MetricLogger:
 
         self.timer = TimeMisc.Timer()
         for idx, obj in enumerate(iterable, start=1):
+            DistMisc.barrier()  # to make accurate measurement for the real model_time, as this barrier will wait for all processes to collate data
             data_time.append_one_value(self.timer.info['last'])
             yield obj
             iter_time.append_one_value(self.timer.info['last'])
