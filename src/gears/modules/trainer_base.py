@@ -1,7 +1,6 @@
 import math
 import os
 import time
-import warnings
 from copy import deepcopy
 from functools import partial
 from glob import glob
@@ -124,7 +123,7 @@ class TrainerBase:
         self.training = True
         
         if self.ema_container is not None:
-            print(LoggerMisc.block_wrapper('Using EMA model to evaluate. Setting EMA model and criterion to eval mode...', '='))
+            print(LoggerMisc.block_wrapper('Using EMA model to evaluate. Setting EMA model and criterion to eval mode...'))
             self.ema_container.eval()
             self.ema_criterion = deepcopy(self.criterion)
             assert hasattr(self.ema_criterion, 'ema_mode'), 'ema_criterion doesn\'t have ema_mode attribute, which means the criterion is not a CriterionBase instance.'
@@ -231,7 +230,7 @@ class TrainerBase:
         # called in "before_all_epochs"
         if self.cfg.trainer.resume:
             checkpoint_path = glob(os.path.join(self.cfg.info.work_dir, 'checkpoint_last_epoch_*.pth'))
-            print(LoggerMisc.block_wrapper(f'loading the checkpoint from {checkpoint_path}', '>'))
+            print(LoggerMisc.block_wrapper(f'loading the checkpoint from {checkpoint_path}', preset='info'))
             assert len(checkpoint_path) == 1, f'Found {len(checkpoint_path)} checkpoints, please check.'
             checkpoint = torch.load(checkpoint_path[0], map_location='cpu', weights_only=True)
             self.model_without_ddp.load_state_dict(checkpoint['model'])
@@ -252,7 +251,7 @@ class TrainerBase:
             self.finished_backward_iters = checkpoint['epoch'] * self.trainloader_len
             self.finished_train_epochs = self.start_epoch - 1  # will be the same as {checkpoint['epoch'] + 1} by doing '+1' in "after_one_epoch"
         else:
-            print(LoggerMisc.block_wrapper('New trainer.', '>'))
+            print(LoggerMisc.block_wrapper('New trainer.', preset='info'))
         print(f'Start from epoch: {self.start_epoch}')
         return self.cfg.trainer.resume
     
@@ -356,7 +355,7 @@ class TrainerBase:
         # label: 'last' or 'best'
         checkpoint_path_list = glob(os.path.join(work_dir, f'checkpoint_{label}_epoch_*.pth'))
         if len(checkpoint_path_list) > 1:
-            warnings.warn(f'Found {len(checkpoint_path_list)} {label} checkpoints, please check.')
+            print(LoggerMisc.block_wrapper(f'Found {len(checkpoint_path_list)} {label} checkpoints, please check.', preset='error'))
         max_saved_temp_epoch = max([int(os.path.basename(checkpoint_path).split('_')[-1].split('.')[0]) for checkpoint_path in checkpoint_path_list] + [0])
         new_path = os.path.join(work_dir, f'checkpoint_{label}_epoch_{finished_train_epochs}.pth')
         if max_saved_temp_epoch == 0:

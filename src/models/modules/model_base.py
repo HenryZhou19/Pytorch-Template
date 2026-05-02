@@ -1,4 +1,3 @@
-import warnings
 from collections import defaultdict
 from functools import partial
 from typing import List
@@ -85,7 +84,7 @@ class ModelBase(nn.Module):
     def _custom_init_all(self, custom_init_fn=None, **kwargs):
         if custom_init_fn is None:
             custom_init_fn = self._fn_custom_init
-        print(LoggerMisc.block_wrapper(f'Customize the initialization of all params in {self.__class__.__name__}...'))
+        print(LoggerMisc.block_wrapper(f'Customize the initialization of all params in {self.__class__.__name__}...', preset='info'))
         self.apply(partial(custom_init_fn, **kwargs))
         print('Custom initialization done.\n')
         self.custom_inited = True
@@ -132,7 +131,7 @@ class ModelBase(nn.Module):
             strict=False,
             )
         if len(self.freeze_modules) > 0 or len(self.freeze_params) > 0:
-            print(LoggerMisc.block_wrapper('Freezing modules before creating optimizers...\n\tThese params will not be added to any param groups.\n\tSo if you want to train them later, do not freeze them here.\n', '>'))
+            print(LoggerMisc.block_wrapper('Freezing modules before creating optimizers...\n\tThese params will not be added to any param groups.\n\tSo if you want to train them later, do not freeze them here.\n', preset='info'))
         ModelMisc.unfreeze_or_freeze_modules(
             modules_dict=self.freeze_modules,
             is_trainable=False,
@@ -188,7 +187,7 @@ class ModelBase(nn.Module):
                     fused_param_group_dict[identifier]['logging_name'] = param_group['name']
             elif param_group['logging'] and fused_param_group_dict[identifier]['logging']:
                 if param_group['logging_name'] != fused_param_group_dict[identifier]['logging_name']:
-                    warnings.warn(f'Warning: Multiple params in the same fused group have logging=True, but different logging_name: {fused_param_group_dict[identifier]["logging_name"]} and {param_group["logging_name"]}. Only the first one will be used.')
+                    print(LoggerMisc.block_wrapper(f'Warning: Multiple params in the same fused group have logging=True, but different logging_name: {fused_param_group_dict[identifier]["logging_name"]} and {param_group["logging_name"]}. Only the first one will be used.', preset='warning'))
 
         # check all fused groups with logging=True have distinct logging_name
         logging_name_set = set()

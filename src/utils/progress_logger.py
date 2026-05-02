@@ -155,7 +155,7 @@ class MetricLogger:
                     require_sync_metric_idx += 1
         except Exception as e:
             rank = DistMisc.get_rank()
-            print(f'Rank: {rank}, error in MetricLogger._synchronize_all_processes():', force=True)
+            print(LoggerMisc.block_wrapper(f'Rank: {rank}, error in MetricLogger._synchronize_all_processes():', preset='error'), force=True)
             for name, metric in self.metrics.items():
                 print(f'\tRank: {rank}, metric name: {name}\n\t\ttype: {type(metric.value)}, sample_count: {metric.sample_count}, total: {metric.total}\n\t\trequire_sync: {metric.require_sync}, synced: {metric.synced}', force=True)
             raise e
@@ -170,15 +170,15 @@ class MetricLogger:
         
         if self.pbar is not None:
             if self.global_tqdm:
-                post_msg = '\033[33m' + self.epoch_str \
-                    + '\033[32m' + ' [{0}/{1}] eta: {eta} ' \
-                    + '\033[30m' + ' t_data: {data_time}  t_model: {model_time}\033[0m'
+                post_msg = LoggerMisc.color_codes['yellow'] + self.epoch_str \
+                    + LoggerMisc.color_codes['green'] + ' [{0}/{1}] eta: {eta} ' \
+                    + LoggerMisc.color_codes['bright_black'] + ' t_data: {data_time}  t_model: {model_time}' + LoggerMisc.color_codes['default']
             else:
-                post_msg = '\033[30m' + ' t_data: {data_time}  t_model: {model_time}\033[0m'
+                post_msg = LoggerMisc.str_with_color(' t_data: {data_time}  t_model: {model_time}', 'bright_black')
                 self.pbar.set_description_str(self.header + ' ' + self.epoch_str, refresh=False)
             postlines_msg = self.delimiter.join([
                 # '\t{metrics}',
-                '    \033[30m{metrics}\033[0m',
+                LoggerMisc.str_with_color('    {metrics}', 'bright_black'),
                 # 'data_time: {data_time}',
                 # 'iter_time: {iter_time}',
             ])
@@ -256,7 +256,7 @@ class MetricLogger:
         self.log_file.flush()
         if self.pbar is not None:
             print(
-                '\n' * (self.pbar.postlines + 1) + '\033[34m' + final_msg, '\033[0m\n'
+                '\n' * (self.pbar.postlines + 1) + LoggerMisc.str_with_color(final_msg, 'blue') + '\n'
             )
 
 
@@ -294,7 +294,7 @@ class LossGuard:
         for k, loss in loss_dict.items():
             if not self._check_one_value_safe(loss):
                 safe_to_backward = False
-                print(LoggerMisc.block_wrapper(f'Rank {DistMisc.get_rank()}: [LossGuard] `{k}` has nan/inf: {loss}, already counts: {self.nan_inf_count}/{self.tolerance}', '#'), force=True)
+                print(LoggerMisc.block_wrapper(f'Rank {DistMisc.get_rank()}: [LossGuard] `{k}` has nan/inf: {loss}, already counts: {self.nan_inf_count}/{self.tolerance}', preset='warning'), force=True)
 
         if not safe_to_backward:
             # check amp scale and set safe_to_backward to True if scale is reduced

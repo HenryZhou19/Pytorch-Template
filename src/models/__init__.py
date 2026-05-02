@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import torch
 
+from src.utils.misc import LoggerMisc
 from src.utils.optimizer import EMAContainer
 from src.utils.register import get_registered_class, scan_register_classes
 
@@ -47,7 +48,7 @@ class ModelManager:
             try:
                 ema_model = deepcopy(model_without_ddp)
             except Exception as e:
-                print(f'Warning: {e}')
+                print(LoggerMisc.block_wrapper(f'Warning: {e}', preset='warning'))
                 print('Build an EMA model from scratch and load state_dict instead.')
                 ema_model = self.build_model(verbose=False)
                 ema_model.load_state_dict(model_without_ddp.state_dict())

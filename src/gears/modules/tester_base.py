@@ -95,7 +95,7 @@ class TesterBase:
             if self.ema_container is not None:
                 self.ema_container.ema_model.set_infer_mode(True)
                 self.ema_container.eval()
-                print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...', '='))
+                print(LoggerMisc.block_wrapper('Using EMA model to infer. Setting EMA model and criterion to eval mode...'))
                 self.ema_criterion = deepcopy(self.criterion)
                 assert hasattr(self.ema_criterion, 'ema_mode'), 'ema_criterion doesn\'t have ema_mode attribute, which means the criterion is not a CriterionBase instance.'
                 self.ema_criterion.set_ema_mode(True)
@@ -140,7 +140,7 @@ class TesterBase:
             assert checkpoint['ema_container'] is not None, '"ema_container" in checkpoint is None, which means the checkpoint is not trained with ema.'
             self.ema_container.load_state_dict(checkpoint['ema_container'])
         # print(f'{config.mode} mode: Loading pth from', path)
-        print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_val_metrics {checkpoint.get("best_val_metrics", {})}\nlast_val_metrics {checkpoint.get("last_val_metrics", {})}', '>'))
+        print(LoggerMisc.block_wrapper(f'Loading pth from {self.cfg.tester.checkpoint_path}\nbest_val_metrics {checkpoint.get("best_val_metrics", {})}\nlast_val_metrics {checkpoint.get("last_val_metrics", {})}', preset='info'))
         if DistMisc.is_main_process():
             if 'epoch' in checkpoint.keys():
                 print('Epoch:', checkpoint['epoch'])
@@ -261,6 +261,6 @@ class TesterBase:
             string_to_print += '\nIn trainer, ema_primary_criterion is False, so using the "best" checkpoint and "get_ema_model=False" is recommended.'
         
         if verbose:
-            print(LoggerMisc.block_wrapper(string_to_print, '='))
+            print(LoggerMisc.block_wrapper(string_to_print))
         return return_model
     

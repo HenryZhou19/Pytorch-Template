@@ -3,6 +3,7 @@ import sys
 
 from metric_curve import *
 from read_log import get_metrics_from_log
+from src.utils.misc import LoggerMisc
 
 if __name__ == '__main__':
     log_file_path = sys.argv[1]
@@ -33,4 +34,4 @@ if __name__ == '__main__':
                 save_file_path=f'{log_dir}/{metric_name}.png'
                 )
         else:
-            Warning(f'Unknown metric type: {metric_name}')
+            print(LoggerMisc.block_wrapper(f'Warning: metric "{metric_name}" doesn\'t have the required keys to plot. Available keys: {list(metric_data.keys())}. Skipping this metric.', preset='warning'))

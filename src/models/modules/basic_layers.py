@@ -234,7 +234,7 @@ class PositionalEncoding2D(nn.Module):
         else:  # learnable or none
             h_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=HH, type=pos_embed_mode, init_magnitute=0.02)
             w_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=WW, type=pos_embed_mode, init_magnitute=0.02)
-        print(LoggerMisc.block_wrapper(f'{self.__class__.__name__} using pos_embed mode: {pos_embed_mode}!', s='#'))
+        print(LoggerMisc.block_wrapper(f'{self.__class__.__name__} using pos_embed mode: {pos_embed_mode}!', preset='info'))
         self.h_pos_enc = h_pos_enc
         self.w_pos_enc = w_pos_enc
         self.pos_embed_mode = pos_embed_mode
@@ -262,7 +262,7 @@ class PositionalEncoding3D(nn.Module):
             d_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=DD, type=pos_embed_mode, init_magnitute=0.02)
             h_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=HH, type=pos_embed_mode, init_magnitute=0.02)
             w_pos_enc = PositionalEncoding(d_pos=embed_dim, max_seq_length=WW, type=pos_embed_mode, init_magnitute=0.02)
-        print(LoggerMisc.block_wrapper(f'{self.__class__.__name__} using pos_embed mode: {pos_embed_mode}!', s='#'))
+        print(LoggerMisc.block_wrapper(f'{self.__class__.__name__} using pos_embed mode: {pos_embed_mode}!', preset='info'))
         self.d_pos_enc = d_pos_enc
         self.h_pos_enc = h_pos_enc
         self.w_pos_enc = w_pos_enc

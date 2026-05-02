@@ -1,5 +1,6 @@
-import warnings
 from typing import List, Tuple
+
+from src.utils.misc import LoggerMisc
 
 from .modules.arbitrary_scheduler import ArbitraryScheduler, DummyScheduler
 
@@ -43,7 +44,7 @@ class SchedulerUtils:
             phase_steps = [epoch * iters_per_epoch for epoch in phase_epochs]
         else:
             if phase_epochs is not None:
-                warnings.warn('Both phase_epochs and phase_steps are provided. phase_epochs will be ignored.')
+                print(LoggerMisc.block_wrapper('Both phase_epochs and phase_steps are provided. phase_epochs will be ignored.', preset='warning'))
         
         return ArbitraryScheduler(
             T_list=phase_steps + [total_iters],

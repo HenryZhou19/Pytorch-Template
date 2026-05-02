@@ -1,10 +1,11 @@
-import warnings
 from typing import Union
 
 import numpy as np
 import torch
 from torch import nn
 from torch.autograd import Function
+
+from src.utils.misc import LoggerMisc
 
 
 def trunc_normal_init_linear_weights(module: torch.nn.Module, std: float = 0.02):
@@ -63,7 +64,7 @@ def masked_mean_and_var(inputs: torch.Tensor, mask_keep: torch.Tensor, dim=None,
     
     count_nonzero = torch.count_nonzero(mask_keep, dim=dim)
     if torch.any(count_nonzero == 0).item():
-        warnings.warn('No nonzero element in mask_keep')
+        print(LoggerMisc.block_wrapper('`masked_mean_and_var`: No nonzero element in mask_keep', preset='warning'))
     mean = torch.sum(inputs * mask_keep, dim=dim) / count_nonzero
 
     if need_var:
@@ -195,7 +196,7 @@ def adapt_conv_2d_load_from_state_dict(state_dict, module_prefix, current_module
             if strict:
                 raise ValueError(f"Failed to adapt conv2d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}.")
             else:
-                warnings.warn(f"Failed to adapt conv2d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}. The weights will not be loaded.")
+                print(LoggerMisc.block_wrapper(f"`adapt_conv_2d_load_from_state_dict`: Failed to adapt conv2d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}. The weights will not be loaded.", preset='warning'))
                 loaded_weight = current_weight
 
         state_dict[weight_key] = loaded_weight
@@ -223,7 +224,7 @@ def adapt_conv_2d_load_from_state_dict(state_dict, module_prefix, current_module
                 if strict:
                     raise ValueError(f"Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}.")
                 else:
-                    warnings.warn(f"Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}. The weights will not be loaded.")
+                    print(LoggerMisc.block_wrapper(f"`adapt_conv_2d_load_from_state_dict`: Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}. The weights will not be loaded.", preset='warning'))
                     loaded_bias = current_bias
         
             state_dict[bias_key] = loaded_bias
@@ -274,7 +275,7 @@ def adapt_conv_3d_load_from_state_dict(state_dict, module_prefix, current_module
             if strict:
                 raise ValueError(f"Failed to adapt conv3d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}.")
             else:
-                warnings.warn(f"Failed to adapt conv3d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}. The weights will not be loaded.")
+                print(LoggerMisc.block_wrapper(f"`adapt_conv_3d_load_from_state_dict`: Failed to adapt conv3d weights for key '{weight_key}'. The loaded shape {loaded_weight.shape} cannot be adapted to the current shape {current_weight.shape}. The weights will not be loaded.", preset='warning'))
                 loaded_weight = current_weight
 
         state_dict[weight_key] = loaded_weight
@@ -302,7 +303,7 @@ def adapt_conv_3d_load_from_state_dict(state_dict, module_prefix, current_module
                 if strict:
                     raise ValueError(f"Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}.")
                 else:
-                    warnings.warn(f"Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}. The weights will not be loaded.")
+                    print(LoggerMisc.block_wrapper(f"`adapt_conv_3d_load_from_state_dict`: Failed to adapt bias weights for key '{bias_key}'. The loaded shape {loaded_bias.shape} cannot be adapted to the current shape {current_bias.shape}. The weights will not be loaded.", preset='warning'))
                     loaded_bias = current_bias
         
             state_dict[bias_key] = loaded_bias
@@ -331,7 +332,7 @@ def adapt_L_C_parameter_load_from_state_dict(state_dict, param_key, current_para
             if strict:
                 raise ValueError(f"Failed to adapt parameter weights for key '{param_key}'. The loaded shape {loaded_param.shape} cannot be adapted to the current shape {current_param.shape}.")
             else:
-                warnings.warn(f"Failed to adapt parameter weights for key '{param_key}'. The loaded shape {loaded_param.shape} cannot be adapted to the current shape {current_param.shape}. The weights will not be loaded.")
+                print(LoggerMisc.block_wrapper(f"`adapt_L_C_parameter_load_from_state_dict`: Failed to adapt parameter weights for key '{param_key}'. The loaded shape {loaded_param.shape} cannot be adapted to the current shape {current_param.shape}. The weights will not be loaded.", preset='warning'))
                 loaded_param = current_param
         
         state_dict[param_key] = loaded_param

@@ -1,5 +1,4 @@
 import importlib
-# import logging
 import os
 import random
 import re
@@ -8,7 +7,6 @@ import signal
 import subprocess
 import sys
 import time
-import warnings
 from collections import UserList, defaultdict
 from copy import deepcopy
 from glob import glob
@@ -385,7 +383,7 @@ class PortalMisc:
         ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_dir'], '/'.join(infer_cfg.tester.train_cfg_path.split('/')[:-1]))
         ConfigMisc.auto_track_setattr(cfg, ['info', 'train_work_log_dir'], cfg.info.work_log_dir)
         if os.path.realpath(cfg.info.train_work_dir) != os.path.realpath(cfg.info.work_dir):
-            print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', '#'))
+            print(LoggerMisc.block_wrapper(f'Folder of "train_cfg_path" in inference_config is different from "work_dir" in train_config.\nThe output folder might have been moved or renamed.', preset='warning'))
         
         ## 3. confirm the checkpoint_path (last or best, or specified) for inference
         if cfg.tester.checkpoint_path is None:
@@ -412,11 +410,11 @@ class PortalMisc:
             ConfigMisc.auto_track_setattr(cfg, ['info', 'work_log_dir'],
                                           os.path.join(cfg.info.train_work_log_dir, 'inference_results', dir_time_extras))
         if DistMisc.is_main_process():
-            print(LoggerMisc.block_wrapper(f'Inference at: {cfg.info.work_dir}', '>'))
+            print(LoggerMisc.block_wrapper(f'Inference at: {cfg.info.work_dir}', preset='info'))
             if not os.path.exists(cfg.info.work_dir):
                 os.makedirs(cfg.info.work_dir)
             if os.path.realpath(cfg.info.work_log_dir) != os.path.realpath(cfg.info.work_dir):
-                print(LoggerMisc.block_wrapper(f'Temporary log dir: {cfg.info.work_log_dir}', '>'))
+                print(LoggerMisc.block_wrapper(f'Temporary log dir: {cfg.info.work_log_dir}', preset='info'))
                 if not os.path.exists(cfg.info.work_log_dir):
                     os.makedirs(cfg.info.work_log_dir)
         
@@ -428,7 +426,7 @@ class PortalMisc:
         if cfg.trainer.resume is not None:  # read 'work_dir', 'start_time' from the .yaml file
             ### Assert critial params are the same, but others can be changed(e.g. info...)
             ### Here a warning is given, and user should check manually, allowing more flexibility.
-            print(LoggerMisc.block_wrapper(f'Resuming from: {cfg.trainer.resume}, reading existing configs...\n\033[31mWarning: Please make sure critical parameters(model, data, optimizer, scheduler, ...) are the same manually (in most cases).\033[0m', '>'))
+            print(LoggerMisc.block_wrapper(f'Resuming from: {cfg.trainer.resume}, reading existing configs...\n' + LoggerMisc.str_with_color('Warning: Please make sure critical parameters(model, data, optimizer, scheduler, ...) are the same manually (in most cases).', 'red', 'yellow'), preset='warning'))
             cfg_old = ConfigMisc.read_from_yaml(cfg.trainer.resume)
             cfg_differences = ConfigMisc.check_difference_between_nested_namespaces(
                 cfg_base=cfg_old,
@@ -442,16 +440,16 @@ class PortalMisc:
                 for diff in cfg_differences:
                     key_path, change_type, old_value, new_value = diff
                     if change_type == 'added':
-                        print(f'  \033[32m[Added]\033[0m {key_path}: {new_value}', force=True)
+                        print(LoggerMisc.str_with_color('  [Added]', 'green') + f' {key_path}: {new_value}', force=True)
                     elif change_type == 'removed':
-                        print(f'  \033[31m[Removed]\033[0m {key_path}: {old_value}', force=True)
+                        print(LoggerMisc.str_with_color('  [Removed]', 'red') + f' {key_path}: {old_value}', force=True)
                     elif change_type == 'modified':
-                        print(f'  \033[34m[Modified]\033[0m {key_path}: {old_value} -> {new_value}', force=True)
+                        print(LoggerMisc.str_with_color('  [Modified]', 'blue') + f' {key_path}: {old_value} -> {new_value}', force=True)
                 if not cfg.trainer.force_resume:
-                    print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\nConfigs are different. Please check and modify the new config.\n If you are sure to resume with these differences, set "trainer.force_resume" to True.', '#'), force=True)
+                    print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\nConfigs are different. Please check and modify the new config.\n If you are sure to resume with these differences, set "trainer.force_resume" to True.', preset='error'), force=True)
                     exit(1)
                 else:
-                    print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\n\033[33mWarning: Ignoring the mismatch of critical params and continuing to resume as `trainer.force_resume` is set to True.\033[0m', '#'), force=True)
+                    print(LoggerMisc.block_wrapper(f'Rank: {DistMisc.get_rank()}\nWarning: Ignoring the mismatch of critical params and continuing to resume as `trainer.force_resume` is set to True.', preset='warning'), force=True)
             work_dir = cfg_old.info.work_dir
             work_log_dir = cfg_old.info.work_log_dir
             ConfigMisc.auto_track_setattr(cfg, ['info', 'resume_start_time'], cfg.info.start_time)
@@ -463,11 +461,11 @@ class PortalMisc:
                 cfg.info.output_log_dir = cfg.info.output_dir
             work_log_dir = os.path.join(cfg.info.output_log_dir, dir_time_extras)
             if DistMisc.is_main_process():
-                print(LoggerMisc.block_wrapper(f'New training at: {work_dir}', '>'))
+                print(LoggerMisc.block_wrapper(f'New training at: {work_dir}', preset='info'))
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir)
                 if os.path.realpath(work_log_dir) != os.path.realpath(work_dir):
-                    print(LoggerMisc.block_wrapper(f'Temporary log dir: {work_log_dir}', '>'))
+                    print(LoggerMisc.block_wrapper(f'Temporary log dir: {work_log_dir}', preset='info'))
                     if not os.path.exists(work_log_dir):
                         os.makedirs(work_log_dir)
         ConfigMisc.auto_track_setattr(cfg, ['info', 'work_dir'], work_dir)
@@ -507,14 +505,14 @@ class PortalMisc:
         def _set_real_batch_size_and_lr(cfg):
             if not ConfigMisc.is_inference(cfg):  # for train and val
                 if cfg.trainer.grad_accumulation > 1:
-                    warnings.warn('`trainer.grad_accumulation` is set to N > 1. This may affect the function of some modules(e.g. batchnorm, schedulers, fixed_length_[train/val]loader).')
+                    print(LoggerMisc.block_wrapper(f'`trainer.grad_accumulation` is set to {cfg.trainer.grad_accumulation} > 1. Please check if this is expected, as it may affect the function of some modules(e.g. batchnorm, schedulers, fixed_length_[train/val]loader).', preset='warning'))
                     # sync fixed_length_[train/val]loader with grad_accumulation
                     if cfg.trainer.fixed_length_trainloader > 0:
-                        warnings.warn('setting `trainer.fixed_length_trainloader` according to `trainer.grad_accumulation`. Please check if this is expected.')
+                        print(LoggerMisc.block_wrapper('setting `trainer.fixed_length_trainloader` according to `trainer.grad_accumulation`. Please check if this is expected.', preset='warning'))
                         ConfigMisc.auto_track_setattr(cfg, ['trainer', 'fixed_length_trainloader'],
                                                     (cfg.trainer.fixed_length_trainloader * cfg.trainer.grad_accumulation))
                     elif cfg.trainer.fixed_length_valloader > 0:
-                        warnings.warn('setting `trainer.fixed_length_valloader` according to `trainer.grad_accumulation`. Please check if this is expected.')
+                        print(LoggerMisc.block_wrapper('setting `trainer.fixed_length_valloader` according to `trainer.grad_accumulation`. Please check if this is expected.', preset='warning'))
                         ConfigMisc.auto_track_setattr(cfg, ['trainer', 'fixed_length_valloader'],
                                                     (cfg.trainer.fixed_length_valloader * cfg.trainer.grad_accumulation))
 
@@ -531,7 +529,7 @@ class PortalMisc:
                         ConfigMisc.auto_track_setattr(cfg, ['trainer', optimizer_name, 'lr_default'],
                                                       _sync_lr(optimizer_cfg.lr_default, cfg.trainer.trainer_batch_size_total, cfg.trainer.sync_lr_with_batch_size, mode=getattr(cfg.trainer, 'sync_lr_mode', 'linear')))
                 if cfg.trainer.single_val_per_rank:
-                    warnings.warn('`trainer.single_val_per_rank` is set to True. You may want to set `trainer.dist_val` to False and keep trainer.fixed_length_valloader=-1 as the default setting, thus to ensure that each sample in the validation set is evaluated once for an accurate dataset-level metric. Please check if this is expected.')
+                    print(LoggerMisc.block_wrapper('`trainer.single_val_per_rank` is set to True. You may want to set `trainer.dist_val` to False and keep trainer.fixed_length_valloader=-1 as the default setting, thus to ensure that each sample in the validation set is evaluated once for an accurate dataset-level metric. Please check if this is expected.', preset='warning'))
                 
             else: # for inference
                 ConfigMisc.auto_track_setattr(cfg, ['tester', 'tester_batch_size_total'],
@@ -575,16 +573,16 @@ class PortalMisc:
         MODIFIED = 2
         TYPECHANGED = 3
         
-        FADED_COLOR = '\033[30m'  # black
+        FADED_COLOR = LoggerMisc.color_codes['bright_black']
         COLORS = {
-            0: '\033[0m',  # white
-            1: '\033[32m',  # green
-            2: '\033[34m',  # blue
-            3: '\033[31m',  # red
+            0: LoggerMisc.color_codes['default'],
+            1: LoggerMisc.color_codes['green'],
+            2: LoggerMisc.color_codes['blue'],
+            3: LoggerMisc.color_codes['red'],
         }
-        CLI_COLOR = '\033[33m'  # yellow
-        SWEEP_COLOR = '\033[35m'  # magenta
-        AUTO_COLOR = '\033[36m'  # cyan
+        CLI_COLOR = LoggerMisc.color_codes['yellow']
+        SWEEP_COLOR = LoggerMisc.color_codes['magenta']
+        AUTO_COLOR = LoggerMisc.color_codes['cyan']
         
         modified_cfg_dict = cfg.modified_cfg_dict
         dict_key_prefix_list = ['auto', 'sweep', 'cli']  # In reverse order of occurrence
@@ -630,7 +628,7 @@ class PortalMisc:
                 else:
                     if len(key_indent) > 40:
                         if DistMisc.is_main_process():
-                            warnings.warn(f'Config key "{key}" with indent is too long (>40) to display, please check.')
+                            print(LoggerMisc.block_wrapper(f'Config key "{key}" with indent is too long (>40) to display, please check.', s='!', color='bright_black'))
                     elif len(key_indent) < 38:
                         key_indent += ' ' + '-' * (38 - len(key_indent)) + ' '
                     
@@ -656,8 +654,8 @@ class PortalMisc:
             else:
                 return ''
         
-        str_block = f'Rank {DistMisc.get_rank()} --- {"Modified" if modified_config_only else "All"} Parameters: (\033[32madded, \033[34mmodified, \033[31mtypechanged)\033[0m\n'
-        str_block = LoggerMisc.block_wrapper(write_config_lines(str_block, cfg), s='=', block_width=80)
+        str_block = f'Rank {DistMisc.get_rank()} --- {"Modified" if modified_config_only else "All"} Parameters: ({LoggerMisc.color_codes["green"]}added, {LoggerMisc.color_codes["blue"]}modified, {LoggerMisc.color_codes["red"]}typechanged){LoggerMisc.color_codes["default"]}\n'
+        str_block = LoggerMisc.block_wrapper(write_config_lines(str_block, cfg))
         
         DistMisc.avoid_print_mess()
         print(str_block, force=force_all_rank)
@@ -738,7 +736,7 @@ class PortalMisc:
                         print('\nTrying to close wandb gracefully...')
                         if cfg.special.debug is None:
                             if seconds_remain > 0:
-                                for _ in tqdm(range(seconds_remain), desc='Waiting for wandb to upload all files...'):
+                                for _ in tqdm(range(seconds_remain), desc='Waiting for wandb to upload all files...', dynamic_ncols=True):
                                     time.sleep(1)
                         loggers.wandb_run.finish()
                         print('wandb closed.')
@@ -752,7 +750,7 @@ class PortalMisc:
                                             ignore=shutil.ignore_patterns('*.log', '*.wandb', 'tensorboard'))
                         elif os.path.isfile(file):
                             shutil.copy(file, cfg.info.work_dir)
-                    print(LoggerMisc.block_wrapper(f'All log files are copied from\n"{cfg.info.work_log_dir}"\nto\n"{cfg.info.work_dir}"', s='>'))
+                    print(LoggerMisc.block_wrapper(f'All log files are copied from\n"{cfg.info.work_log_dir}"\nto\n"{cfg.info.work_dir}"', preset='info'))
             finally:
                 pass
         else:
@@ -1008,10 +1006,10 @@ class DistMisc:
             DistMisc.setup_for_distributed_print(True)
             
             if getattr(cfg.amp, 'amp_enabled', False):  # in train mode, check AMP
-                print(LoggerMisc.block_wrapper('AMP is not supported on CPU currently. Automatically turning off AMP by setting "cfg.amp.amp_enabled = False".', '#'))
+                print(LoggerMisc.block_wrapper('AMP is not supported on CPU currently. Automatically turning off AMP by setting "cfg.amp.amp_enabled = False".', preset='warning'))
                 ConfigMisc.auto_track_setattr(cfg, ['amp', 'amp_enabled'], False)
             if cfg.env.pin_memory:
-                print(LoggerMisc.block_wrapper('Pin memory is not supported on CPU. Automatically turning off pin_memory by setting "cfg.env.pin_memory = False".', '#'))
+                print(LoggerMisc.block_wrapper('Pin memory is not supported on CPU. Automatically turning off pin_memory by setting "cfg.env.pin_memory = False".', preset='warning'))
                 ConfigMisc.auto_track_setattr(cfg, ['env', 'pin_memory'], False)
         else:
             raise ValueError('Invalid device type.')
@@ -1131,10 +1129,10 @@ class ModelMisc:
             missing_keys = list(set(['.'.join(missing_keys.split('.')[:print_keys_level]) for missing_keys in missing_keys]))
             unexpected_keys = list(set(['.'.join(unexpected_key.split('.')[:print_keys_level]) for unexpected_key in unexpected_keys]))
             print_info = f'{module_name}\'s state_dict loaded not strictly.' \
-                + '\n\033[32m\nMATCHED KEYS:\n\033[0m    ' + '\n    '.join(matched_keys) \
-                + '\n\033[33m\nMISSING KEYS (only in model):\n\033[0m    ' + '\n    '.join(missing_keys) \
-                + '\n\033[34m\nUNEXPECTED KEYS (only in pth):\n\033[0m    ' + '\n    '.join(unexpected_keys)
-            print(LoggerMisc.block_wrapper(print_info, '#'))
+                + LoggerMisc.str_with_color('\nMATCHED KEYS:\n    ', 'green') + '\n    '.join(matched_keys) \
+                + LoggerMisc.str_with_color('\nMISSING KEYS (only in model):\n    ', 'yellow') + '\n    '.join(missing_keys) \
+                + LoggerMisc.str_with_color('\nUNEXPECTED KEYS (only in pth):\n    ', 'blue') + '\n    '.join(unexpected_keys)
+            print(LoggerMisc.block_wrapper(print_info))
     
     @staticmethod
     def toggle_batchnorm_track_running_stats(module, true_or_false: bool):
@@ -1165,11 +1163,11 @@ class ModelMisc:
         for submodule_name in submodule_name_list:
             submodule: torch.nn.Module = named_modules.get(submodule_name, None)
             if submodule is None:
-                error_message = f'Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.'
+                error_message = f'`ModelMisc.get_specific_submodules_with_full_names`: Cannot find submodule "{submodule_name}" in {module.__class__.__name__}.'
                 if strict:
                     raise ValueError(error_message)
                 else:
-                    warnings.warn(error_message)
+                    print(LoggerMisc.block_wrapper(error_message, preset='warning'))
             else:
                 found_submodules[submodule_name] = submodule
         return found_submodules
@@ -1181,11 +1179,11 @@ class ModelMisc:
         for param_name in params_name_list:
             param: torch.nn.Parameter = params_dict.get(param_name, None)
             if param is None:
-                error_message = f'Cannot find parameter "{param_name}" in {module.__class__.__name__}.'
+                error_message = f'`ModelMisc.get_specific_params_with_full_names`: Cannot find parameter "{param_name}" in {module.__class__.__name__}.'
                 if strict:
                     raise ValueError(error_message)
                 else:
-                    warnings.warn(error_message)
+                    print(LoggerMisc.block_wrapper(error_message, preset='warning'))
             else:
                 found_params[param_name] = param
         return found_params
@@ -1207,7 +1205,7 @@ class ModelMisc:
                 for param in submodule.parameters():
                     param.requires_grad = is_trainable
             if verbose:
-                print(LoggerMisc.block_wrapper(verbose_string, '='))
+                print(LoggerMisc.block_wrapper(verbose_string))
     
     @staticmethod
     def unfreeze_or_freeze_params(params_dict, is_trainable: bool, verbose=True):  # whether to update these parameters 
@@ -1222,7 +1220,7 @@ class ModelMisc:
                 verbose_string += f'\n    {name}'
                 param.requires_grad = is_trainable
             if verbose:
-                print(LoggerMisc.block_wrapper(verbose_string, '='))        
+                print(LoggerMisc.block_wrapper(verbose_string))        
     
     @staticmethod
     def train_or_eval_modules(modules_dict, is_train: bool, verbose=False):
@@ -1240,7 +1238,7 @@ class ModelMisc:
                 verbose_string += f'\n    {name}'
                 submodule.train() if is_train else submodule.eval()
             if verbose:
-                print(LoggerMisc.block_wrapper(verbose_string, '='))
+                print(LoggerMisc.block_wrapper(verbose_string))
     
     @staticmethod
     def _re_init_check(module, param_name):
@@ -1259,6 +1257,56 @@ class ModelMisc:
 
 
 class LoggerMisc:
+    color_codes = {
+        'default': '\033[0m',
+
+        # foreground colors
+        'black': '\033[90m',
+        'red': '\033[31m',
+        'green': '\033[32m',
+        'yellow': '\033[33m',
+        'blue': '\033[34m',
+        'magenta': '\033[35m',
+        'cyan': '\033[36m',
+        'white': '\033[37m',
+
+        # bright foreground colors
+        'bright_black': '\033[90m',
+        'bright_red': '\033[91m',
+        'bright_green': '\033[92m',
+        'bright_yellow': '\033[93m',
+        'bright_blue': '\033[94m',
+        'bright_magenta': '\033[95m',
+        'bright_cyan': '\033[96m',
+        'bright_white': '\033[97m',
+
+        # background colors
+        'bg_black': '\033[40m',
+        'bg_red': '\033[41m',
+        'bg_green': '\033[42m',
+        'bg_yellow': '\033[43m',
+        'bg_blue': '\033[44m',
+        'bg_magenta': '\033[45m',
+        'bg_cyan': '\033[46m',
+        'bg_white': '\033[47m',
+
+        # bright background
+        'bg_bright_black': '\033[100m',
+        'bg_bright_red': '\033[101m',
+        'bg_bright_green': '\033[102m',
+        'bg_bright_yellow': '\033[103m',
+        'bg_bright_blue': '\033[104m',
+        'bg_bright_magenta': '\033[105m',
+        'bg_bright_cyan': '\033[106m',
+        'bg_bright_white': '\033[107m',
+    }
+    
+    @staticmethod
+    def str_with_color(text, color, end_color_code='default'):
+        if color not in LoggerMisc.color_codes:
+            raise ValueError(f'Invalid color "{color}". Valid colors are: {list(LoggerMisc.color_codes.keys())}')
+        return LoggerMisc.color_codes[color] + text + LoggerMisc.color_codes[end_color_code]
+    
     class MultiTQDM:
         def __init__(self, postlines=1, *args, **kwargs) -> None:
             self.bar_main = tqdm(*args, **kwargs)
@@ -1321,11 +1369,25 @@ class LoggerMisc:
             self._file.close()
     
     @staticmethod
-    def block_wrapper(input_object, s='=', block_width=80):
-        str_input = str(input_object)
-        if not str_input.endswith('\n'):
-            str_input += '\n'
-        return '\n' + s * block_width + '\n' + str_input + s * block_width + '\n'
+    def block_wrapper(input_object, s='=', block_width=80, color=None, preset=None):
+        if preset is not None:
+            if preset == 'warning':
+                s = '!'
+                color = 'yellow'
+            elif preset == 'error':
+                s = '#'
+                color = 'red'
+            elif preset == 'info':
+                s = '>'
+                color = 'green'
+        
+        output_str = str(input_object)
+        if not output_str.endswith('\n'):
+            output_str += '\n'
+        output_str = '\n' + s * block_width + '\n' + output_str + s * block_width + '\n'
+        if color is not None:
+            output_str = LoggerMisc.str_with_color(output_str, color)
+        return output_str
     
     @staticmethod
     def set_dict_key_prefix(input_dict: dict, prefix):
@@ -1399,7 +1461,7 @@ class LoggerMisc:
                     wandb_pid_list.append(p.pid)
                     if kill_all:
                         subprocess.Popen(['nohup', 'sh', '-c', f'sleep {kill_wait_time}; kill -15 {p.pid}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=os.setpgrp)
-                        print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running after {kill_wait_time} second(s).', s='#'))
+                        print(LoggerMisc.block_wrapper(f'wandb process (PID: {p.pid}) may need to be killed manually if it\'s still running after {kill_wait_time} second(s).', preset='warning'))
         except Exception as e:
             print(f'Error when getting wandb\'s pid:\n\t{e}')
                 
@@ -1418,7 +1480,7 @@ class SweepMisc:
     def _do_sweep(cfg, portal_fn):
         if hasattr(cfg, 'trainer'):
             if cfg.trainer.resume is not None:
-                print(LoggerMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', '$'))
+                print(LoggerMisc.block_wrapper('Sweep mode cannot be used with resume in phase of training. Ignoring all sweep configs...', preset='warning'))
                 _ = portal_fn(cfg)
                 exit()
         else:
@@ -1433,7 +1495,7 @@ class SweepMisc:
         filtered_combinations = [combination for idx, combination in enumerate(combinations) if idx not in sweep_skip_indices]
         
         for idx, combination in enumerate(filtered_combinations):
-            print(LoggerMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(filtered_combinations)}] combinations', s='#', block_width=80))
+            print(LoggerMisc.block_wrapper(f'Sweep mode: [{idx + 1}/{len(filtered_combinations)}] combinations', preset='info'))
             
             cfg_now = deepcopy(cfg)
             for chained_k, v in combination.items():
@@ -1477,14 +1539,12 @@ class SweepMisc:
             smtp = smtplib.SMTP_SSL(email_host, 465)
             smtp.login(email_sender, email_password)
             smtp.sendmail(email_sender, email_receiver, msg.as_string())
-            result = None
-            
+            error_message = None
         except Exception as e:
-            result = e
-            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) failed to send. Error: {e}.\n\n{message}'))
+            error_message = e
         finally:
             smtp.quit()
-        return result
+        return error_message
                 
     @staticmethod
     def portal_fn_with_notification(func):
@@ -1512,13 +1572,13 @@ class SweepMisc:
                     work_dir = getattr(cfg.info, 'work_dir', 'unknown work_dir')
                     message_with_work_dir = f'WORK DIR: {work_dir}\n\n{message}'
                     if if_send_email:
-                        email_result = SweepMisc._send_email(cfg, subject, message_with_work_dir)
-                        if email_result is None:
-                            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) sent successfully.\n\n{message_with_work_dir}'))
+                        error_message = SweepMisc._send_email(cfg, subject, message_with_work_dir)
+                        if error_message is None:
+                            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) sent successfully.\n\n{message_with_work_dir}', preset='info'))
                         else:
-                            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) failed to send. Error: {e}.\n\n{message_with_work_dir}\n\nError: {email_result}'))
+                            print(LoggerMisc.block_wrapper(f'Email (subject: {subject}) failed to send. Error: {e}.\n\n{message_with_work_dir}\n\nError: {error_message}', preset='error'))
                     else:
-                        print(LoggerMisc.block_wrapper(message_with_work_dir))
+                        print(LoggerMisc.block_wrapper(message_with_work_dir, preset='info'))
             return cfg
         return wrapper
 
@@ -1648,7 +1708,7 @@ class TimeMisc:
                     m_indent = '    ' + self.block_name
                     if len(m_indent) > 40:
                         if DistMisc.is_main_process():
-                            warnings.warn(f'Block name "{self.block_name}" with indent is too long (>40) to display, please check.')
+                            print(LoggerMisc.block_wrapper(f'Block name "{self.block_name}" with indent is too long (>40) to display, please check.', s='!', color='bright_black'))
                     if len(m_indent) < 38:
                             m_indent += ' ' + '-' * (38 - len(m_indent)) + ' '
                     print(f'{m_indent:40s}elapsed time: {self.timer.info["all"]:.4f}', force=self.force)
